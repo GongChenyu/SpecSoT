@@ -115,6 +115,7 @@ def main():
 
 	for i in tqdm(range(len(df))):
 		task_prompt = df.loc[i, "task_prompt"]
+		# task_prompt = "请从三个方面分析篮球的好处"
 		print(f"prompt:{task_prompt}")
 		# input_ids = tokenizer([task_prompt], return_tensors="pt").input_ids.to(model.base_model.device)
 
@@ -143,7 +144,7 @@ def main():
 			"memory": monitor.peak_usage,
 			"length": len(output_ids[0])
 		})
-		print(results)
+		print(f"time: {total_time}, memory: {monitor.peak_usage}, length: {len(output_ids[0])}")
 
 	# # 保存结果
 	# save_dir = os.path.join(project_dir, "results")

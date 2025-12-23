@@ -256,10 +256,9 @@ class EaModel(nn.Module):
     def eagenerate(self, task_prompt, max_new_tokens=2048, temperature=0.0, top_p=0.0, top_k=0.0, enable_parallel=True, para_token_ids=None):
 
         if not enable_parallel:
-            # 如果不开启并行，回退到原始 EAGLE 逻辑 (为了兼容性，建议保留原始逻辑)
-            # 这里简化处理，直接调用普通的 eagenerate_loop (Stage 1 logic without logits processor)
+            # 如果不开启并行，回退到原始 EAGLE 逻辑
             input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(self.base_model.device)
-            return self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k)
+            return self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k, enable_parallel)
 
         # 准备输入
         task_input = base_prompt.format(user_question=task_prompt)
@@ -287,6 +286,7 @@ class EaModel(nn.Module):
             input_ids=input_ids, 
             max_new_tokens=max_new_tokens, 
             temperature=temperature,
+            enable_parallel=enable_parallel,
             logits_processor=LogitsProcessorList([sp_processor]),   
             stop_token_id=para_token_ids['para_end_token_id'],
             return_kv=False,
@@ -329,11 +329,14 @@ class EaModel(nn.Module):
         # 拼接结果
         skeleton_part = self.skeleton_output[0].tolist()
         skeleton_part.append(para_token_ids['line_break_token_id'])
+        print("Skeleton:", self.tokenizer.decode(torch.tensor(skeleton_part)))
+
         parallel_part = []
         for i in range(num_para):
             branch_output = self.parallel_branches_output[i][instruction_len[i]:]
             parallel_part.extend(branch_output)
             parallel_part.append(para_token_ids['line_break_token_id'])
+            print(f"Branch {i}:", self.tokenizer.decode(torch.tensor(branch_output)))
         
         merged_ids = skeleton_part + parallel_part
         merged_ids.append(para_token_ids['para_end_token_id'])
@@ -342,7 +345,7 @@ class EaModel(nn.Module):
 
 
     # ================= 内部方法: 原始 EAGLE 循环 (Stage 1) =================
-    def _eagenerate_loop(self, input_ids, max_new_tokens, temperature=0.0, top_p=0.0, top_k=0.0, 
+    def _eagenerate_loop(self, input_ids, max_new_tokens=2048, temperature=0.0, top_p=0.0, top_k=0.0, enable_parallel=False,
                         logits_processor=None, stop_token_id=None, return_kv=False, para_token_ids=None):
         # 初始化
         if temperature > 1e-5:
@@ -354,7 +357,8 @@ class EaModel(nn.Module):
         self.ea_layer.reset_kv()
         
         # KV Cache 初始化
-        (past_key_values, past_key_values_data, current_length_data) = initialize_past_key_values(self.base_model, max_length=input_ids.shape[1] + max_new_tokens + 300)
+        max_kv_len = input_ids.shape[1] + max_new_tokens + 100
+        (past_key_values, past_key_values_data, current_length_data) = initialize_past_key_values(self.base_model, max_length=max_kv_len)
         
         self.past_key_values = past_key_values
         self.past_key_values_data = past_key_values_data
@@ -403,15 +407,17 @@ class EaModel(nn.Module):
                 break
             if self.tokenizer.eos_token_id in input_ids[0, input_len:].tolist():
                 break
-            if idx >= 150:  # skeleton 的长度控制不超过50
+            if self.current_length_data[0].item() == max_kv_len - 10:
+                break
+            if idx >= 50 and enable_parallel:  # skeleton 的长度控制不超过50
                 break
                  
         if return_kv:  # 这里需要返回self.ea_layer.stable_kv来复用eagle layer的cache
             return input_ids[:, input_len:], (past_key_values, past_key_values_data, current_length_data)
         return input_ids[:, input_len:]
 
+
     # ================= 内部方法: 并行解码 (Stage 3) =================
-    
     def _eagenerate_parallel(self, prefix_ids, branches_prompts, max_new_tokens, temperature=0, top_p=0, top_k=0, instruction_len=None, logits_processor=None):
         if temperature > 1e-5:
             logits_processor = prepare_logits_processor(temperature=temperature, top_p=top_p, top_k=top_k)
@@ -454,7 +460,7 @@ class EaModel(nn.Module):
             best_candidate, accept_length, sample_logits = self._evaluate_wrapper(logits, draft_tokens, retrieve_indices, logits_processor)
             # print(f"accept length: {accept_length}")
             if torch.sum(accept_length) > 0:
-                print("Accepted lengths:", accept_length.tolist())
+                print(f"Step: {step}, Accepted lengths: {accept_length.tolist()}")
 
             prob = sample_logits 
             if logits_processor is not None:
@@ -462,9 +468,6 @@ class EaModel(nn.Module):
                 sample_tokens = sample_tokens[None] if sample_tokens.ndim == 1 else sample_tokens # Ensure [B, 1]
             else:
                 sample_tokens = torch.argmax(prob, dim=-1, keepdim=True) # [B, 1]
-            
-            # for i in range(num_para):
-            #     print(f"branch {i}, sample token: [{self.tokenizer.decode(sample_tokens[i].tolist())}]")
 
             # Update State (Cache Management & Token Commit)
             next_tips_hidden, next_tips_tokens = self._update_parallel_state(best_candidate, accept_length, draft_tokens, 
@@ -612,7 +615,10 @@ class EaModel(nn.Module):
         draft_update_tokens_list = []  # 每个分支的 Bonus Token（或 pad）
         draft_update_hiddens_list = [] # 对应 hidden state
 
+        unfinished_branches = [i for i, finished in enumerate(finished_branches) if not finished]
+
         # ========== 3. 遍历每个分支 ==========
+        # for i, branch_idx in enumerate(unfinished_branches):
         for i in range(num_para):
             if finished_branches[i]:
                 # 已结束分支：填充 dummy 数据
@@ -664,10 +670,6 @@ class EaModel(nn.Module):
 
             # --- 准备下一轮 Draft 输入 ---
             hidden_states_this_branch = hidden_states[:, i*num_nodes: (i+1)*num_nodes]
-            # if select_indices.shape[0] == 1:  # Root
-            #     hidden_indices = select_indices
-            # else:
-            #     hidden_indices = select_indices[1:]
             seq_hiddens = hidden_states_this_branch[0, select_indices, :] 
 
             draft_tokens_tensor = torch.cat([seq_tokens[1:], torch.tensor([bonus_token], device=device)])  # 这里需要去掉root错位对齐
@@ -773,9 +775,7 @@ class EaModel(nn.Module):
         draft_tokens = draft_tokens.to(device)
         
         # 1. Gather Candidates (含 Root)
-        # retrieve_indices 可能含 -1 (Padding)
         # draft_tokens 是原始含 Root 的 [B, 61]
-        
         padding_mask = (retrieve_indices == -1)
         safe_indices = retrieve_indices.clone()
         safe_indices[padding_mask] = 0  # 避免负索引
@@ -783,15 +783,7 @@ class EaModel(nn.Module):
         candidates = torch.gather(draft_tokens.unsqueeze(1).expand(-1, retrieve_indices.size(1), -1), 2, safe_indices)
         candidates.masked_fill_(padding_mask, 0)
         
-        # 2. Prepare Logits (Concat Root Logits)
-        # tips_logits: [B, 1, V]   这是生成root的logits，虽然不需要验证，但是要拼接上保证数据的正确性
-        # logits: [B, 60, V]， 这里的最后一个logits是用来做bonus的
-        # full_logits = torch.cat([tips_logits, logits], dim=1) 
-        # 这里的对肯定有问题啊，这怎么又把root对应的logits加上了？？？感觉没必要呢？ 这里边的index0是 生成root的logits
-        # 确定了是不需要上边的tip logits的。可以从单挑路径的维度去理解。logits是对应的indices的index的生成的logits。比如index0生成index1的logits
-        # index 0，1，2，3分别生成index 1，2，3，4的logits，所以后边才有了在同一条路径上的 candidates[:, :, 1:] == torch.argmax(logits[:, :, :-1, :], dim=-1))
-        # 这个放在同一条path上去理解就很好理解了
-        # Gather Logits
+        # 2. Prepare Logits
         vocab_size = logits.size(-1)
         flat_indices = safe_indices.view(num_para, -1).unsqueeze(-1).expand(-1, -1, vocab_size)
         candidate_logits = torch.gather(logits, 1, flat_indices).view(num_para, retrieve_indices.size(1), retrieve_indices.size(2), -1)
@@ -817,9 +809,7 @@ class EaModel(nn.Module):
         colon_ids.append(para_token_ids['colon_new_line_token_id'])
 
         try:
-            # 关键：从 prompt_len 开始搜索，避开 prompt 中的 ####
             para_begin_idx = seq_list.index(para_begin_token_id)
-            
             # 搜索结束符
             try:
                 para_end_idx = seq_list.index(para_end_token_id, para_begin_idx)
@@ -831,7 +821,6 @@ class EaModel(nn.Module):
 
         # 1. 提取公共前缀 (Shared Prefix)
         prefix_ids = skeleton_ids[:, :para_begin_idx]
-
         # 2. 提取并行片段并分割, 把结束符的两个符号"####" "%%%%" 都去掉
         para_segment = seq_list[para_begin_idx : para_end_idx-1]
         
@@ -874,7 +863,6 @@ class EaModel(nn.Module):
             current_branch_str = self.tokenizer.decode(br)
             instruction_text = parallel_trigger_zh.format(skeleton_context = result_skeleton_str, current_point=current_branch_str)
             instruction_ids = self.tokenizer.encode(instruction_text, add_special_tokens=False)
-            # clean_branches[i] = instruction_ids + br
             clean_branches[i] = instruction_ids + br
             instruction_len.append(len(instruction_ids))
 
