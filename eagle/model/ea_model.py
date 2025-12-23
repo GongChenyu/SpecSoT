@@ -22,6 +22,7 @@ from .kv_cache import initialize_past_key_values
 from .cnets import Model
 from .cnets1 import Model as Model1
 from .configs import EConfig
+from ..prompts import *
 
 # ======================= 添加内容 ================
 class SemanticLogitsProcessor(LogitsProcessor):
@@ -138,6 +139,7 @@ class EaModel(nn.Module):
         self.skeleton_output = None
         self.parallel_branches_output = None
 
+
     def get_tokenizer(self):
         """Get the tokenizer of the base model.
 
@@ -251,37 +253,44 @@ class EaModel(nn.Module):
 
     # ================= 核心修改：三阶段生成逻辑 =================
     @torch.no_grad()
-    def eagenerate(self, input_ids, max_new_tokens=2048, temperature=0.0, top_p=0.0, top_k=0.0, enable_parallel=True, **kwargs):
+    def eagenerate(self, task_prompt, max_new_tokens=2048, temperature=0.0, top_p=0.0, top_k=0.0, enable_parallel=True, para_token_ids=None):
 
         if not enable_parallel:
             # 如果不开启并行，回退到原始 EAGLE 逻辑 (为了兼容性，建议保留原始逻辑)
             # 这里简化处理，直接调用普通的 eagenerate_loop (Stage 1 logic without logits processor)
+            input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(self.base_model.device)
             return self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k)
+
+        # 准备输入
+        task_input = base_prompt.format(user_question=task_prompt)
+        task_input_ids = self.tokenizer([task_input], return_tensors="pt").input_ids.to(self.base_model.device)
+        skeleton_input_ids = self.tokenizer([skeleton_trigger_zh], return_tensors="pt").input_ids.to(self.base_model.device)
+        input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1).to(self.base_model.device)
 
         # === Stage 1: Skeleton Generation (生成大纲) ===
         print(">>> Stage 1: Generating Skeleton...")
 
         # 构造 Logits Processor 强制生成骨架
         sp_processor = SemanticLogitsProcessor(
-            para_end_token_id=kwargs['para_end_token_id'],
-            ellipsis_token_id=kwargs['ellipsis_token_id'],
-            line_break_token_id=kwargs['line_break_token_id'],
-            para_begin_token_id=kwargs['para_begin_token_id'],
-            colon_token_id=kwargs['colon_token_id'],
-            cn_colon_token_id=kwargs['cn_colon_token_id'],
-            colon_new_line_token_id=kwargs['colon_new_line_token_id'],
+            para_end_token_id=para_token_ids['para_end_token_id'],
+            ellipsis_token_id=para_token_ids['ellipsis_token_id'],
+            line_break_token_id=para_token_ids['line_break_token_id'],
+            para_begin_token_id=para_token_ids['para_begin_token_id'],
+            colon_token_id=para_token_ids['colon_token_id'],
+            cn_colon_token_id=para_token_ids['cn_colon_token_id'],
+            colon_new_line_token_id=para_token_ids['colon_new_line_token_id'],
             prefix_len=input_ids.shape[1]
         )
         
         # 调用 EAGLE 生成骨架 (直到生成 %%%%)
-        skeleton_ids, stage1_base_kv = self._eagenerate_loop(
+        skeleton_ids = self._eagenerate_loop(
             input_ids=input_ids, 
             max_new_tokens=max_new_tokens, 
             temperature=temperature,
             logits_processor=LogitsProcessorList([sp_processor]),   
-            stop_token_id=kwargs['para_end_token_id'],
-            return_kv=True,
-            **kwargs 
+            stop_token_id=para_token_ids['para_end_token_id'],
+            return_kv=False,
+            para_token_ids=para_token_ids 
         )
         
         self.skeleton_output = skeleton_ids.clone()  # 保存skeleton
@@ -290,16 +299,9 @@ class EaModel(nn.Module):
         print(">>> Stage 2: Parsing Skeleton & Preparing Parallel Branches...")
         
         # 调用封装好的解析函数
-        prefix_ids, clean_branches, instruction_len = self._parse_skeleton_branches(
-            skeleton_ids, 
-            prompt_len=input_ids.shape[1], 
-            **kwargs
-        )
-        # 为了填充branches的stablekv，需要前一个token的hidden states
-        # 这里采用重计算的策略，即把最后一个token与branch重新计算获取hidden states
-        # prefix_last_token_id = prefix_ids[0, -1].item() 
+        clean_branches, instruction_len = self._parse_skeleton_branches(skeleton_ids, para_token_ids)
         
-        if prefix_ids is None or not clean_branches:
+        if not clean_branches:
             print("Parsing failed or no branches found. Returning skeleton.")
             return skeleton_ids
 
@@ -308,47 +310,40 @@ class EaModel(nn.Module):
             return skeleton_ids
         
         self.parallel_branches_output = [list(br) for br in clean_branches]  # 保存branches结果
-
         print(f"Detected {num_para} parallel branches.")
-
-        # print(f"prefix: \n{self.tokenizer.decode(prefix_ids[0].tolist())}")
-        # for i in range(num_para):
-        #     print(f"branch {i}: {self.tokenizer.decode(clean_branches[i])}")
-
 
         # === Stage 3: Parallel Decoding (并行解码) ===
         print(">>> Stage 3: Parallel Decoding...")
 
         # 调用并行解码
         _ = self._eagenerate_parallel(
-            prefix_ids=prefix_ids,
+            prefix_ids=task_input_ids,
             branches_prompts=clean_branches,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
             instruction_len=instruction_len,
-            **kwargs
         )
         
-        # 拼接结果 (Stage 3 后半部分: Merge)
-        # 简单拼接：Common + Branch1 + \n + Branch2 + \n ...
-        skeleton_part = self.skeleton_output[0, prefix_ids.shape[1]:].tolist()
-        skeleton_part.append(kwargs['line_break_token_id'])
+        # 拼接结果
+        skeleton_part = self.skeleton_output[0].tolist()
+        skeleton_part.append(para_token_ids['line_break_token_id'])
         parallel_part = []
         for i in range(num_para):
             branch_output = self.parallel_branches_output[i][instruction_len[i]:]
             parallel_part.extend(branch_output)
-            parallel_part.append(kwargs['line_break_token_id'])
+            parallel_part.append(para_token_ids['line_break_token_id'])
         
         merged_ids = skeleton_part + parallel_part
-        merged_ids.append(kwargs['para_end_token_id'])
+        merged_ids.append(para_token_ids['para_end_token_id'])
         
         return torch.tensor([merged_ids], device=input_ids.device)
 
+
     # ================= 内部方法: 原始 EAGLE 循环 (Stage 1) =================
     def _eagenerate_loop(self, input_ids, max_new_tokens, temperature=0.0, top_p=0.0, top_k=0.0, 
-                        logits_processor=None, stop_token_id=None, return_kv=False, **kwargs):
+                        logits_processor=None, stop_token_id=None, return_kv=False, para_token_ids=None):
         # 初始化
         if temperature > 1e-5:
             lp = prepare_logits_processor(temperature=temperature, top_p=top_p, top_k=top_k)
@@ -388,7 +383,7 @@ class EaModel(nn.Module):
             logits_for_eval = logits #  [1, Leaf, Depth, Vocab]
 
             # Verification
-            best_candidate, accept_length, sample_p = evaluate_posterior(logits_for_eval, candidates, logits_processor, **kwargs)
+            best_candidate, accept_length, sample_p = evaluate_posterior(logits_for_eval, candidates, logits_processor, para_token_ids)
             print(f"Accept length: {accept_length.item()}")
 
             # 为了兼容 update_inference_inputs (它处理 Batch)，我们需要把 best_candidate 和 accept_length 包装回 Batch=1
@@ -417,7 +412,7 @@ class EaModel(nn.Module):
 
     # ================= 内部方法: 并行解码 (Stage 3) =================
     
-    def _eagenerate_parallel(self, prefix_ids, branches_prompts, max_new_tokens, temperature=0, top_p=0, top_k=0, instruction_len=None, logits_processor=None, **kwargs):
+    def _eagenerate_parallel(self, prefix_ids, branches_prompts, max_new_tokens, temperature=0, top_p=0, top_k=0, instruction_len=None, logits_processor=None):
         if temperature > 1e-5:
             logits_processor = prepare_logits_processor(temperature=temperature, top_p=top_p, top_k=top_k)
 
@@ -429,12 +424,11 @@ class EaModel(nn.Module):
         input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = self._init_parallel_state(
             prefix_ids, branches_prompts, max_new_tokens)
 
-        # Call Initialize Tree   这里看起来生成的draft token都不太正常
+        # Call Initialize Tree  
         input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = initialize_tree_packed(
             prefix_len, input_ids, self, tips_indices, branch_begins, branch_lengths, draft_input_ids, logits_processor)
        
         # 结果容器
-        final_sequences = [list(br) for br in branches_prompts] 
         finished_branches = [False] * num_para
         
         print(f"skeleton_output {self.tokenizer.decode(self.skeleton_output[0].tolist())}")
@@ -447,9 +441,6 @@ class EaModel(nn.Module):
             if all(finished_branches):
                 print("All branches finished generation.")
                 break
-
-            if step == 1:
-                print(1)
             
             # 构建 Mask, History(使用 BIM) + Draft(Tree mask)
             current_length = self.current_length_data[0].item()
@@ -477,7 +468,7 @@ class EaModel(nn.Module):
 
             # Update State (Cache Management & Token Commit)
             next_tips_hidden, next_tips_tokens = self._update_parallel_state(best_candidate, accept_length, draft_tokens, 
-                retrieve_indices, hidden_states, sample_tokens, num_para, num_nodes, finished_branches, **kwargs)
+                retrieve_indices, hidden_states, sample_tokens, num_para, num_nodes, finished_branches)
 
             # Next Draft
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids = self.ea_layer.topK_generate(
@@ -598,7 +589,7 @@ class EaModel(nn.Module):
 
 
     def _update_parallel_state(self, best_candidate, accept_length, draft_tokens, retrieve_indices, 
-        hidden_states, sample_tokens, num_para, num_nodes, finished_branches, **kwargs):
+        hidden_states, sample_tokens, num_para, num_nodes, finished_branches):
         """
         核心管理函数：
         1. 搬运 Accepted KV 到 History 末尾 (Compact)
@@ -811,25 +802,23 @@ class EaModel(nn.Module):
         return best_candidate, accept_length, sample_logits
 
 
-    def _parse_skeleton_branches(self, skeleton_ids, prompt_len, **kwargs):
+    def _parse_skeleton_branches(self, skeleton_ids, para_token_ids):
         """
         解析 Skeleton，提取公共前缀和并行分支
         返回: (prefix_ids, branches_prompts)
         """
         seq_list = skeleton_ids[0].tolist()
-        para_begin_token_id = kwargs['para_begin_token_id']
-        para_end_token_id = kwargs['para_end_token_id']
+        para_begin_token_id = para_token_ids['para_begin_token_id']
+        para_end_token_id = para_token_ids['para_end_token_id']
         
         # 准备冒号 ID 列表
-        colon_ids = [kwargs['colon_token_id']]
-        if kwargs.get('cn_colon_token_id'):
-            colon_ids.append(kwargs['cn_colon_token_id'])
-        if kwargs.get('colon_new_line_token_id'):
-            colon_ids.append(kwargs['colon_new_line_token_id'])
+        colon_ids = [para_token_ids['colon_token_id']]
+        colon_ids.append(para_token_ids['cn_colon_token_id'])
+        colon_ids.append(para_token_ids['colon_new_line_token_id'])
 
         try:
             # 关键：从 prompt_len 开始搜索，避开 prompt 中的 ####
-            para_begin_idx = seq_list.index(para_begin_token_id, prompt_len)
+            para_begin_idx = seq_list.index(para_begin_token_id)
             
             # 搜索结束符
             try:
@@ -883,20 +872,10 @@ class EaModel(nn.Module):
         instruction_len = []
         for i, br in enumerate(clean_branches):
             current_branch_str = self.tokenizer.decode(br)
-            instruction_text = (
-                    f"目前的任务拆分骨架（步骤一结果）如下：{result_skeleton_str}，你分到了其中的一个任务分支。\n"
-                    f"\n步骤二系统指令：内容填充。\n"
-                    f"你的角色：你是分工明确的子任务执行者。\n"
-                    f"你的任务：请聚焦于下方指定的【当前分支】，撰写详细且完整的回答。\n"
-                    f"严格约束：\n"
-                    f"1. 禁止输出任何其他分支的内容。\n"
-                    f"2. 禁止重复生成“####”或分支标题，直接开始写内容。\n"
-                    f"3. 内容必须紧扣该分支的主题。\n"
-                    f"\n【当前分支：{current_branch_str}】，直接输出内容，不需要有任何开场白，开始回答：\n"
-                )
+            instruction_text = parallel_trigger_zh.format(skeleton_context = result_skeleton_str, current_point=current_branch_str)
             instruction_ids = self.tokenizer.encode(instruction_text, add_special_tokens=False)
             # clean_branches[i] = instruction_ids + br
-            clean_branches[i] = instruction_ids 
+            clean_branches[i] = instruction_ids + br
             instruction_len.append(len(instruction_ids))
 
-        return prefix_ids, clean_branches, instruction_len
+        return clean_branches, instruction_len

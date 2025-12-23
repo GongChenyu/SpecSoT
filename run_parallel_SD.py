@@ -11,7 +11,7 @@ from tqdm import tqdm
 import pynvml
 from threading import Thread, Event
 from eagle.model.ea_model import EaModel
-from prompts import *
+from eagle.prompts import *
 
 # ================= 显存监控工具 (复用自 generate.py) =================
 class GPUMemoryMonitor:
@@ -45,21 +45,36 @@ class GPUMemoryMonitor:
 		return False
 
 
-skeleton_prompt_zh = (
-	"解决以上任务共需要两个步骤：\n"
-	"步骤一目标：简短的骨架生成。任务指令：请对上述问题进行分析，判断是否可以拆分为多个独立的平行分支（Parallel Branches）进行处理。\n"
-	"1. 判断逻辑：如果任务必须顺序执行，请直接回答，无需拆分与生成骨架；如果任务可以拆分（如不同文档、不同方面、不同步骤等），请务必简洁的输出骨架。\n"
-	"2. 输出格式：当进行拆分时，必须严格遵守以下 Skeleton-of-Thought 格式：\n"
-	" - 每个分支以 '####' 开头，紧接分支标题，以英文冒号 ':' 结尾。\n"
-	" - 冒号后使用省略号，绝对不要在此阶段生成具体内容。\n"
-	" - 所有分支列举完毕后，必须输出 '####%%%%' 作为结束标记。\n"
-	"3. 示例：\n"
-	" ####分支一标题:......\n"
-	" ####分支二标题:......\n"
-	" ####%%%%\n"
-	"4. 注意：现在只执行步骤一（生成骨架）。请直接输出回答或者直接输出骨架，禁止包含任何开场白或解释。\n"
-	"开始回答（直接回答或者骨架）：\n"
-)
+def load_dateset(task):
+	# 数据集加载逻辑 (保持原样)
+	project_dir = os.path.dirname(os.path.abspath(__file__))
+	if task == "retrieval":
+		df_path = os.path.join(project_dir, "datasets/student_resume_logic_retrieval", "logic_gpa_resume_10.jsonl")
+		df = pd.read_json(df_path, lines=True)
+		df['task_prompt'] = df['prompt']
+	elif task == "planning":
+		df_path = os.path.join(project_dir, "datasets/planning", "industry_tasks.jsonl")
+		df = pd.read_json(df_path, lines=True)
+		df['task_prompt'] = df['task']
+	else: # multi-doc-qa
+		df_path = os.path.join(project_dir, "datasets/multi-doc-qa", "2wikimqa.jsonl")
+		df = pd.read_json(df_path, lines=True)
+		df['task_prompt'] = df['input']
+	return df
+
+
+def get_special_token_ids(tokenizer):
+	para_token_ids = {
+		"para_begin_token_id": tokenizer.encode("####")[0],
+		"para_end_token_id": tokenizer.encode("%%%%")[0],
+		"ellipsis_token_id": tokenizer.encode("......")[0],
+		"half_ellipsis_token_id": tokenizer.encode("...")[0],
+		"line_break_token_id": tokenizer.encode("\n\n")[0],
+		"colon_token_id": tokenizer.encode(":")[0],
+		"cn_colon_token_id": tokenizer.encode("：")[0], # cn ： 
+		"colon_new_line_token_id": tokenizer.encode(":\n")[0]
+	}
+	return para_token_ids
 
 
 # ================= 主函数 =================
@@ -89,58 +104,30 @@ def main():
 	tokenizer.padding_side = "left"
 
 	# 准备特殊 Token ID (用于语义并行)
-	para_token_ids = {
-		"para_begin_token_id": tokenizer.encode("####")[0],
-		"para_end_token_id": tokenizer.encode("%%%%")[0],
-		"ellipsis_token_id": tokenizer.encode("......")[0],
-		"half_ellipsis_token_id": tokenizer.encode("...")[0],
-		"line_break_token_id": tokenizer.encode("\n\n")[0],
-		"colon_token_id": tokenizer.encode(":")[0],
-		"cn_colon_token_id": tokenizer.encode("：")[0], # cn ： 
-		"colon_new_line_token_id": tokenizer.encode(":\n")[0]
-	}
+	para_token_ids = get_special_token_ids(tokenizer)
 	print("Semantic Parallel Special Token IDs:", para_token_ids)
 
-	# 数据集加载逻辑 (保持原样)
-	project_dir = os.path.dirname(os.path.abspath(__file__))
-	if args.task == "retrieval":
-		df_path = os.path.join(project_dir, "datasets/student_resume_logic_retrieval", "logic_gpa_resume_10.jsonl")
-		df = pd.read_json(df_path, lines=True)
-		addition_prompt = "You should check every student to judge whether he meets the requirement in your reasoning process."
-		df['full_prompt'] = df['prompt'].apply(lambda x: x + "\n" + addition_prompt + "\n" + skeleton_prompt_zh)
-	elif args.task == "planning":
-		df_path = os.path.join(project_dir, "datasets/planning", "industry_tasks.jsonl")
-		df = pd.read_json(df_path, lines=True)
-		df['full_prompt'] = df['task'].apply(lambda x: "任务：" + x + "\n" + skeleton_prompt_zh)
-	else: # multi-doc-qa
-		df_path = os.path.join(project_dir, "datasets/multi-doc-qa", "2wikimqa.jsonl")
-		df = pd.read_json(df_path, lines=True)
-		df = df[df["context"].apply(lambda x: len(tokenizer.encode(x))) < 7500].reset_index(drop=True)
-		addition_prompt = "You should check each document one by one..."
-		df['full_prompt'] = df.apply(lambda x: x["context"] + "\n\nQuestion: " + x['input'] + "\n" + addition_prompt + "\n" + skeleton_prompt_zh, axis=1)
-
+	df = load_dateset(args.task)
 	# 测试前 5 条
 	df = df[0:1]
     
 	results = []
 
 	for i in tqdm(range(len(df))):
-		full_prompt = df.loc[i, "full_prompt"]
-		# full_prompt = "你叫什么名字，给我介绍华为。"
-		# full_prompt = "你好"
-		print(f"prompt:{full_prompt}")
-		input_ids = tokenizer([full_prompt], return_tensors="pt").input_ids.to(model.base_model.device)
+		task_prompt = df.loc[i, "task_prompt"]
+		print(f"prompt:{task_prompt}")
+		# input_ids = tokenizer([task_prompt], return_tensors="pt").input_ids.to(model.base_model.device)
 
 		with GPUMemoryMonitor(device_index=args.device_index) as monitor:
 			start_time = time.time()
             
 			# === 调用核心方法: eagenerate (支持语义并行) ===
 			output_ids = model.eagenerate(
-				input_ids,
+				task_prompt,
 				max_new_tokens=5000,
 				temperature=0.0,
 				enable_parallel=True,   # 开启并行开关
-				**para_token_ids        # 传入特殊 Token
+				para_token_ids=para_token_ids        # 传入特殊 Token
 			)
             
 			total_time = time.time() - start_time

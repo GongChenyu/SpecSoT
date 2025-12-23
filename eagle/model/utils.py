@@ -516,21 +516,9 @@ def initialize_tree_packed(prefix_len, input_ids, model, tips_indices, branch_be
     else:
         root_tokens = torch.argmax(current_logits, dim=-1, keepdim=True)
 
-    # ================= Update Base Model State =================
-    # root_tokens_flat = root_tokens.view(-1)
-    # input_ids = torch.cat([input_ids, root_tokens_flat.unsqueeze(0)], dim=-1)
-    # # 我们需要找到当前 BIM 的有效长度，并在后面追加 0, 1, 2...
-    # bim_len = (model.branch_index_map != -2).sum()
-    # model.branch_index_map[bim_len : bim_len + num_para] = torch.arange(num_para, device=device, dtype=torch.long)
-
     # ================= 4. Prepare Draft Inputs (Batched Update) =================
     batched_input = draft_input_ids
     draft_input_ids = torch.cat([batched_input, root_tokens], dim=1) # [B, L+1]
-    # ones = torch.ones((num_para, 1), dtype=torch.long, device=device)
-    # model.ea_layer.draft_input_padding_mask = torch.cat([model.ea_layer.draft_input_padding_mask, ones], dim=1)   # 目前没包括prefix
-    # 获取每个 Branch 最后一个 Token 的 Position ID，左padding，所以最右边一定是 Tip。
-    # last_pos = model.ea_layer.full_position_ids[:, -1:] # [B, 1]   # 目前也没包括prefix_len
-    # model.ea_layer.full_position_ids = torch.cat([model.ea_layer.full_position_ids, last_pos + 1], dim=1)  # Position IDs: [Pos, Last_Pos + 1]
     
     # Clone the output hidden states
     ea_device = model.ea_layer.lm_head.weight.device
@@ -553,7 +541,7 @@ def initialize_tree_packed(prefix_len, input_ids, model, tips_indices, branch_be
     return input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states  # 返回的 hidden_states 后续可能修改
 
 
-def evaluate_posterior(logits: torch.Tensor, candidates: torch.Tensor, logits_processor, temperature=0.0,**kwargs):
+def evaluate_posterior(logits: torch.Tensor, candidates: torch.Tensor, logits_processor, para_token_ids=None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     has_semantic_processor = False   # 判断有无 SemanticLogitsProcessor
     special_token = None
     if logits_processor is not None:
@@ -562,7 +550,7 @@ def evaluate_posterior(logits: torch.Tensor, candidates: torch.Tensor, logits_pr
             # 这里通过类名判断，确保你的类名字符串包含 'Semantic' 或者是你指定的类
             if "SemanticLogitsProcessor" in processor.__class__.__name__:
                 has_semantic_processor = True
-                special_token = [kwargs['ellipsis_token_id'], kwargs['line_break_token_id'], kwargs['para_begin_token_id']]
+                special_token = [para_token_ids['ellipsis_token_id'], para_token_ids['line_break_token_id'], para_token_ids['para_begin_token_id']]
                 break
     
     batch_size, num_paths, seq_len, vocab_size = logits.shape[0], logits.shape[1], logits.shape[2], logits.shape[3]
