@@ -859,30 +859,32 @@ class Model(nn.Module):
     #     return draft_tokens, retrieve_indices, tree_mask, tree_position_ids
 
     # ============== 添加内容 ================
-    def _expand_root(self, hidden_states, input_ids, top_k, position_ids=None, prefix_len=-1):
+    def _expand_root(self, hidden_states, input_ids, top_k, position_ids=None, prefix_len=-1, active_branch=None):
         """
         Phase 1: Root Expansion
         """
         # 无论何时都要切掉第一个token对齐
-        actual_input_ids = input_ids[:, 1:]
         actual_hidden_states = hidden_states
 
         # 1. 判断当前状态   我觉的这里的分支判断应该往前放，也就是说在输入的时候，就应该输入正确的token和hidden states
         if hasattr(self, "stable_kv") and self.stable_kv is not None:   # 如果是非prefill阶段
             kv_len = self.stable_kv[0][0].shape[2]
 
-            if input_ids.shape[0] == 1: # Skeleton Decoding (回滚后重新生成), bsz=1
-                actual_input_ids = actual_input_ids[:, kv_len:]  # 需要通过cache与hidden states对齐
+            if input_ids.shape[0] == 1: 
+                if active_branch is not None:  # para 阶段只剩一个branch
+                    actual_input_ids = input_ids 
+                else:  # Skeleton Decoding, bsz=1
+                    actual_input_ids = input_ids[:, 1:]
+                    actual_input_ids = actual_input_ids[:, kv_len:]  # 需要通过cache与hidden states对齐
             elif hidden_states.shape[1] != input_ids.shape[1]:  # Parallel init
-                pass
+                actual_input_ids = input_ids[:, 1:]
             else:  # parallel decoding
                 # Parallel 什么都不切，输入的维度是对的
                 actual_input_ids = input_ids
         else:  # Skeleton Prefill (First Run)
             # 只需要 Input 切掉第一个，Hidden 保留全量, 对齐
-            pass
+            actual_input_ids = input_ids[:, 1:]
 
-        # 这个位置编码是否应该放在外边，因为这个expand root和grow tree都要用到。??
         if hasattr(self, "full_position_ids") and self.full_position_ids is not None:
             position_start = self.stable_kv[0][0].shape[2]
             step = actual_input_ids.shape[1]
@@ -1103,7 +1105,7 @@ class Model(nn.Module):
         return draft_tokens, retrieve_indices, tree_mask, tree_position_ids
 
     @torch.no_grad()
-    def topK_generate(self, hidden_states, input_ids, head, logits_processor, prefix_len=-1):
+    def topK_generate(self, hidden_states, input_ids, prefix_len=-1, active_branch=None):
         # 1. Prepare
         bsz = input_ids.shape[0]
         input_ids = input_ids.to(hidden_states.device)
@@ -1116,7 +1118,7 @@ class Model(nn.Module):
         ss_token = []
 
         # 2. Phase 1: Root Expansion
-        scores, parents, next_token, next_input_ids, last_hidden = self._expand_root(hidden_states, input_ids, self.top_k, prefix_len=prefix_len)
+        scores, parents, next_token, next_input_ids, last_hidden = self._expand_root(hidden_states, input_ids, self.top_k, prefix_len=prefix_len, active_branch=active_branch)
         
         scores_list.append(scores) # 这三行是保存了第一个轮次，一个节点生成十个节点的信息
         parents_list.append(parents)

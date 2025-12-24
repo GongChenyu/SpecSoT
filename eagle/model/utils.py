@@ -536,7 +536,7 @@ def initialize_tree_packed(prefix_len, input_ids, model, tips_indices, branch_be
 
     # Draft Model Generation
     draft_tokens, retrieve_indices, tree_mask, tree_position_ids = model.ea_layer.topK_generate(
-        batched_hidden, draft_input_ids, model.base_model.lm_head, logits_processor=None, prefix_len=prefix_len)  # draft 不用 logits_processor
+        batched_hidden, draft_input_ids, prefix_len=prefix_len)  # draft 不用 logits_processor
     
     return input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states  # 返回的 hidden_states 后续可能修改
 
@@ -727,8 +727,6 @@ def update_inference_inputs(input_ids, candidates, best_candidate_index, accept_
     draft_tokens, retrieve_indices, tree_mask, tree_position_ids = model.ea_layer.topK_generate(
         accept_hidden_state_new,
         input_ids=draft_input_ids,
-        head=model.base_model.lm_head,
-        logits_processor=logits_processor
     )
 
     return input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids

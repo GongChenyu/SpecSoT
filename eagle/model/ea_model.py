@@ -139,6 +139,8 @@ class EaModel(nn.Module):
         self.skeleton_output = None
         self.parallel_branches_output = None
 
+        self.active_branches = None
+
 
     def get_tokenizer(self):
         """Get the tokenizer of the base model.
@@ -423,7 +425,6 @@ class EaModel(nn.Module):
             logits_processor = prepare_logits_processor(temperature=temperature, top_p=top_p, top_k=top_k)
 
         device = self.base_model.device
-        num_para = len(branches_prompts)
         prefix_len = prefix_ids.shape[1]
         
         # 初始化状态 (Input, Cache, BIM)  
@@ -433,28 +434,17 @@ class EaModel(nn.Module):
         # Call Initialize Tree  
         input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = initialize_tree_packed(
             prefix_len, input_ids, self, tips_indices, branch_begins, branch_lengths, draft_input_ids, logits_processor)
-       
-        # 结果容器
-        finished_branches = [False] * num_para
-        
+               
         print(f"skeleton_output {self.tokenizer.decode(self.skeleton_output[0].tolist())}")
         # 3. Decoding Loop
         for step in range(max_new_tokens):
-            # for i, seq in enumerate(self.parallel_branches_output):
-            #     branch_str = self.tokenizer.decode(seq[instruction_len[i]:]).strip()
-            #     print(f"step {step}, branch {i}, [{branch_str}]")
-
-            if all(finished_branches):
-                print("All branches finished generation.")
-                break
-            
             # 构建 Mask, History(使用 BIM) + Draft(Tree mask)
             current_length = self.current_length_data[0].item()
             num_nodes = draft_tokens.shape[1] # 这里绝对不能去掉root啊，因为root是生成的，还没有输入推理         
-            combined_mask = self._construct_verify_mask(current_length, tree_mask, num_para, num_nodes, device, torch.float32)
+            combined_mask = self._construct_verify_mask(current_length, tree_mask, num_nodes, device, torch.float32)
             
             # Verify (Base Model Forward)
-            logits, hidden_states = self._parallel_verify_step(draft_tokens, tree_position_ids, combined_mask, num_para, num_nodes)
+            logits, hidden_states = self._parallel_verify_step(draft_tokens, tree_position_ids, combined_mask, num_nodes)
             
             # Evaluate (Compare candidates & logits)  
             best_candidate, accept_length, sample_logits = self._evaluate_wrapper(logits, draft_tokens, retrieve_indices, logits_processor)
@@ -471,11 +461,15 @@ class EaModel(nn.Module):
 
             # Update State (Cache Management & Token Commit)
             next_tips_hidden, next_tips_tokens = self._update_parallel_state(best_candidate, accept_length, draft_tokens, 
-                retrieve_indices, hidden_states, sample_tokens, num_para, num_nodes, finished_branches)
+                retrieve_indices, hidden_states, sample_tokens, num_nodes)
+            
+            if self.active_branches == None or len(self.active_branches) == 0:
+                print("All branches finished generation.")
+                break
 
             # Next Draft
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids = self.ea_layer.topK_generate(
-                next_tips_hidden, next_tips_tokens, self.base_model.lm_head, logits_processor=None)
+                next_tips_hidden, next_tips_tokens, active_branch=self.active_branches)
             
             if step > 300: break # Safety break
         
@@ -486,6 +480,7 @@ class EaModel(nn.Module):
         device = self.base_model.device
         num_para = len(branches_prompts)
         prefix_len = prefix_ids.shape[1]
+        self.active_branches = list(range(num_para))
 
         # === Cache Init (Base & Draft) === 
         self.current_length_data.fill_(prefix_len)  # base model,只保留prefix的cache就好
@@ -552,20 +547,25 @@ class EaModel(nn.Module):
         return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
 
 
-    def _construct_verify_mask(self, history_len, tree_mask, num_para, num_nodes, device, dtype=torch.float32):
+    def _construct_verify_mask(self, history_len, tree_mask, num_nodes, device, dtype=torch.float32):
         """
         利用 Branch Index Map (BIM) 构建高效 Mask
         mask由两部分构成，一部分是根据历史得到的块对角矩阵，另一部分是不同branch的tree mask拼成的块对角阵
         """
         history_bim = self.branch_index_map[:history_len]
         total_history = history_bim.shape[0]
+        
+        active_ids_list = self.active_branches
+        num_para = len(self.active_branches)
         packed_draft_len = num_para * num_nodes
         
         # Cross Mask [1, 1, Draft, History]
         cross_mask = torch.full((1, 1, packed_draft_len, total_history), torch.finfo(dtype).min, device=device)
         
         # 获取token的branch归属：[0,0,0...,1,1,1,...,2,2,2....]
-        draft_branch_ids = torch.arange(num_para, device=device).repeat_interleave(num_nodes) # [Packed_Draft]
+        active_ids_tensor = torch.tensor(active_ids_list, device=device)
+        draft_branch_ids = active_ids_tensor.repeat_interleave(num_nodes)
+        # draft_branch_ids = torch.arange(num_para, device=device).repeat_interleave(num_nodes) # [Packed_Draft]
         
         # Prefix 全部可见
         is_prefix = (history_bim == -1).view(1, 1, 1, -1) # [1, 1, 1, Hist]
@@ -592,7 +592,7 @@ class EaModel(nn.Module):
 
 
     def _update_parallel_state(self, best_candidate, accept_length, draft_tokens, retrieve_indices, 
-        hidden_states, sample_tokens, num_para, num_nodes, finished_branches):
+        hidden_states, sample_tokens, num_nodes):
         """
         核心管理函数：
         1. 搬运 Accepted KV 到 History 末尾 (Compact)
@@ -608,6 +608,7 @@ class EaModel(nn.Module):
         valid_history_len = (self.branch_index_map != -2).sum().item()
         dst_ptr = valid_history_len  # KV 写入指针
         last_pos = self.ea_layer.full_position_ids[:, -1].tolist()
+
         new_bim_entries = []
         new_pos_list = []
 
@@ -615,17 +616,11 @@ class EaModel(nn.Module):
         draft_update_tokens_list = []  # 每个分支的 Bonus Token（或 pad）
         draft_update_hiddens_list = [] # 对应 hidden state
 
-        unfinished_branches = [i for i, finished in enumerate(finished_branches) if not finished]
+        # 标记本轮分支存活状态 (初始化全为 True)
+        keep_mask_list = [True] * len(self.active_branches)
 
         # ========== 3. 遍历每个分支 ==========
-        # for i, branch_idx in enumerate(unfinished_branches):
-        for i in range(num_para):
-            if finished_branches[i]:
-                # 已结束分支：填充 dummy 数据
-                draft_update_tokens_list.append(torch.tensor([pad_token_id], device=device, dtype=torch.long))
-                dummy_hidden = torch.zeros((1, hidden_states.shape[-1]), device=device, dtype=hidden_states.dtype)
-                draft_update_hiddens_list.append(dummy_hidden)
-                continue
+        for i, branch_idx in enumerate(self.active_branches):
 
             # --- 提取当前分支的验证结果 ---
             acc_len_i = accept_length[i].item()  # 接受的 token 数（不含 Root）
@@ -643,44 +638,70 @@ class EaModel(nn.Module):
             # --- 更新 final_sequences（已接受的 token，不含 bonus）---
             tokens_to_add = seq_tokens.tolist()  
             if is_now_finished:
-                print(f"branch {i} finished!!!!!!!!!!!!!!!!!!!!!")
-                finished_branches[i] = True
+                print(f"Branch {branch_idx} (curr_idx {i}) finished with EOS.")
+                keep_mask_list[i] = False
                 tokens_to_add.append(bonus_token)  # 如果 Bonus 是 EOS，必须加上并结束
-            self.parallel_branches_output[i].extend(tokens_to_add)
-
-            # --- Base Model KV Cache 搬运 ---
-            if is_now_finished:  # TODO
-                # cache处理
-                pass
+            self.parallel_branches_output[branch_idx].extend(tokens_to_add)
 
             # 更新 KV Cache
             cache_indices = select_indices + num_nodes * i  # [关键]转换为全局索引
             for past_key_values in self.past_key_values_data:
                 # abs_select_indices = select_indices + dst_ptr
-                tgt = past_key_values.index_select(dim=-2, index=(cache_indices + valid_history_len).to(past_key_values.device))
+                tgt = past_key_values.index_select(dim=-2, index=(cache_indices + valid_history_len).to(device))
                 tgt_len = tgt.shape[-2]
                 dst = past_key_values[..., dst_ptr: dst_ptr + tgt_len, :]
                 dst.copy_(tgt, non_blocking=True)
                 self.current_length_data.fill_(dst_ptr + tgt_len)
             dst_ptr = dst_ptr + tgt_len  # 补充一个指针，这个指针是下一个branch的起点
-            new_bim_entries.extend([i] * tgt_len)
+            new_bim_entries.extend([branch_idx] * tgt_len)
+            
             pos = torch.tensor(list(range(last_pos[i] + 1, last_pos[i] + 1 + tgt_len)), device=device)
-            new_pos_list.append(pos)
             self.full_position_ids = torch.cat([self.full_position_ids, pos])
 
-            # --- 准备下一轮 Draft 输入 ---
-            hidden_states_this_branch = hidden_states[:, i*num_nodes: (i+1)*num_nodes]
-            seq_hiddens = hidden_states_this_branch[0, select_indices, :] 
+            if not is_now_finished:
+                # --- 准备下一轮 Draft 输入 ---
+                hidden_states_this_branch = hidden_states[:, i*num_nodes: (i+1)*num_nodes]
+                seq_hiddens = hidden_states_this_branch[0, select_indices, :] 
 
-            draft_tokens_tensor = torch.cat([seq_tokens[1:], torch.tensor([bonus_token], device=device)])  # 这里需要去掉root错位对齐
-            draft_update_tokens_list.append(draft_tokens_tensor)
-            draft_update_hiddens_list.append(seq_hiddens)
+                draft_tokens_tensor = torch.cat([seq_tokens[1:], torch.tensor([bonus_token], device=device)])  # 这里需要去掉root错位对齐
+                draft_update_tokens_list.append(draft_tokens_tensor)
+                draft_update_hiddens_list.append(seq_hiddens)
+
+                new_pos_list.append(pos)
 
         # ========== Base Model 状态更新 ==========
         if new_bim_entries:  #  更新 BIM 和 position id
             self.branch_index_map[valid_history_len : dst_ptr] = torch.tensor(new_bim_entries, device=device)
         self.branch_index_map[dst_ptr:] = -2 
         self.current_length_data.fill_(dst_ptr)  # 更新 cache指针
+
+        # ========== Draft Model 动态剪枝与更新 ==========
+        # 1. 生成掩码
+        keep_mask_tensor = torch.tensor(keep_mask_list, device=device, dtype=torch.bool)
+        
+        # 2. 【剪枝】如果本轮有分支结束，立即从 ea_layer 物理删除
+        # 这步操作保证了 ea_layer 的行数与 active_branches 保持一致
+        if not torch.all(keep_mask_tensor):
+            self.ea_layer.full_position_ids = self.ea_layer.full_position_ids[keep_mask_tensor]
+            self.ea_layer.cache_padding_mask = self.ea_layer.cache_padding_mask[keep_mask_tensor]
+            
+            # 同步更新 Python 端的 ID 列表
+            self.active_branches = [b for b, keep in zip(self.active_branches, keep_mask_list) if keep]
+
+            # 针对stable kv进行剪枝
+            if self.ea_layer.stable_kv is not None:
+                k_stable, v_stable = self.ea_layer.stable_kv[0]
+                k_stable = k_stable[keep_mask_tensor]
+                v_stable = v_stable[keep_mask_tensor]
+                self.ea_layer.stable_kv = ((k_stable, v_stable),)
+
+        # if len(self.active_branches) == 1:
+        #     print("Only one branch remaining, switching to original EAGLE decoding.")
+
+        # 3. 检查是否全部结束
+        if not self.active_branches:
+            print("All branches finished.")
+            return None, None
 
         # ========== Draft Model 局状态更新 ==========
         # token, cache, positon 对齐
@@ -732,11 +753,12 @@ class EaModel(nn.Module):
         return mask
 
 
-    def _parallel_verify_step(self, draft_tokens, tree_position_ids, combined_mask, num_para, num_nodes):
+    def _parallel_verify_step(self, draft_tokens, tree_position_ids, combined_mask, num_nodes):
         """
         执行 Base Model Forward 进行验证
         """
         # 1. 准备 Input, Position IDs，千万不能切掉root，因为root只是生成了，还没有前向推理
+        num_para = draft_tokens.shape[0]
         flat_draft_tokens = draft_tokens.reshape(1, -1)
 
         current_branch_tip_pos = self.ea_layer.full_position_ids[:,-1].unsqueeze(-1)  # 计算每个 Branch 当前的 Tip 绝对位置 (含Prefix)
