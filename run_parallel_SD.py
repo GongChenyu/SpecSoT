@@ -1,9 +1,13 @@
 # run_parallel.py
 # coding=utf-8
+import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+device_index = 7  # 修改为所需的 GPU 设备索引
+os.environ["CUDA_VISIBLE_DEVICES"] = str(device_index)
+
 import random
 import numpy as np
 import torch
-import os
 import argparse
 import pandas as pd
 import time
@@ -13,9 +17,10 @@ from threading import Thread, Event
 from eagle.model.ea_model import EaModel
 from eagle.prompts import *
 
+
 # ================= 显存监控工具 (复用自 generate.py) =================
 class GPUMemoryMonitor:
-	def __init__(self, device_index=0, interval=0.1):
+	def __init__(self, device_index=0, interval=0.01):
 		self.device_index = device_index
 		self.interval = interval
 		self.peak_usage = 0
@@ -52,8 +57,8 @@ def load_dateset(task):
 		df_path = os.path.join(project_dir, "datasets/student_resume_logic_retrieval", "logic_gpa_resume_10.jsonl")
 		df = pd.read_json(df_path, lines=True)
 		df['task_prompt'] = df['prompt']
-	elif task == "planning":
-		df_path = os.path.join(project_dir, "datasets/planning", "industry_tasks.jsonl")
+	elif task == "planning": 
+		df_path = os.path.join(project_dir, "datasets/planning", "industry_tasks_no_ascii.jsonl")
 		df = pd.read_json(df_path, lines=True)
 		df['task_prompt'] = df['task']
 	else: # multi-doc-qa
@@ -83,11 +88,9 @@ def main():
 	parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B")
 	parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3")
 	parser.add_argument("--task", type=str, default="planning", choices=["retrieval", "planning", "multi-doc-qa"])
-	parser.add_argument("--device_index", type=int, default=7)
+	# parser.add_argument("--device_index", type=int, default=7)
 	args = parser.parse_args()
 
-	os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device_index)
-    
 	print(f"Loading Base Model from: {args.base_model_path}")
 	print(f"Loading EAGLE Model from: {args.eagle_model_path}")
 
@@ -97,7 +100,10 @@ def main():
 		ea_model_path=args.eagle_model_path,
 		torch_dtype=torch.float16,
 		low_cpu_mem_usage=True,
-		device_map="auto"
+		device_map="auto",
+		total_token=60, 
+		depth=7, 
+		top_k=10
 	)
     
 	tokenizer = model.get_tokenizer()
@@ -115,17 +121,26 @@ def main():
 
 	for i in tqdm(range(len(df))):
 		task_prompt = df.loc[i, "task_prompt"]
-		# task_prompt = "请从三个方面分析篮球的好处"
+		# task_prompt = "请分析运动的好处"
+		# task_prompt = "请从两个方面分析运动的好处"
+		# task_prompt = "请从三个方面分析运动的好处"
+		# task_prompt = "请从四个方面分析运动的好处"
+		# task_prompt = "请从五个方面分析篮球的好处"
+		# task_prompt = "请从六个方面分析篮球的好处"
+		# task_prompt = "请从七个方面分析篮球的好处"
+		# task_prompt = "请从八个方面分析篮球的好处"
+		# task_prompt = "请从九个方面分析篮球的好处"
+
 		print(f"prompt:{task_prompt}")
 		# input_ids = tokenizer([task_prompt], return_tensors="pt").input_ids.to(model.base_model.device)
 
-		with GPUMemoryMonitor(device_index=args.device_index) as monitor:
+		with GPUMemoryMonitor(device_index=device_index) as monitor:
 			start_time = time.time()
             
 			# === 调用核心方法: eagenerate (支持语义并行) ===
 			output_ids = model.eagenerate(
 				task_prompt,
-				max_new_tokens=5000,
+				max_new_tokens=3000,
 				temperature=0.0,
 				enable_parallel=True,   # 开启并行开关
 				para_token_ids=para_token_ids        # 传入特殊 Token

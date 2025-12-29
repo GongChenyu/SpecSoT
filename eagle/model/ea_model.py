@@ -126,20 +126,7 @@ class EaModel(nn.Module):
         self.ea_layer.to(self.base_model.dtype).to(device)
         self.ea_layer.init_tree()
 
-        # 这里我想维护一个BIM,和一个保存draft输入的padding信息，因为如果接受长度不同的话，需要补齐输入的batch
-        # 同时最好可以维护一个全量的位置编码，包括这几个变量的初始化函数。最初在parallel初始化的时候调用就好
-        self.branch_index_map = None
-        self.full_position_ids = None
-
-        # self.batched_draft_input = None
-        self.ea_layer.cache_padding_mask = None
-        self.ea_layer.full_position_ids = None
-
-        # 保存结果
-        self.skeleton_output = None
-        self.parallel_branches_output = None
-
-        self.active_branches = None
+        self.reset_state()
 
 
     def get_tokenizer(self):
@@ -253,9 +240,32 @@ class EaModel(nn.Module):
             return outputs, hidden_states
 
 
+    def reset_state(self):
+        self.ea_layer.reset_kv()
+        self.past_key_values = None
+        self.past_key_values_data = None
+        self.current_length_data = None
+
+        # 维护一个BIM,和一个保存draft输入的padding信息，因为如果接受长度不同的话，需要补齐输入的batch
+        # 同时维护一个全量的位置编码
+        self.branch_index_map = None
+        self.full_position_ids = None
+
+        # self.batched_draft_input = None
+        self.ea_layer.cache_padding_mask = None
+        self.ea_layer.full_position_ids = None
+
+        # 保存结果
+        self.skeleton_output = None
+        self.parallel_branches_output = None
+
+        self.active_branches = None
+
     # ================= 核心修改：三阶段生成逻辑 =================
     @torch.no_grad()
     def eagenerate(self, task_prompt, max_new_tokens=2048, temperature=0.0, top_p=0.0, top_k=0.0, enable_parallel=True, para_token_ids=None):
+        
+        self.reset_state()
 
         if not enable_parallel:
             # 如果不开启并行，回退到原始 EAGLE 逻辑
@@ -294,7 +304,7 @@ class EaModel(nn.Module):
             return_kv=False,
             para_token_ids=para_token_ids 
         )
-        
+        print("Generated Skeleton:", self.tokenizer.decode(skeleton_ids[0]))
         self.skeleton_output = skeleton_ids.clone()  # 保存skeleton
 
         # === Stage 2: Parse & Prepare (解析与准备) ===
@@ -338,7 +348,7 @@ class EaModel(nn.Module):
             branch_output = self.parallel_branches_output[i][instruction_len[i]:]
             parallel_part.extend(branch_output)
             parallel_part.append(para_token_ids['line_break_token_id'])
-            print(f"Branch {i}:", self.tokenizer.decode(torch.tensor(branch_output)))
+            # print(f"Branch {i}:", self.tokenizer.decode(torch.tensor(branch_output)))
         
         merged_ids = skeleton_part + parallel_part
         merged_ids.append(para_token_ids['para_end_token_id'])
@@ -390,7 +400,7 @@ class EaModel(nn.Module):
 
             # Verification
             best_candidate, accept_length, sample_p = evaluate_posterior(logits_for_eval, candidates, logits_processor, para_token_ids)
-            print(f"Accept length: {accept_length.item()}")
+            # print(f"Accept length: {accept_length.item()}")
 
             # 为了兼容 update_inference_inputs (它处理 Batch)，我们需要把 best_candidate 和 accept_length 包装回 Batch=1
             if isinstance(accept_length, int):
@@ -409,7 +419,7 @@ class EaModel(nn.Module):
                 break
             if self.tokenizer.eos_token_id in input_ids[0, input_len:].tolist():
                 break
-            if self.current_length_data[0].item() == max_kv_len - 10:
+            if self.current_length_data[0].item() == max_kv_len - 100:  # 防止超出cache(每个轮次会分配60)
                 break
             if idx >= 50 and enable_parallel:  # skeleton 的长度控制不超过50
                 break
@@ -437,6 +447,7 @@ class EaModel(nn.Module):
                
         print(f"skeleton_output {self.tokenizer.decode(self.skeleton_output[0].tolist())}")
         # 3. Decoding Loop
+        total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
         for step in range(max_new_tokens):
             # 构建 Mask, History(使用 BIM) + Draft(Tree mask)
             current_length = self.current_length_data[0].item()
@@ -449,7 +460,8 @@ class EaModel(nn.Module):
             # Evaluate (Compare candidates & logits)  
             best_candidate, accept_length, sample_logits = self._evaluate_wrapper(logits, draft_tokens, retrieve_indices, logits_processor)
             # print(f"accept length: {accept_length}")
-            if torch.sum(accept_length) > 0:
+            total_accept_len += accept_length.sum()
+            if torch.sum(accept_length) > 0 and step % 10 == 0:
                 print(f"Step: {step}, Accepted lengths: {accept_length.tolist()}")
 
             prob = sample_logits 
@@ -472,7 +484,7 @@ class EaModel(nn.Module):
                 next_tips_hidden, next_tips_tokens, active_branch=self.active_branches)
             
             if step > 300: break # Safety break
-        
+        print(f"Avg accepted lengths: {total_accept_len.item()/step}")
         return None
 
 
