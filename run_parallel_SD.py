@@ -138,7 +138,7 @@ def main():
 			start_time = time.time()
             
 			# === 调用核心方法: eagenerate (支持语义并行) ===
-			output_ids = model.eagenerate(
+			output_ids, avg_accept_len, num_para = model.eagenerate(
 				task_prompt,
 				max_new_tokens=3000,
 				temperature=0.0,

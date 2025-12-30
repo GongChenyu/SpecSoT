@@ -269,8 +269,10 @@ class EaModel(nn.Module):
 
         if not enable_parallel:
             # 如果不开启并行，回退到原始 EAGLE 逻辑
+            num_para = 0
             input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(self.base_model.device)
-            return self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k, enable_parallel)
+            output_ids, avg_accept_len = self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k, enable_parallel)
+            return output_ids, avg_accept_len, num_para
 
         # 准备输入
         task_input = base_prompt.format(user_question=task_prompt)
@@ -279,7 +281,7 @@ class EaModel(nn.Module):
         input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1).to(self.base_model.device)
 
         # === Stage 1: Skeleton Generation (生成大纲) ===
-        print(">>> Stage 1: Generating Skeleton...")
+        # print(">>> Stage 1: Generating Skeleton...")
 
         # 构造 Logits Processor 强制生成骨架
         sp_processor = SemanticLogitsProcessor(
@@ -294,7 +296,7 @@ class EaModel(nn.Module):
         )
         
         # 调用 EAGLE 生成骨架 (直到生成 %%%%)
-        skeleton_ids = self._eagenerate_loop(
+        skeleton_ids, avg_accept_len = self._eagenerate_loop(
             input_ids=input_ids, 
             max_new_tokens=max_new_tokens, 
             temperature=temperature,
@@ -304,31 +306,30 @@ class EaModel(nn.Module):
             return_kv=False,
             para_token_ids=para_token_ids 
         )
-        print("Generated Skeleton:", self.tokenizer.decode(skeleton_ids[0]))
+        # print("Generated Skeleton:", self.tokenizer.decode(skeleton_ids[0]))
         self.skeleton_output = skeleton_ids.clone()  # 保存skeleton
 
         # === Stage 2: Parse & Prepare (解析与准备) ===
-        print(">>> Stage 2: Parsing Skeleton & Preparing Parallel Branches...")
+        # print(">>> Stage 2: Parsing Skeleton & Preparing Parallel Branches...")
         
         # 调用封装好的解析函数
         clean_branches, instruction_len = self._parse_skeleton_branches(skeleton_ids, para_token_ids)
         
         if not clean_branches:
+            num_para = 0
             print("Parsing failed or no branches found. Returning skeleton.")
-            return skeleton_ids
+            return skeleton_ids, avg_accept_len, num_para
 
         num_para = len(clean_branches)
-        if num_para == 0:
-            return skeleton_ids
-        
+       
         self.parallel_branches_output = [list(br) for br in clean_branches]  # 保存branches结果
         print(f"Detected {num_para} parallel branches.")
 
         # === Stage 3: Parallel Decoding (并行解码) ===
-        print(">>> Stage 3: Parallel Decoding...")
+        # print(">>> Stage 3: Parallel Decoding...")
 
         # 调用并行解码
-        _ = self._eagenerate_parallel(
+        avg_accept_len = self._eagenerate_parallel(
             prefix_ids=task_input_ids,
             branches_prompts=clean_branches,
             max_new_tokens=max_new_tokens,
@@ -341,7 +342,7 @@ class EaModel(nn.Module):
         # 拼接结果
         skeleton_part = self.skeleton_output[0].tolist()
         skeleton_part.append(para_token_ids['line_break_token_id'])
-        print("Skeleton:", self.tokenizer.decode(torch.tensor(skeleton_part)))
+        # print("Skeleton:", self.tokenizer.decode(torch.tensor(skeleton_part)))
 
         parallel_part = []
         for i in range(num_para):
@@ -353,7 +354,7 @@ class EaModel(nn.Module):
         merged_ids = skeleton_part + parallel_part
         merged_ids.append(para_token_ids['para_end_token_id'])
         
-        return torch.tensor([merged_ids], device=input_ids.device)
+        return torch.tensor([merged_ids], device=input_ids.device), avg_accept_len, num_para
 
 
     # ================= 内部方法: 原始 EAGLE 循环 (Stage 1) =================
@@ -385,7 +386,7 @@ class EaModel(nn.Module):
         )
         
         padding = (torch.zeros(1, 1, dtype=torch.long) - 1).to(input_ids.device)
-        
+        total_accept_len = torch.zeros(1, dtype=torch.long, device=input_ids.device)
         # Decode Loop
         for idx in range(max_new_tokens):
             self.base_model.model.tree_mask = tree_mask # 关键：设置 Base Model 的 Mask
@@ -409,6 +410,7 @@ class EaModel(nn.Module):
                 best_candidate = best_candidate.unsqueeze(0) # [1]
             if accept_length.ndim == 0:
                 accept_length = accept_length.unsqueeze(0)   # [1]
+            total_accept_len += accept_length.sum()
             
             # Update Inputs for next step (Generates next Draft Tree)
             input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids = update_inference_inputs(
@@ -419,14 +421,14 @@ class EaModel(nn.Module):
                 break
             if self.tokenizer.eos_token_id in input_ids[0, input_len:].tolist():
                 break
-            if self.current_length_data[0].item() == max_kv_len - 100:  # 防止超出cache(每个轮次会分配60)
+            if self.current_length_data[0].item() == max_kv_len - 200:  # 防止超出cache(每个轮次会分配60)
                 break
-            if idx >= 50 and enable_parallel:  # skeleton 的长度控制不超过50
+            if idx >= 150 and enable_parallel:  # skeleton 的长度控制不超过50
                 break
-                 
+        avg_accept_len = total_accept_len.item() / idx      
         if return_kv:  # 这里需要返回self.ea_layer.stable_kv来复用eagle layer的cache
             return input_ids[:, input_len:], (past_key_values, past_key_values_data, current_length_data)
-        return input_ids[:, input_len:]
+        return input_ids[:, input_len:], avg_accept_len
 
 
     # ================= 内部方法: 并行解码 (Stage 3) =================
@@ -445,7 +447,7 @@ class EaModel(nn.Module):
         input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = initialize_tree_packed(
             prefix_len, input_ids, self, tips_indices, branch_begins, branch_lengths, draft_input_ids, logits_processor)
                
-        print(f"skeleton_output {self.tokenizer.decode(self.skeleton_output[0].tolist())}")
+        # print(f"skeleton_output {self.tokenizer.decode(self.skeleton_output[0].tolist())}")
         # 3. Decoding Loop
         total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
         for step in range(max_new_tokens):
@@ -462,7 +464,8 @@ class EaModel(nn.Module):
             # print(f"accept length: {accept_length}")
             total_accept_len += accept_length.sum()
             if torch.sum(accept_length) > 0 and step % 10 == 0:
-                print(f"Step: {step}, Accepted lengths: {accept_length.tolist()}")
+                # print(f"Step: {step}, Accepted lengths: {accept_length.tolist()}")
+                pass
 
             prob = sample_logits 
             if logits_processor is not None:
@@ -483,10 +486,10 @@ class EaModel(nn.Module):
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids = self.ea_layer.topK_generate(
                 next_tips_hidden, next_tips_tokens, active_branch=self.active_branches)
             
-            if step > 300: break # Safety break
-        print(f"Avg accepted lengths: {total_accept_len.item()/step}")
-        return None
-
+            if step > 100: break # Safety break
+        avg_accept_len = total_accept_len.item() / step
+        print(f"Avg accepted lengths: {avg_accept_len}")
+        return avg_accept_len
 
     def _init_parallel_state(self, prefix_ids, branches_prompts, max_new_tokens):
         device = self.base_model.device
