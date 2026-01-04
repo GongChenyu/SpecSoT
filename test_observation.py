@@ -19,7 +19,7 @@ import pynvml
 from threading import Thread, Event
 from eagle.model.ea_model import EaModel
 from eagle.prompts import *
-
+from eagle.model.global_recorder import att_time_recoding, ffn_time_recoding
 
 # ================= 显存监控工具 (复用自 generate.py) =================
 class GPUMemoryMonitor:
@@ -85,53 +85,40 @@ def get_special_token_ids(tokenizer):
 	return para_token_ids
 
 
-# ================= 数据保存逻辑 (已移除绘图部分) =================
+# ================= 数据保存逻辑 (只保存原始数据) =================
 def save_results(raw_results_df, output_dir):
-    print("\nStarting Data Processing (No Plotting)...")
+    print("\nSaving Raw Data...")
     
-    # 1. 保存原始有效数据 (包含 response 文本)
-    raw_path = os.path.join(output_dir, "benchmark_valid_raw_data.csv")
-    # 使用 escapechar 处理文本中可能存在的复杂字符
-    raw_results_df.to_csv(raw_path, index=False, escapechar='\\')
+    # Only save raw data as CSV
+    raw_path = os.path.join(output_dir, "benchmark_valid_raw_data.xlsx")
+    raw_results_df.to_excel(raw_path, index=False)
     print(f"Raw data saved to {raw_path}")
-
-    # 2. 数据聚合
-    # 注意：聚合时会自动忽略非数值列 (response 文本列会被自动忽略)
-    grouped_df = raw_results_df.groupby(['total_token_setting', 'num_para']).agg({
-        'avg_accept_len': 'mean',
-        'throughput': 'mean',
-        'time': 'mean',
-        'length': 'mean',
-        'memory': 'max',
-        'sample_id': 'count'
-    }).reset_index()
-    
-    grouped_df = grouped_df.rename(columns={'sample_id': 'valid_sample_count'})
-    grouped_df = grouped_df.sort_values(by=['total_token_setting', 'num_para'])
-
-    agg_path = os.path.join(output_dir, "benchmark_aggregated_table.csv")
-    grouped_df.to_csv(agg_path, index=False)
-    print(f"Aggregated table saved to {agg_path}")
-    print("Data processing complete.")
+    print("Data saving complete.")
 
 
 # ================= 推理执行函数 (已修改：增加 tokenizer 和 response 返回) =================
 def run_inference(model, tokenizer, task_prompt, para_token_ids, is_warmup=False):
-    """
-    执行单次推理。
-    修改：增加 tokenizer 参数，解码并返回 response 文本。
-    """
+    att_time_recoding.clear()
+    ffn_time_recoding.clear()
     try:
         with GPUMemoryMonitor(device_index=device_index) as monitor:
             start_time = time.time()
             
-            output_ids, avg_accept_len, num_para = model.eagenerate(
+            # Ensure model.eagenerate returns these values
+            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time = model.eagenerate(
                 task_prompt,
-                max_new_tokens=3000,
+                max_new_tokens=5000,
                 temperature=0.0,
                 enable_parallel=True,
                 para_token_ids=para_token_ids
             )
+
+            branches_len = []
+            if model.parallel_branches_output is not None:
+                for i, branch in enumerate(model.parallel_branches_output):
+                    branch_len = len(branch) - model.instruction_len[i]
+                    branches_len.append(branch_len)
+            # print(f"Generated {len(branches_len)} branches with lengths: {branches_len}")
             
             total_time = time.time() - start_time
             gen_len = len(output_ids[0])
@@ -140,8 +127,10 @@ def run_inference(model, tokenizer, task_prompt, para_token_ids, is_warmup=False
             if is_warmup:
                 return None
             
-            # === 解码并保存 Response ===
             response_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+            avg_att_time = float(np.mean(att_time_recoding)) if att_time_recoding else 0.0
+            avg_ffn_time = float(np.mean(ffn_time_recoding)) if ffn_time_recoding else 0.0
             
             return {
                 "prompt": task_prompt,
@@ -151,7 +140,13 @@ def run_inference(model, tokenizer, task_prompt, para_token_ids, is_warmup=False
                 "length": gen_len,
                 "throughput": throughput,
                 "memory": monitor.peak_usage,
-                "response": response_text  # <--- 新增字段
+                "response": response_text,
+                "avg_draft_time": avg_draft_time,  # New Metric
+                "avg_verify_time": avg_verify_time, # New Metric
+                "avg_update_time": avg_update_time, # New Metric
+                "avg_att_time": avg_att_time,   # 新增
+                "avg_ffn_time": avg_ffn_time,    # 新增
+                "branches_len": branches_len,
             }
     except Exception as e:
         print(f"Error during inference: {e}")
@@ -174,7 +169,7 @@ def main():
     full_df = load_dateset(args.task)
     
     # 切分预热和正式数据
-    if len(full_df) > 3:
+    if len(full_df) > 2:
         warmup_df = full_df.iloc[:2].reset_index(drop=True)
         test_df = full_df.iloc[2:].reset_index(drop=True)
     else:
@@ -208,7 +203,7 @@ def main():
                 device_map="auto",
                 total_token=tt,
                 depth=4, 
-                top_k=15
+                top_k=10
             )
             model.eval()
             tokenizer = model.get_tokenizer()
@@ -237,15 +232,15 @@ def main():
             expected_branches = int(test_df.loc[i, "num_branches"]) if "num_branches" in test_df.columns else -1
             
             for r in range(args.test_rounds):
-                # 传入 tokenizer
                 res = run_inference(model, tokenizer, task_prompt, para_token_ids, is_warmup=False)
                 
                 if res:
                     total_attempts += 1
                     actual_para = res["num_para"]
                     
-                    # === 核心校验逻辑 ===
+                    # === 核心校验逻辑：只保存匹配的数据 ===
                     if expected_branches != -1 and actual_para != expected_branches:
+                        print(f"  [Skip] Sample {i} Round {r}: Expected {expected_branches} branches, got {actual_para}")
                         continue
                     
                     valid_attempts += 1
@@ -254,6 +249,7 @@ def main():
                     res["round_id"] = r
                     res["expected_branches"] = expected_branches
                     all_results.append(res)
+                    print(f"  [Valid] Sample {i} Round {r}: num_para={actual_para} matches expected")
 
         del model
         del tokenizer
@@ -282,7 +278,7 @@ def main():
     print("\nBenchmark Completed Successfully!")
 
 if __name__ == "__main__":
-    seed = 35
+    seed = 42
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

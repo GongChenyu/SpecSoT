@@ -49,6 +49,8 @@ from typing import TypedDict
 class LossKwargs(TypedDict):
     pass
 
+from .global_recorder import att_time_recoding, ffn_time_recoding
+
 logger = logging.get_logger(__name__)
 
 # Copied from transformers.models.bart.modeling_bart._make_causal_mask
@@ -314,6 +316,8 @@ class Qwen3DecoderLayer(GradientCheckpointingLayer):
         self.post_attention_layernorm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.attention_type = config.layer_types[layer_idx]
 
+        self.is_recording_time = (layer_idx == 10)
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -326,6 +330,13 @@ class Qwen3DecoderLayer(GradientCheckpointingLayer):
         position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
+        
+        if self.is_recording_time: 
+            attn_start = torch.cuda.Event(enable_timing=True)
+            attn_end = torch.cuda.Event(enable_timing=True)
+            ffn_end = torch.cuda.Event(enable_timing=True)
+            attn_start.record()
+
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
 
@@ -343,11 +354,25 @@ class Qwen3DecoderLayer(GradientCheckpointingLayer):
         )
         hidden_states = residual + hidden_states
 
+        if self.is_recording_time:
+            attn_end.record()
+            torch.cuda.synchronize()
+            attn_time = attn_start.elapsed_time(attn_end)  # ms
+            att_time_recoding.append(attn_time)
+
+        
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
+
+        if self.is_recording_time:
+            ffn_end.record()
+            torch.cuda.synchronize()
+            ffn_time = attn_end.elapsed_time(ffn_end) # ms
+            ffn_time_recoding.append(ffn_time)
+            # print(f"attn time: {attn_time:.3f}ms, ffn time: {ffn_time:.3f}ms")
 
         outputs = (hidden_states,)
         if output_attentions:
@@ -590,6 +615,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
         for idx, decoder_layer in enumerate(self.layers[: self.config.num_hidden_layers]):
             if idx==len(self.layers)-3 or idx==len(self.layers)//2 or idx==2:
                 all_hidden_states += (hidden_states,)
+            # print(f"layer {idx} is recoding: {decoder_layer.is_recording_time}")
             past_key_value = (
                 past_key_values[idx] if past_key_values is not None else None
             )

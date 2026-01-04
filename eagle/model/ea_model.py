@@ -258,6 +258,7 @@ class EaModel(nn.Module):
         # 保存结果
         self.skeleton_output = None
         self.parallel_branches_output = None
+        self.instruction_len = None
 
         self.active_branches = None
 
@@ -271,8 +272,8 @@ class EaModel(nn.Module):
             # 如果不开启并行，回退到原始 EAGLE 逻辑
             num_para = 0
             input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(self.base_model.device)
-            output_ids, avg_accept_len = self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k, enable_parallel)
-            return output_ids, avg_accept_len, num_para
+            output_ids, avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time = self._eagenerate_loop(input_ids, max_new_tokens, temperature, top_p, top_k, enable_parallel)
+            return output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
 
         # 准备输入
         task_input = base_prompt.format(user_question=task_prompt)
@@ -296,7 +297,7 @@ class EaModel(nn.Module):
         )
         
         # 调用 EAGLE 生成骨架 (直到生成 %%%%)
-        skeleton_ids, avg_accept_len = self._eagenerate_loop(
+        skeleton_ids, avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time = self._eagenerate_loop(
             input_ids=input_ids, 
             max_new_tokens=max_new_tokens, 
             temperature=temperature,
@@ -318,18 +319,19 @@ class EaModel(nn.Module):
         if not clean_branches:
             num_para = 0
             print("Parsing failed or no branches found. Returning skeleton.")
-            return skeleton_ids, avg_accept_len, num_para
+            return skeleton_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
 
         num_para = len(clean_branches)
        
         self.parallel_branches_output = [list(br) for br in clean_branches]  # 保存branches结果
         print(f"Detected {num_para} parallel branches.")
+        self.instruction_len = instruction_len
 
         # === Stage 3: Parallel Decoding (并行解码) ===
         # print(">>> Stage 3: Parallel Decoding...")
 
         # 调用并行解码
-        avg_accept_len = self._eagenerate_parallel(
+        avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time = self._eagenerate_parallel(
             prefix_ids=task_input_ids,
             branches_prompts=clean_branches,
             max_new_tokens=max_new_tokens,
@@ -354,7 +356,7 @@ class EaModel(nn.Module):
         merged_ids = skeleton_part + parallel_part
         merged_ids.append(para_token_ids['para_end_token_id'])
         
-        return torch.tensor([merged_ids], device=input_ids.device), avg_accept_len, num_para
+        return torch.tensor([merged_ids], device=input_ids.device), avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
 
 
     # ================= 内部方法: 原始 EAGLE 循环 (Stage 1) =================
@@ -387,13 +389,27 @@ class EaModel(nn.Module):
         
         padding = (torch.zeros(1, 1, dtype=torch.long) - 1).to(input_ids.device)
         total_accept_len = torch.zeros(1, dtype=torch.long, device=input_ids.device)
+        
+        # 初始化计时累加器
+        total_draft_time = 0.0
+        total_update_time = 0.0
+        total_verify_time = 0.0
+
+        # 初始化 CUDA 事件
+        evt_start = torch.cuda.Event(enable_timing=True)
+        evt_after_verify = torch.cuda.Event(enable_timing=True)
+        evt_after_update = torch.cuda.Event(enable_timing=True)
+        evt_after_draft = torch.cuda.Event(enable_timing=True)
+
         # Decode Loop
         for idx in range(max_new_tokens):
+            evt_start.record()
             self.base_model.model.tree_mask = tree_mask # 关键：设置 Base Model 的 Mask
             draft_tokens = draft_tokens.to(input_ids.device)
             
             # Base Model Forward
             logits, hidden_state_new, outputs = tree_decoding(self, draft_tokens, past_key_values, tree_position_ids, input_ids, retrieve_indices)
+            evt_after_verify.record()
 
             draft_tokens = torch.cat((draft_tokens, padding), dim=1)
             candidates = draft_tokens[0, retrieve_indices]  # 全都采用batch维度。  [1, Leaf, Depth] 
@@ -411,11 +427,26 @@ class EaModel(nn.Module):
             if accept_length.ndim == 0:
                 accept_length = accept_length.unsqueeze(0)   # [1]
             total_accept_len += accept_length.sum()
+
+            evt_after_update.record()
             
             # Update Inputs for next step (Generates next Draft Tree)
             input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids = update_inference_inputs(
                 input_ids, candidates, best_candidate, accept_length, retrieve_indices, logits_processor, self, hidden_state_new, sample_p)
             
+            evt_after_draft.record()
+
+            torch.cuda.synchronize()
+            
+            # 计算分段耗时 (ms -> s)
+            step_verify_time = evt_start.elapsed_time(evt_after_verify) / 1000  # Base Model
+            step_update_time = evt_after_verify.elapsed_time(evt_after_update) / 1000 # Evaluation
+            step_draft_time = evt_after_update.elapsed_time(evt_after_draft) / 1000 # Eagle
+
+            total_verify_time += step_verify_time
+            total_update_time += step_update_time
+            total_draft_time += step_draft_time
+
             # Stop Conditions
             if stop_token_id and stop_token_id in input_ids[0, input_len:].tolist():
                 break
@@ -425,10 +456,13 @@ class EaModel(nn.Module):
                 break
             if idx >= 150 and enable_parallel:  # skeleton 的长度控制不超过50
                 break
-        avg_accept_len = total_accept_len.item() / idx      
+        avg_accept_len = total_accept_len.item() / idx  
+        avg_draft_time = total_draft_time / idx
+        avg_update_time = total_update_time / idx
+        avg_verify_time = total_verify_time / idx    
         if return_kv:  # 这里需要返回self.ea_layer.stable_kv来复用eagle layer的cache
             return input_ids[:, input_len:], (past_key_values, past_key_values_data, current_length_data)
-        return input_ids[:, input_len:], avg_accept_len
+        return input_ids[:, input_len:], avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time
 
 
     # ================= 内部方法: 并行解码 (Stage 3) =================
@@ -450,7 +484,19 @@ class EaModel(nn.Module):
         # print(f"skeleton_output {self.tokenizer.decode(self.skeleton_output[0].tolist())}")
         # 3. Decoding Loop
         total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
+
+        # 初始化计时器变量
+        total_verify_time = 0.0  # Base Model Forward
+        total_update_time = 0.0  # Token Selection & State Update
+        total_draft_time = 0.0   # Eagle Layer Generate
+        
+        # 初始化 CUDA 事件 (复用以减少开销)
+        evt_start = torch.cuda.Event(enable_timing=True)
+        evt_after_verify = torch.cuda.Event(enable_timing=True)
+        evt_after_update = torch.cuda.Event(enable_timing=True)
+        evt_after_draft = torch.cuda.Event(enable_timing=True)
         for step in range(max_new_tokens):
+            evt_start.record()
             # 构建 Mask, History(使用 BIM) + Draft(Tree mask)
             current_length = self.current_length_data[0].item()
             num_nodes = draft_tokens.shape[1] # 这里绝对不能去掉root啊，因为root是生成的，还没有输入推理         
@@ -458,7 +504,8 @@ class EaModel(nn.Module):
             
             # Verify (Base Model Forward)
             logits, hidden_states = self._parallel_verify_step(draft_tokens, tree_position_ids, combined_mask, num_nodes)
-            
+            evt_after_verify.record()
+
             # Evaluate (Compare candidates & logits)  
             best_candidate, accept_length, sample_logits = self._evaluate_wrapper(logits, draft_tokens, retrieve_indices, logits_processor)
             # print(f"accept length: {accept_length}")
@@ -474,6 +521,7 @@ class EaModel(nn.Module):
             else:
                 sample_tokens = torch.argmax(prob, dim=-1, keepdim=True) # [B, 1]
 
+            
             # Update State (Cache Management & Token Commit)
             next_tips_hidden, next_tips_tokens = self._update_parallel_state(best_candidate, accept_length, draft_tokens, 
                 retrieve_indices, hidden_states, sample_tokens, num_nodes)
@@ -481,15 +529,32 @@ class EaModel(nn.Module):
             if self.active_branches == None or len(self.active_branches) == 0:
                 print("All branches finished generation.")
                 break
+            evt_after_update.record()
 
             # Next Draft
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids = self.ea_layer.topK_generate(
                 next_tips_hidden, next_tips_tokens, active_branch=self.active_branches)
             
-            if step > 100: break # Safety break
+            evt_after_draft.record()
+
+            torch.cuda.synchronize() 
+            
+            step_verify_time = evt_start.elapsed_time(evt_after_verify) / 1000
+            step_update_time = evt_after_verify.elapsed_time(evt_after_update) / 1000
+            step_draft_time = evt_after_update.elapsed_time(evt_after_draft) / 1000
+            
+            total_verify_time += step_verify_time
+            total_update_time += step_update_time
+            total_draft_time += step_draft_time
+
+            # if step > 50: break # Safety break
+
         avg_accept_len = total_accept_len.item() / step
-        print(f"Avg accepted lengths: {avg_accept_len}")
-        return avg_accept_len
+        avg_draft_time = total_draft_time / step
+        avg_update_time = total_update_time / step
+        avg_verify_time = total_verify_time / step
+        print(f"Avg accepted lengths: {avg_accept_len}, Avg draft time per step: {avg_draft_time:.4f}s, Avg update time per step: {avg_update_time:.4f}s, Avg verify time per step: {avg_verify_time:.4f}s")
+        return avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time
 
     def _init_parallel_state(self, prefix_ids, branches_prompts, max_new_tokens):
         device = self.base_model.device
