@@ -307,7 +307,7 @@ class EaModel(nn.Module):
             return_kv=False,
             para_token_ids=para_token_ids 
         )
-        # print("Generated Skeleton:", self.tokenizer.decode(skeleton_ids[0]))
+        print("Generated Skeleton:", self.tokenizer.decode(skeleton_ids[0]))
         self.skeleton_output = skeleton_ids.clone()  # 保存skeleton
 
         # === Stage 2: Parse & Prepare (解析与准备) ===
@@ -352,6 +352,7 @@ class EaModel(nn.Module):
             parallel_part.extend(branch_output)
             parallel_part.append(para_token_ids['line_break_token_id'])
             # print(f"Branch {i}:", self.tokenizer.decode(torch.tensor(branch_output)))
+            print(f"Branch {i} Length: {len(branch_output)}")
         
         merged_ids = skeleton_part + parallel_part
         merged_ids.append(para_token_ids['para_end_token_id'])

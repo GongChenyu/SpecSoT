@@ -1,0 +1,24 @@
+/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2026-01-08 21:47:32,721 - init - INFO - 检测到单机多卡环境，使用NCCL后端
+[Rank 0] 单机多卡模式(无环境隔离)，使用GPU 0
+Traceback (most recent call last):
+  File "/data/home/chenyu/Coding/SD+SoT/Communication-Optimize/distributed_inference.py", line 446, in <module>
+    main()
+  File "/data/home/chenyu/Coding/SD+SoT/Communication-Optimize/distributed_inference.py", line 430, in main
+    engine = DistributedInferenceEngine(
+  File "/data/home/chenyu/Coding/SD+SoT/Communication-Optimize/distributed_inference.py", line 60, in __init__
+    self._init_distributed(master_addr, master_port)
+  File "/data/home/chenyu/Coding/SD+SoT/Communication-Optimize/distributed_inference.py", line 128, in _init_distributed
+    dist.init_process_group(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/distributed/c10d_logger.py", line 81, in wrapper
+    return func(*args, **kwargs)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/distributed/c10d_logger.py", line 95, in wrapper
+    func_return = func(*args, **kwargs)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/distributed/distributed_c10d.py", line 1714, in init_process_group
+    store, rank, world_size = next(rendezvous_iterator)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/distributed/rendezvous.py", line 226, in _tcp_rendezvous_handler
+    store = _create_c10d_store(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/distributed/rendezvous.py", line 194, in _create_c10d_store
+    return TCPStore(
+RuntimeError: The server socket has failed to listen on any local network address. port: 29500, useIpv6: 0, code: -98, name: EADDRINUSE, message: address already in use
