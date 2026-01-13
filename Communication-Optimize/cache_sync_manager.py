@@ -25,7 +25,8 @@ class CacheSyncManager:
         rank: int, 
         world_size: int, 
         strategy: str = "pairwise",
-        device: str = "cuda"
+        device: str = "cuda",
+        backend: str = "nccl"
     ):
         """
         Args:
@@ -33,11 +34,13 @@ class CacheSyncManager:
             world_size: 总设备数
             strategy: 同步策略 ("pairwise" 或 "ring")
             device: 设备类型
+            backend: 通信后端 ("nccl" 或 "gloo")
         """
         self.rank = rank
         self.world_size = world_size
         self.strategy = strategy
         self.device = device
+        self.backend = backend
         
         self.logger = logging.getLogger(f"CacheSyncManager-Rank{rank}")
         
@@ -164,28 +167,93 @@ class CacheSyncManager:
         kv_cache: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        两两通信策略：所有设备两两通信
+        两两通信策略：使用点对点通信，无需全局同步
         
         通信模式（以3个设备为例）：
-        - Rank 0 <-> Rank 1
-        - Rank 0 <-> Rank 2
-        - Rank 1 <-> Rank 2
+        - 每个rank与其他所有rank进行P2P通信
+        - 使用非阻塞通信避免死锁
+        - 不需要所有rank同时到达
         
         每个设备最终获得所有设备的完整cache
         """
         key_cache, value_cache = kv_cache
         
-        # 收集所有设备的cache
-        all_key_caches = [torch.zeros_like(key_cache) for _ in range(self.world_size)]
-        all_value_caches = [torch.zeros_like(value_cache) for _ in range(self.world_size)]
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} 开始P2P同步 (backend={self.backend}), cache shape: K={key_cache.shape}, V={value_cache.shape}")
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} Key contiguous: {key_cache.is_contiguous()}, Value contiguous: {value_cache.is_contiguous()}")
         
-        # 使用all_gather收集所有cache
-        dist.all_gather(all_key_caches, key_cache.contiguous())
-        dist.all_gather(all_value_caches, value_cache.contiguous())
+        # Gloo后端需要在CPU上通信
+        if self.backend == 'gloo':
+            key_cache_comm = key_cache.cpu()
+            value_cache_comm = value_cache.cpu()
+        else:
+            key_cache_comm = key_cache
+            value_cache_comm = value_cache
         
-        # 在sequence维度拼接所有cache
+        # 存储所有rank的cache（包括自己的）
+        all_key_caches = [None] * self.world_size
+        all_value_caches = [None] * self.world_size
+        
+        # 先存储自己的cache（保持在GPU上）
+        all_key_caches[self.rank] = key_cache
+        all_value_caches[self.rank] = value_cache
+        
+        # 准备发送和接收的请求列表
+        send_requests = []
+        recv_requests = []
+        recv_buffers = []  # 用于gloo后端保存接收缓冲区
+        
+        # 与其他所有rank进行P2P通信
+        for other_rank in range(self.world_size):
+            if other_rank == self.rank:
+                continue
+            
+            # 发送自己的cache给other_rank（非阻塞）
+            send_req_k = dist.isend(key_cache_comm, dst=other_rank)
+            send_req_v = dist.isend(value_cache_comm, dst=other_rank)
+            send_requests.extend([send_req_k, send_req_v])
+            
+            # 准备接收缓冲区
+            if self.backend == 'gloo':
+                # Gloo: 在CPU上接收
+                recv_key = torch.zeros_like(key_cache_comm)
+                recv_value = torch.zeros_like(value_cache_comm)
+            else:
+                # NCCL: 在GPU上接收
+                recv_key = torch.zeros_like(key_cache)
+                recv_value = torch.zeros_like(value_cache)
+            
+            # 从other_rank接收cache（非阻塞）
+            recv_req_k = dist.irecv(recv_key, src=other_rank)
+            recv_req_v = dist.irecv(recv_value, src=other_rank)
+            recv_requests.extend([recv_req_k, recv_req_v])
+            
+            # 保存接收缓冲区引用
+            recv_buffers.append((other_rank, recv_key, recv_value))
+        
+        # 等待所有发送完成
+        for req in send_requests:
+            req.wait()
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} 发送完成")
+        
+        # 等待所有接收完成
+        for req in recv_requests:
+            req.wait()
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} 接收完成")
+        
+        # 将接收到的数据移到GPU（如果使用gloo）并存储
+        for other_rank, recv_key, recv_value in recv_buffers:
+            if self.backend == 'gloo':
+                all_key_caches[other_rank] = recv_key.to(key_cache.device)
+                all_value_caches[other_rank] = recv_value.to(value_cache.device)
+            else:
+                all_key_caches[other_rank] = recv_key
+                all_value_caches[other_rank] = recv_value
+        
+        # 按rank顺序拼接所有cache
         merged_key = torch.cat(all_key_caches, dim=2)  # dim=2是seq_len维度
         merged_value = torch.cat(all_value_caches, dim=2)
+        
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} 拼接后 shape: K={merged_key.shape}, V={merged_value.shape}")
         
         return (merged_key, merged_value)
         
@@ -195,25 +263,21 @@ class CacheSyncManager:
         kv_cache: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        环形通信策略：设备按环形拓扑传递cache
+        环形通信策略：使用P2P点对点通信实现环形传递
         
         通信流程（以3个设备为例）：
         初始: Rank0有cache0, Rank1有cache1, Rank2有cache2
-        Step 1:
-          - Rank 0 -> Rank 1: cache0
-          - Rank 1 -> Rank 2: cache1  
-          - Rank 2 -> Rank 0: cache2
-          现在: Rank0有[cache0,cache2], Rank1有[cache1,cache0], Rank2有[cache2,cache1]
-          
-        Step 2:
-          - Rank 0 -> Rank 1: cache2
-          - Rank 1 -> Rank 2: cache0
-          - Rank 2 -> Rank 0: cache1
-          最终: 每个Rank都有[cache0,cache1,cache2]
-          
-        每个设备经过world_size-1轮后获得所有cache
+        
+        使用P2P通信，每轮环形传递一个cache：
+        Step 1: 每个rank向下一个rank发送，从上一个rank接收
+        Step 2: 重复world_size-1轮
+        
+        优势：不需要全局同步，各rank可以异步执行
         """
         key_cache, value_cache = kv_cache
+        
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} 开始Ring P2P同步 (backend={self.backend})")
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} Key contiguous: {key_cache.is_contiguous()}, Value contiguous: {value_cache.is_contiguous()}")
         
         # 使用字典存储来自不同rank的cache，key是原始rank编号
         all_keys = {self.rank: key_cache}
@@ -228,30 +292,43 @@ class CacheSyncManager:
         # 进行world_size-1轮传递，每轮传递一个cache
         for step in range(self.world_size - 1):
             # 发送当前持有的cache（这是从current_cache_from_rank来的）
-            send_keys = all_keys[current_cache_from_rank]
-            send_values = all_values[current_cache_from_rank]
+            send_keys = all_keys[current_cache_from_rank].contiguous()
+            send_values = all_values[current_cache_from_rank].contiguous()
             
-            # 接收缓冲区（大小与单个cache相同）
-            recv_keys = torch.zeros_like(key_cache)
-            recv_values = torch.zeros_like(value_cache)
+            # Gloo后端需要在CPU上通信
+            if self.backend == 'gloo':
+                send_keys_comm = send_keys.cpu()
+                send_values_comm = send_values.cpu()
+                recv_keys = torch.empty_like(key_cache).cpu().contiguous()
+                recv_values = torch.empty_like(value_cache).cpu().contiguous()
+            else:
+                send_keys_comm = send_keys
+                send_values_comm = send_values
+                recv_keys = torch.empty_like(key_cache).contiguous()
+                recv_values = torch.empty_like(value_cache).contiguous()
             
-            # 同时发送和接收
-            send_req_k = dist.isend(send_keys.contiguous(), dst=next_rank)
+            # 使用P2P通信同时发送和接收（非阻塞）
             recv_req_k = dist.irecv(recv_keys, src=prev_rank)
-            send_req_v = dist.isend(send_values.contiguous(), dst=next_rank)
+            send_req_k = dist.isend(send_keys_comm, dst=next_rank)
             recv_req_v = dist.irecv(recv_values, src=prev_rank)
+            send_req_v = dist.isend(send_values_comm, dst=next_rank)
             
             # 等待通信完成
-            send_req_k.wait()
             recv_req_k.wait()
-            send_req_v.wait()
             recv_req_v.wait()
+            send_req_k.wait()
+            send_req_v.wait()
             
             # 更新：接收到的cache来自prev_rank传递的cache
-            # prev_rank在这一轮传递的是它在上一轮持有的cache
             received_from_rank = (current_cache_from_rank - 1 + self.world_size) % self.world_size
-            all_keys[received_from_rank] = recv_keys
-            all_values[received_from_rank] = recv_values
+            
+            # Gloo后端需要移回GPU
+            if self.backend == 'gloo':
+                all_keys[received_from_rank] = recv_keys.to(key_cache.device)
+                all_values[received_from_rank] = recv_values.to(value_cache.device)
+            else:
+                all_keys[received_from_rank] = recv_keys
+                all_values[received_from_rank] = recv_values
             
             # 下一轮要传递的cache来源更新
             current_cache_from_rank = received_from_rank
@@ -260,6 +337,8 @@ class CacheSyncManager:
         sorted_ranks = sorted(all_keys.keys())
         merged_key = torch.cat([all_keys[r] for r in sorted_ranks], dim=2)
         merged_value = torch.cat([all_values[r] for r in sorted_ranks], dim=2)
+        
+        self.logger.debug(f"  [Layer {layer_idx}] Rank {self.rank} Ring同步完成")
         
         return (merged_key, merged_value)
         
@@ -316,8 +395,8 @@ class StreamingSyncManager(CacheSyncManager):
     每计算完一层就立即开始同步该层的cache
     """
     
-    def __init__(self, rank: int, world_size: int, strategy: str = "pairwise", device: str = "cuda"):
-        super().__init__(rank, world_size, strategy, device)
+    def __init__(self, rank: int, world_size: int, strategy: str = "pairwise", device: str = "cuda", backend: str = "nccl"):
+        super().__init__(rank, world_size, strategy, device, backend)
         
         # 用于追踪每层的同步状态
         self.layer_sync_status = {}  # {layer_idx: sync_id}
@@ -371,7 +450,8 @@ def create_sync_manager(
     rank: int, 
     world_size: int, 
     strategy: str = "pairwise",
-    streaming: bool = False
+    streaming: bool = False,
+    backend: str = "nccl"
 ) -> CacheSyncManager:
     """
     创建cache同步管理器
@@ -381,11 +461,12 @@ def create_sync_manager(
         world_size: 总设备数
         strategy: 同步策略 ("pairwise" 或 "ring")
         streaming: 是否使用流式同步
+        backend: 通信后端 ("nccl" 或 "gloo")
         
     Returns:
         CacheSyncManager实例
     """
     if streaming:
-        return StreamingSyncManager(rank, world_size, strategy)
+        return StreamingSyncManager(rank, world_size, strategy, backend=backend)
     else:
-        return CacheSyncManager(rank, world_size, strategy)
+        return CacheSyncManager(rank, world_size, strategy, backend=backend)

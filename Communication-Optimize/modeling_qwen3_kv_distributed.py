@@ -15,17 +15,19 @@ from modeling_qwen3_kv import (
     Qwen3PreTrainedModel
 )
 from cache_sync_manager import create_sync_manager, CacheSyncManager
+from kv_cache import KVCache, initialize_past_key_values
 
 
 class Qwen3ModelDistributed(Qwen3Model):
     """支持Pipeline Parallel的Qwen3Model"""
     
-    def __init__(self, config: Qwen3Config, rank: int = 0, world_size: int = 1, sync_strategy: str = "pairwise"):
+    def __init__(self, config: Qwen3Config, rank: int = 0, world_size: int = 1, sync_strategy: str = "pairwise", backend: str = "nccl"):
         super().__init__(config)
         
         self.rank = rank
         self.world_size = world_size
         self.sync_strategy = sync_strategy
+        self.backend = backend
         
         # Pipeline Parallel配置
         self.pp_start_layer = 0
@@ -38,10 +40,17 @@ class Qwen3ModelDistributed(Qwen3Model):
                 rank=rank,
                 world_size=world_size,
                 strategy=sync_strategy,
-                streaming=False
+                streaming=False,
+                backend=backend
             )
         else:
             self.cache_sync_manager = None
+        
+        # 🆕 初始化KV Cache（预分配连续内存）
+        self.past_key_values = None
+        self.past_key_values_data = None
+        self.current_length_data = None
+        self._kv_cache_initialized = False
             
     def set_pipeline_range(self, start_layer: int, end_layer: int):
         """设置当前rank负责的层范围"""
@@ -54,6 +63,41 @@ class Qwen3ModelDistributed(Qwen3Model):
         self.pp_start_layer = 0
         self.pp_end_layer = self.config.num_hidden_layers
         self.is_pipeline_mode = False
+    
+    def initialize_kv_cache(self, max_length: int = 2200, batch_size: int = 1):
+        """初始化预分配的KV Cache（连续内存）"""
+        if not self._kv_cache_initialized:
+            # 临时包装模型供 initialize_past_key_values 使用
+            class ModelWrapper:
+                def __init__(self, model, config):
+                    self.model = model
+                    self.config = config
+                    self.dtype = next(model.parameters()).dtype
+                    self.layers = model.layers
+            
+            wrapper = ModelWrapper(self, self.config)
+            self.past_key_values, self.past_key_values_data, self.current_length_data = \
+                initialize_past_key_values(wrapper, max_length=max_length, batch_size=batch_size)
+            
+            self._kv_cache_initialized = True
+            
+            # 打印初始化信息
+            total_size_gb = sum(d.numel() * d.element_size() for d in self.past_key_values_data) / (1024**3)
+            print(f"[Rank {self.rank}] 预分配KV Cache:")
+            print(f"  层数: {self.config.num_hidden_layers}")
+            print(f"  最大长度: {max_length}")
+            print(f"  总大小: {total_size_gb:.2f} GB")
+            print(f"  缓冲区数量: {len(self.past_key_values_data)}")
+    
+    def reset_kv_cache(self):
+        """重置KV Cache（用于新的推理）"""
+        if self._kv_cache_initialized:
+            for layer_caches in self.past_key_values:
+                for cache in layer_caches:
+                    cache.reset()
+            # 也重置length数据
+            if self.current_length_data is not None:
+                self.current_length_data.zero_()
         
     def forward_pipeline_stage(
         self,
@@ -201,20 +245,34 @@ class Qwen3ModelDistributed(Qwen3Model):
         **kwargs
     ) -> dict:
         """
-        单层forward计算
+        单层forward计算（使用预分配的KVCache）
         
         Args:
             layer_idx: 层索引（全局索引）
             hidden_states: 输入的hidden states
+            past_key_value: 该层的past KV cache（如果使用KVCache，则忽略）
             其他参数同标准forward
             
         Returns:
             dict包含:
                 - hidden_states: 输出的hidden states
-                - past_key_value: 该层的KV cache (key_states, value_states)
+                - past_key_value: 该层的KV cache (连续内存)
         """
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        
+        # 🆕 如果使用KVCache，从预分配缓冲区获取past_key_value
+        if self._kv_cache_initialized and use_cache:
+            # 获取当前层的KVCache对象
+            layer_kv_cache = self.past_key_values[layer_idx]
+            # 构建past_key_value tuple
+            if layer_kv_cache[0].current_length.item() > 0:
+                past_key_value = (
+                    layer_kv_cache[0].get_data(),  # key cache
+                    layer_kv_cache[1].get_data()   # value cache
+                )
+            else:
+                past_key_value = None
         
         # 获取对应的decoder layer
         decoder_layer = self.layers[layer_idx]
@@ -232,14 +290,28 @@ class Qwen3ModelDistributed(Qwen3Model):
             **kwargs
         )
         
-        # layer_outputs格式: (hidden_states,) or (hidden_states, attn_weights,) or (hidden_states, past_kv) or (hidden_states, attn_weights, past_kv)
+        # layer_outputs格式: (hidden_states,) or (hidden_states, past_kv) or (hidden_states, attn_weights, past_kv)
         new_hidden_states = layer_outputs[0]
         
         result = {'hidden_states': new_hidden_states}
         
         if use_cache:
             kv_idx = 2 if output_attentions else 1
-            result['past_key_value'] = layer_outputs[kv_idx]
+            new_kv_cache = layer_outputs[kv_idx] if len(layer_outputs) > kv_idx else None
+            
+            # 🆕 如果使用KVCache，将新生成的cache追加到预分配缓冲区
+            if self._kv_cache_initialized and new_kv_cache is not None:
+                new_key, new_value = new_kv_cache
+                layer_kv_cache = self.past_key_values[layer_idx]
+                
+                # 使用cat方法追加（自动管理连续内存）
+                updated_key = layer_kv_cache[0].cat(new_key, dim=2)
+                updated_value = layer_kv_cache[1].cat(new_value, dim=2)
+                
+                # 返回连续的cache（从预分配缓冲区）
+                result['past_key_value'] = (updated_key, updated_value)
+            else:
+                result['past_key_value'] = new_kv_cache
         else:
             result['past_key_value'] = None
             
@@ -253,6 +325,10 @@ class Qwen3ModelDistributed(Qwen3Model):
         """
         同步单层的KV cache
         
+        在PP模式下，同步是为了让每个rank都获取到其他rank负责层的cache。
+        由于cache_sync_manager会在sequence维度拼接，所以同步后的cache可能变大。
+        我们直接返回同步后的cache，不写回预分配缓冲区（预分配缓冲区只用于单个rank的本地cache管理）。
+        
         Args:
             layer_idx: 层索引
             kv_cache: 单层的(key, value) cache tuple
@@ -263,20 +339,29 @@ class Qwen3ModelDistributed(Qwen3Model):
         if self.cache_sync_manager is None or self.world_size == 1:
             return kv_cache
         
-        # 使用sync_all_layers_sync，但只传入单层cache
-        synced_caches = self.cache_sync_manager.sync_all_layers_sync([kv_cache])
+        # 确保cache是连续的（如果是narrow的结果，需要contiguous）
+        key_cache, value_cache = kv_cache
+        if not key_cache.is_contiguous():
+            key_cache = key_cache.contiguous()
+        if not value_cache.is_contiguous():
+            value_cache = value_cache.contiguous()
+        
+        # 使用sync_all_layers_sync，直接返回同步结果
+        # 注意：cache_sync_manager会在sequence维度拼接，这在SP+PP混合模式下是合理的
+        synced_caches = self.cache_sync_manager.sync_all_layers_sync([(key_cache, value_cache)])
+        
         return synced_caches[0]
 
 
 class Qwen3ForCausalLMDistributed(Qwen3ForCausalLM):
     """支持分布式推理的Qwen3ForCausalLM"""
     
-    def __init__(self, config, rank: int = 0, world_size: int = 1, sync_strategy: str = "pairwise"):
+    def __init__(self, config, rank: int = 0, world_size: int = 1, sync_strategy: str = "pairwise", backend: str = "nccl"):
         # 调用父类的__init__，但需要替换model
         Qwen3PreTrainedModel.__init__(self, config)
         
         # 使用分布式版本的model
-        self.model = Qwen3ModelDistributed(config, rank=rank, world_size=world_size, sync_strategy=sync_strategy)
+        self.model = Qwen3ModelDistributed(config, rank=rank, world_size=world_size, sync_strategy=sync_strategy, backend=backend)
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         
