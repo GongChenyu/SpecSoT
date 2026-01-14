@@ -41,7 +41,7 @@ class ZMQDistributedInferenceEngine:
         world_size: int,
         base_port: int = 29500,
         chunk_size: int = 128,
-        comm_mode: str = "pairwise",  # "pairwise" or "ring"
+        comm_mode: str = "p2p",  # "p2p" or "ring"
         device: str = "cuda",
         node_addresses: Optional[Dict[int, str]] = None,
         startup_delay: float = 2.0,  # 启动延迟，等待所有节点就绪
@@ -55,7 +55,7 @@ class ZMQDistributedInferenceEngine:
             world_size: 总设备数 (3)
             base_port: 基础端口号
             chunk_size: SP的chunk大小
-            comm_mode: 通信模式 ("pairwise"或"ring")
+            comm_mode: 通信模式 ("p2p"或"ring")
             device: 设备类型
             node_addresses: 节点地址映射 {rank: ip}
             startup_delay: 启动延迟秒数
@@ -100,9 +100,12 @@ class ZMQDistributedInferenceEngine:
         # 时间测量点
         self.timing_stats = {
             'prefill_start': 0,
-            'prefill_end': 0,
+            'prefill_compute_end': 0,  # 计算完成时间（不含cache同步）
+            'prefill_end': 0,  # 包含cache同步的完成时间
             'decode_start': 0,
-            'decode_end': 0
+            'decode_end': 0,
+            'cache_sync_start': 0,  # cache同步开始时间
+            'cache_sync_end': 0,  # cache同步结束时间
         }
         
         # Cache接收状态追踪矩阵
@@ -197,6 +200,7 @@ class ZMQDistributedInferenceEngine:
         self.logger.info("=" * 60)
         self.logger.info("开始 Prefill 阶段 (SP+PP with ZMQ)")
         self.timing_stats['prefill_start'] = time.time()
+        self.timing_stats['cache_sync_start'] = time.time()
         
         # 重置KV Cache
         self._reset_kv_cache()
@@ -326,12 +330,8 @@ class ZMQDistributedInferenceEngine:
             
             self.logger.info(f"  chunk {chunk_idx+1} 处理完成")
         
-        # Prefill结束，等待所有cache接收完成
-        self._wait_for_all_caches()
-        
-        self.timing_stats['prefill_end'] = time.time()
-        prefill_time = self.timing_stats['prefill_end'] - self.timing_stats['prefill_start']
-        self.logger.info(f"Prefill 完成，耗时: {prefill_time:.3f}s")
+        # Prefill结束，等待所有cache接收完成, 记录完成时间
+        self.timing_stats['prefill_compute_end'] = time.time()
         
         # Token同步（只有最后一个rank有有效的hidden states）
         # 这里广播first token给所有rank
@@ -343,8 +343,16 @@ class ZMQDistributedInferenceEngine:
             self.first_token = first_token
         else:
             self.first_token = self.comm.recv_token(src_rank=self.world_size - 1)
-        
         self.logger.info(f"First token 同步完成: {self.first_token.item()}")
+
+        self._wait_for_all_caches()
+        self.timing_stats['cache_sync_end'] = time.time()
+        self.timing_stats['prefill_end'] = time.time()
+
+        compute_time = self.timing_stats['prefill_compute_end'] - self.timing_stats['prefill_start']
+        prefill_time = self.timing_stats['prefill_end'] - self.timing_stats['prefill_start']
+        cache_sync_time = self.timing_stats['cache_sync_end'] - self.timing_stats['cache_sync_start']
+        self.logger.info(f"Prefill 总耗时: {prefill_time:.3f}s, cache同步耗时: {cache_sync_time:.3f}s, 计算耗时: {compute_time:.3f}s")
         
         return last_hidden, self.past_key_values
     
@@ -451,13 +459,18 @@ class ZMQDistributedInferenceEngine:
         """打印时间统计"""
         self.logger.info("=" * 60)
         self.logger.info("时间统计:")
+        prefill_compute_time = self.timing_stats['prefill_compute_end'] - self.timing_stats['prefill_start']
+        cache_sync_time = self.timing_stats['cache_sync_end'] - self.timing_stats['cache_sync_start']
         prefill_time = self.timing_stats['prefill_end'] - self.timing_stats['prefill_start']
         decode_time = self.timing_stats['decode_end'] - self.timing_stats['decode_start']
         total_time = self.timing_stats['decode_end'] - self.timing_stats['prefill_start']
         
-        self.logger.info(f"  Prefill 时间:      {prefill_time:.3f}s")
-        self.logger.info(f"  Decode 时间:       {decode_time:.3f}s")
-        self.logger.info(f"  总时间:           {total_time:.3f}s")
+        self.logger.info(f"  Prefill 计算时间:     {prefill_compute_time:.3f}s")
+        self.logger.info(f"  Cache 同步时间:      {cache_sync_time:.3f}s")
+        self.logger.info(f"  Prefill 总时间:      {prefill_time:.3f}s")
+        self.logger.info(f"  通信开销占比:        {cache_sync_time/prefill_time*100:.1f}%")
+        self.logger.info(f"  Decode 时间:        {decode_time:.3f}s")
+        self.logger.info(f"  总时间:            {total_time:.3f}s")
         
         # 打印通信统计
         stats = self.comm.get_stats()
@@ -466,6 +479,7 @@ class ZMQDistributedInferenceEngine:
         self.logger.info(f"  Cache 发送/接收:   {stats['cache_sent']}/{stats['cache_recv']}")
         if self.comm_mode == 'ring':
             self.logger.info(f"  聚合发送次数:      {stats['aggregated_sends']}")
+            self.logger.info(f"  转发消息数:        {stats['forwarded_messages']}")
         self.logger.info("=" * 60)
     
     def run_inference(self, prompt: str, max_new_tokens: int = 100) -> str:
@@ -494,14 +508,51 @@ class ZMQDistributedInferenceEngine:
         finally:
             self.cleanup()
     
+    def get_timing_stats(self) -> dict:
+        """获取时间统计信息（用于性能测试）"""
+        return {
+            'prefill_compute_time': self.timing_stats['prefill_compute_end'] - self.timing_stats['prefill_start'],
+            'cache_sync_time': self.timing_stats['cache_sync_end'] - self.timing_stats['cache_sync_start'],
+            'prefill_total_time': self.timing_stats['prefill_end'] - self.timing_stats['prefill_start'],
+            'decode_time': self.timing_stats['decode_end'] - self.timing_stats['decode_start'],
+            'comm_stats': self.comm.get_stats()
+        }
+    
     def cleanup(self):
         """清理资源"""
         try:
+            # 清理日志handler
             for handler in self.logger.handlers:
                 handler.flush()
             
+            # 清理通信管理器
             if self.comm:
                 self.comm.stop()
+                self.comm = None
+            
+            # 清理模型
+            if hasattr(self, 'model') and self.model is not None:
+                del self.model
+                self.model = None
+            
+            # 清理KV cache
+            if hasattr(self, 'past_key_values') and self.past_key_values is not None:
+                del self.past_key_values
+                self.past_key_values = None
+            
+            # 清理tokenizer
+            if hasattr(self, 'tokenizer') and self.tokenizer is not None:
+                del self.tokenizer
+                self.tokenizer = None
+            
+            # 清理GPU缓存
+            import torch
+            import gc
+            torch.cuda.empty_cache()
+            gc.collect()
+            
+            self.logger.info("资源清理完成")
+            
         except Exception as e:
             self.logger.warning(f"Cleanup出错: {e}")
 
@@ -513,8 +564,8 @@ def main():
     parser.add_argument('--world_size', type=int, default=3, help='总设备数')
     parser.add_argument('--base_port', type=int, default=29500, help='基础端口号')
     parser.add_argument('--chunk_size', type=int, default=128, help='SP的chunk大小')
-    parser.add_argument('--comm_mode', type=str, default='pairwise', 
-                       choices=['pairwise', 'ring'], help='通信模式')
+    parser.add_argument('--comm_mode', type=str, default='p2p', 
+                       choices=['p2p', 'ring'], help='通信模式')
     parser.add_argument('--prompt', type=str, default='请详细介绍一下人工智能的发展历史。', 
                        help='输入prompt')
     parser.add_argument('--max_new_tokens', type=int, default=100, help='最大生成token数')

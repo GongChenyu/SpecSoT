@@ -10,6 +10,7 @@ import multiprocessing as mp
 import logging
 from datetime import datetime
 
+project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 def setup_logging(rank: int, log_dir: str = "./logs"):
     """设置日志系统"""
@@ -128,12 +129,12 @@ def main():
         'model_path': '/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B',
         'base_port': 45000,  # ZMQ使用的基础端口
         'chunk_size': 128,
-        'comm_mode': 'pairwise',  # 'pairwise' 或 'ring'
+        'comm_mode': 'ring',  # 'p2p' 或 'ring'
         'world_size': 3,
         'prompt': '请详细介绍一下人工智能的发展历史。',
         'max_new_tokens': 50,
         'gpu_ids': [5, 6, 7],  # 使用的GPU ID
-        'log_dir': './logs',
+        'log_dir': os.path.join(project_dir, 'Communication-Optimize', 'logs'),
         'startup_delay': 1.0,  # 节点启动延迟
         'node_addresses': None,  # 单机模式下使用默认的localhost
     }

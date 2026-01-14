@@ -1,8 +1,0 @@
-2026-01-13 15:52:07,717 - root - INFO - 日志将保存到: ./logs/zmq_rank_2_20260113_155207.log
-2026-01-13 15:52:08,522 - root - ERROR - Rank 2 出错: No module named 'transformers'
-Traceback (most recent call last):
-  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_debug_launcher.py", line 84, in run_rank
-    from zmq_distributed_inference import ZMQDistributedInferenceEngine
-  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_distributed_inference.py", line 22, in <module>
-    from transformers import AutoTokenizer, AutoConfig
-ModuleNotFoundError: No module named 'transformers'

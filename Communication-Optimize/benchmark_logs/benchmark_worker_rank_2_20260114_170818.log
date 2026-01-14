@@ -1,0 +1,83 @@
+2026-01-14 17:08:18,993 - root - INFO - Worker Rank 2 启动，日志: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/benchmark_logs/benchmark_worker_rank_2_20260114_170818.log
+2026-01-14 17:08:26,147 - root - INFO - Rank 2 开始测试: mode=p2p, test_id=0, warmup=True
+2026-01-14 17:08:26,156 - root - INFO - Rank 2 创建新引擎: mode=p2p
+2026-01-14 17:08:26,161 - ZMQ-Rank-2 - INFO - 检测到 CUDA_VISIBLE_DEVICES=7，使用逻辑设备 cuda:0
+2026-01-14 17:08:26,161 - ZMQ-Rank-2 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
+2026-01-14 17:08:26,177 - ZMQComm-Rank2 - INFO - 设置P2P模式 ZMQ sockets
+2026-01-14 17:08:26,181 - ZMQComm-Rank2 - INFO - P2P模式 ZMQ sockets设置完成
+2026-01-14 17:08:26,181 - ZMQ-Rank-2 - INFO - 等待其他节点就绪 (0.5秒)...
+2026-01-14 17:08:26,683 - ZMQComm-Rank2 - INFO - 接收线程启动
+2026-01-14 17:08:26,684 - ZMQComm-Rank2 - INFO - P2P发送线程启动
+2026-01-14 17:08:26,684 - ZMQComm-Rank2 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-14 17:08:26,684 - ZMQ-Rank-2 - INFO - 初始化设备 Rank 2/3
+2026-01-14 17:08:26,965 - ZMQ-Rank-2 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 17:08:28,558 - ZMQ-Rank-2 - INFO - 模型加载完成，共36层
+2026-01-14 17:08:28,562 - ZMQ-Rank-2 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-14 17:08:28,562 - root - INFO - Rank 2 引擎创建完成
+2026-01-14 17:08:28,562 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 17:08:28,562 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 17:08:28,573 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 17:08:28,573 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 17:08:28,573 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 17:08:28,573 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 17:08:29,636 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 17:08:29,662 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 17:08:29,663 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 17:08:29,663 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 17:08:29,663 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 1.101s, cache同步耗时: 1.101s, 计算耗时: 1.075s
+2026-01-14 17:08:29,664 - root - INFO - Rank 2 完成测试: test_id=0
+2026-01-14 17:08:29,671 - root - INFO - Rank 2 开始测试: mode=p2p, test_id=0, warmup=False
+2026-01-14 17:08:29,671 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 17:08:29,671 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 17:08:29,681 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 17:08:29,681 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 17:08:29,681 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 17:08:29,681 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 17:08:29,932 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 17:08:29,934 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 17:08:29,935 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 17:08:29,935 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 17:08:29,935 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 0.264s, cache同步耗时: 0.264s, 计算耗时: 0.261s
+2026-01-14 17:08:29,935 - root - INFO - Rank 2 完成测试: test_id=0
+2026-01-14 17:08:39,950 - root - INFO - Rank 2 开始测试: mode=ring, test_id=0, warmup=True
+2026-01-14 17:08:39,951 - root - INFO - Rank 2 切换模式: p2p -> ring，清理旧引擎
+2026-01-14 17:08:40,013 - ZMQComm-Rank2 - INFO - 接收线程退出
+2026-01-14 17:08:40,047 - ZMQComm-Rank2 - INFO - P2P发送线程退出
+2026-01-14 17:08:40,048 - ZMQComm-Rank2 - INFO - 通信管理器已停止
+2026-01-14 17:08:40,229 - ZMQ-Rank-2 - INFO - 资源清理完成
+2026-01-14 17:08:40,313 - root - INFO - Rank 2 等待5秒让资源完全释放...
+2026-01-14 17:08:45,320 - root - INFO - Rank 2 创建新引擎: mode=ring
+2026-01-14 17:08:45,322 - ZMQ-Rank-2 - INFO - 检测到 CUDA_VISIBLE_DEVICES=7，使用逻辑设备 cuda:0
+2026-01-14 17:08:45,323 - ZMQ-Rank-2 - INFO - 初始化ZMQ通信管理器 (mode=ring)
+2026-01-14 17:08:45,324 - ZMQComm-Rank2 - INFO - 设置Ring模式 ZMQ sockets
+2026-01-14 17:08:45,324 - ZMQComm-Rank2 - INFO - Ring模式 ZMQ sockets设置完成 (prev=1, next=0)
+2026-01-14 17:08:45,324 - ZMQComm-Rank2 - INFO - Ring拓扑: prev=1 <- rank2 -> next=0
+2026-01-14 17:08:45,324 - ZMQ-Rank-2 - INFO - 等待其他节点就绪 (0.5秒)...
+2026-01-14 17:08:45,825 - ZMQComm-Rank2 - INFO - 接收线程启动
+2026-01-14 17:08:45,825 - ZMQComm-Rank2 - INFO - Ring发送线程启动
+2026-01-14 17:08:45,826 - ZMQComm-Rank2 - INFO - 通信管理器已启动 (RingCommManager)
+2026-01-14 17:08:45,826 - ZMQ-Rank-2 - INFO - 初始化设备 Rank 2/3
+2026-01-14 17:08:46,078 - ZMQ-Rank-2 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 17:08:46,889 - root - ERROR - Rank 2 测试出错: CUDA out of memory. Tried to allocate 48.00 MiB. GPU 0 has a total capacity of 23.53 GiB of which 43.00 MiB is free. Process 2087597 has 912.23 MiB memory in use. Process 579774 has 12.93 GiB memory in use. Including non-PyTorch memory, this process has 9.61 GiB memory in use. Of the allocated memory 9.01 GiB is allocated by PyTorch, and 147.70 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Traceback (most recent call last):
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_performance_benchmark.py", line 160, in benchmark_worker
+    current_engine = ZMQDistributedInferenceEngine(
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_distributed_inference.py", line 98, in __init__
+    self.model = self._load_model()
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_distributed_inference.py", line 142, in _load_model
+    model = Qwen3ForCausalLM.from_pretrained(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/transformers/modeling_utils.py", line 277, in _wrapper
+    return func(*args, **kwargs)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/transformers/modeling_utils.py", line 5048, in from_pretrained
+    ) = cls._load_pretrained_model(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/transformers/modeling_utils.py", line 5468, in _load_pretrained_model
+    _error_msgs, disk_offload_index = load_shard_file(args)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/transformers/modeling_utils.py", line 843, in load_shard_file
+    disk_offload_index = _load_state_dict_into_meta_model(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/transformers/modeling_utils.py", line 748, in _load_state_dict_into_meta_model
+    param = param[...]
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 48.00 MiB. GPU 0 has a total capacity of 23.53 GiB of which 43.00 MiB is free. Process 2087597 has 912.23 MiB memory in use. Process 579774 has 12.93 GiB memory in use. Including non-PyTorch memory, this process has 9.61 GiB memory in use. Of the allocated memory 9.01 GiB is allocated by PyTorch, and 147.70 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+2026-01-14 17:08:46,939 - root - INFO - Rank 2 收到停止信号
+2026-01-14 17:08:46,940 - root - INFO - Rank 2 退出

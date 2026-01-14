@@ -1,0 +1,31 @@
+2026-01-14 16:09:05,656 - ZMQ-Rank-0 - INFO - 检测到 CUDA_VISIBLE_DEVICES=5，使用逻辑设备 cuda:0
+2026-01-14 16:09:05,656 - ZMQ-Rank-0 - INFO - 初始化ZMQ通信管理器 (mode=ring)
+2026-01-14 16:09:05,657 - ZMQComm-Rank0 - INFO - 设置Ring模式 ZMQ sockets
+2026-01-14 16:09:05,657 - ZMQComm-Rank0 - INFO - Ring模式 ZMQ sockets设置完成 (prev=2, next=1)
+2026-01-14 16:09:05,657 - ZMQComm-Rank0 - INFO - Ring拓扑: prev=2 <- rank0 -> next=1
+2026-01-14 16:09:05,657 - ZMQ-Rank-0 - INFO - 等待其他节点就绪 (2.0秒)...
+2026-01-14 16:09:07,660 - ZMQComm-Rank0 - INFO - 接收线程启动
+2026-01-14 16:09:07,660 - ZMQComm-Rank0 - INFO - Ring发送线程启动
+2026-01-14 16:09:07,660 - ZMQComm-Rank0 - INFO - 通信管理器已启动 (RingCommManager)
+2026-01-14 16:09:07,661 - ZMQ-Rank-0 - INFO - 初始化设备 Rank 0/3
+2026-01-14 16:09:07,936 - ZMQ-Rank-0 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 16:09:09,409 - ZMQ-Rank-0 - INFO - 模型加载完成，共36层
+2026-01-14 16:09:09,412 - ZMQ-Rank-0 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-14 16:09:09,412 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-14 16:09:09,412 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 16:09:09,423 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-14 16:09:09,423 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 16:09:09,423 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-14 16:09:09,423 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-14 16:09:09,625 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-14 16:09:09,626 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-14 16:09:10,219 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-14 16:09:10,219 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.807s, cache同步耗时: 0.807s, 计算耗时: 0.213s
+2026-01-14 16:09:40,219 - ZMQComm-Rank0 - WARNING - 接收token超时
+2026-01-14 16:09:40,220 - root - ERROR - Rank 0 测试出错: 'NoneType' object has no attribute 'item'
+Traceback (most recent call last):
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_performance_benchmark.py", line 100, in run_single_test
+    last_hidden, kv_caches = engine.prefill_phase(args_dict['prompt'])
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_distributed_inference.py", line 355, in prefill_phase
+    self.logger.info(f"First token 同步完成: {self.first_token.item()}")
+AttributeError: 'NoneType' object has no attribute 'item'

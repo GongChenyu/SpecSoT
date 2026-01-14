@@ -1,0 +1,26 @@
+2026-01-14 16:07:08,362 - ZMQ-Rank-2 - INFO - 检测到 CUDA_VISIBLE_DEVICES=7，使用逻辑设备 cuda:0
+2026-01-14 16:07:08,362 - ZMQ-Rank-2 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
+2026-01-14 16:07:08,362 - ZMQComm-Rank2 - INFO - 设置P2P模式 ZMQ sockets
+2026-01-14 16:07:08,362 - ZMQComm-Rank2 - INFO - P2P模式 ZMQ sockets设置完成
+2026-01-14 16:07:08,362 - ZMQ-Rank-2 - INFO - 等待其他节点就绪 (2.0秒)...
+2026-01-14 16:07:10,365 - ZMQComm-Rank2 - INFO - 接收线程启动
+2026-01-14 16:07:10,365 - ZMQComm-Rank2 - INFO - P2P发送线程启动
+2026-01-14 16:07:10,366 - ZMQComm-Rank2 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-14 16:07:10,366 - ZMQ-Rank-2 - INFO - 初始化设备 Rank 2/3
+2026-01-14 16:07:10,655 - ZMQ-Rank-2 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 16:07:12,214 - ZMQ-Rank-2 - INFO - 模型加载完成，共36层
+2026-01-14 16:07:12,217 - ZMQ-Rank-2 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-14 16:07:12,217 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 16:07:12,217 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 16:07:12,227 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 16:07:12,228 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 16:07:12,228 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 16:07:12,228 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 16:07:13,151 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 16:07:13,151 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 16:07:13,151 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 16:07:13,151 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 0.934s, cache同步耗时: 0.934s, 计算耗时: 0.934s
+2026-01-14 16:07:13,167 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 16:07:13,194 - ZMQComm-Rank2 - INFO - 接收线程退出
+2026-01-14 16:07:13,268 - ZMQComm-Rank2 - INFO - P2P发送线程退出
+2026-01-14 16:07:13,269 - ZMQComm-Rank2 - INFO - 通信管理器已停止

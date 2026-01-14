@@ -1,0 +1,82 @@
+{
+  "p2p": [
+    [
+      {
+        "rank": 2,
+        "comm_mode": "p2p",
+        "test_id": 0,
+        "is_warmup": false,
+        "prefill_compute_time": 0.1782515048980713,
+        "cache_sync_time": 0.18263602256774902,
+        "prefill_total_time": 0.18263936042785645,
+        "comm_stats": {
+          "token_sent": 4,
+          "token_recv": 0,
+          "hidden_sent": 0,
+          "hidden_recv": 2,
+          "cache_sent": 48,
+          "cache_recv": 48,
+          "aggregated_sends": 0,
+          "forwarded_messages": 0
+        }
+      },
+      {
+        "rank": 0,
+        "comm_mode": "p2p",
+        "test_id": 0,
+        "is_warmup": false,
+        "prefill_compute_time": 0.0627753734588623,
+        "cache_sync_time": 0.184326171875,
+        "prefill_total_time": 0.1843278408050537,
+        "comm_stats": {
+          "token_sent": 0,
+          "token_recv": 2,
+          "hidden_sent": 2,
+          "hidden_recv": 0,
+          "cache_sent": 48,
+          "cache_recv": 48,
+          "aggregated_sends": 0,
+          "forwarded_messages": 0
+        }
+      },
+      {
+        "rank": 1,
+        "comm_mode": "p2p",
+        "test_id": 0,
+        "is_warmup": false,
+        "prefill_compute_time": 0.11573147773742676,
+        "cache_sync_time": 0.1843724250793457,
+        "prefill_total_time": 0.18437433242797852,
+        "comm_stats": {
+          "token_sent": 0,
+          "token_recv": 2,
+          "hidden_sent": 2,
+          "hidden_recv": 2,
+          "cache_sent": 48,
+          "cache_recv": 48,
+          "aggregated_sends": 0,
+          "forwarded_messages": 0
+        }
+      }
+    ]
+  ],
+  "ring": [
+    [
+      {
+        "rank": 1,
+        "error": "Address already in use (addr='tcp://*:45001')",
+        "test_id": 0
+      },
+      {
+        "rank": 0,
+        "error": "Address already in use (addr='tcp://*:45006')",
+        "test_id": 0
+      },
+      {
+        "rank": 1,
+        "error": "Address already in use (addr='tcp://*:45001')",
+        "test_id": 0
+      }
+    ]
+  ]
+}

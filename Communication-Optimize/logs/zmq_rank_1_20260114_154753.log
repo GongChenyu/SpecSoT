@@ -1,0 +1,46 @@
+2026-01-14 15:47:53,284 - root - INFO - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/logs/zmq_rank_1_20260114_154753.log
+2026-01-14 15:47:55,117 - ZMQ-Rank-1 - INFO - 检测到 CUDA_VISIBLE_DEVICES=6，使用逻辑设备 cuda:0
+2026-01-14 15:47:55,117 - ZMQ-Rank-1 - INFO - 初始化ZMQ通信管理器 (mode=ring)
+2026-01-14 15:47:55,118 - ZMQComm-Rank1 - INFO - 设置Ring模式 ZMQ sockets
+2026-01-14 15:47:55,118 - ZMQComm-Rank1 - INFO - Ring模式 ZMQ sockets设置完成 (prev=0, next=2)
+2026-01-14 15:47:55,118 - ZMQComm-Rank1 - INFO - Ring拓扑: prev=0 <- rank1 -> next=2
+2026-01-14 15:47:55,118 - ZMQ-Rank-1 - INFO - 等待其他节点就绪 (1.0秒)...
+2026-01-14 15:47:56,124 - ZMQComm-Rank1 - INFO - 接收线程启动
+2026-01-14 15:47:56,140 - ZMQComm-Rank1 - INFO - 通信管理器已启动 (RingCommManager)
+2026-01-14 15:47:56,140 - ZMQComm-Rank1 - INFO - Ring发送线程启动
+2026-01-14 15:47:56,141 - ZMQ-Rank-1 - INFO - 初始化设备 Rank 1/3
+2026-01-14 15:47:56,422 - ZMQ-Rank-1 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 15:47:58,149 - ZMQ-Rank-1 - INFO - 模型加载完成，共36层
+2026-01-14 15:47:58,152 - ZMQ-Rank-1 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-14 15:47:58,152 - ZMQ-Rank-1 - INFO - ============================================================
+2026-01-14 15:47:58,152 - ZMQ-Rank-1 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 15:47:58,163 - ZMQ-Rank-1 - INFO - Prompt长度: 7 tokens
+2026-01-14 15:47:58,163 - ZMQ-Rank-1 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 15:47:58,163 - ZMQ-Rank-1 - INFO - 负责层范围: [12, 24)
+2026-01-14 15:47:58,163 - ZMQ-Rank-1 - INFO - 处理 chunk 1/1
+2026-01-14 15:47:58,469 - ZMQ-Rank-1 - INFO -   chunk 1 处理完成
+2026-01-14 15:47:58,469 - ZMQ-Rank-1 - INFO - 等待接收 12 个cache...
+2026-01-14 15:47:58,927 - ZMQ-Rank-1 - INFO - 所有cache接收完成
+2026-01-14 15:47:58,927 - ZMQ-Rank-1 - INFO - Prefill 完成，耗时: 0.776s
+2026-01-14 15:47:58,929 - ZMQ-Rank-1 - INFO - First token 同步完成: 220
+2026-01-14 15:47:58,929 - ZMQ-Rank-1 - INFO - ============================================================
+2026-01-14 15:47:58,929 - ZMQ-Rank-1 - INFO - 开始 Decode 阶段 (全量冗余计算)
+2026-01-14 15:47:59,260 - ZMQ-Rank-1 - INFO - 已生成 10 tokens
+2026-01-14 15:47:59,506 - ZMQ-Rank-1 - INFO - 已生成 20 tokens
+2026-01-14 15:47:59,753 - ZMQ-Rank-1 - INFO - 已生成 30 tokens
+2026-01-14 15:48:00,000 - ZMQ-Rank-1 - INFO - 已生成 40 tokens
+2026-01-14 15:48:00,246 - ZMQ-Rank-1 - INFO - 已生成 50 tokens
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO - Decode 完成，耗时: 1.317s
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO - ============================================================
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO - 时间统计:
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   Prefill 时间:      0.776s
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   Decode 时间:       1.317s
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   总时间:           2.095s
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   Token 发送/接收:   1/1
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   Hidden 发送/接收:  2/2
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   Cache 发送/接收:   72/72
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO -   聚合发送次数:      3
+2026-01-14 15:48:00,247 - ZMQ-Rank-1 - INFO - ============================================================
+2026-01-14 15:48:00,258 - ZMQComm-Rank1 - INFO - Ring发送线程退出
+2026-01-14 15:48:00,327 - ZMQComm-Rank1 - INFO - 接收线程退出
+2026-01-14 15:48:00,328 - ZMQComm-Rank1 - INFO - 通信管理器已停止

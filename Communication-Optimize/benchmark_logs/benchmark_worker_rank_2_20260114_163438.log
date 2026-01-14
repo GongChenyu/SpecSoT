@@ -1,0 +1,67 @@
+2026-01-14 16:34:38,149 - root - INFO - Worker Rank 2 启动，日志: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/benchmark_logs/benchmark_worker_rank_2_20260114_163438.log
+2026-01-14 16:34:46,066 - root - INFO - Rank 2 开始测试: mode=p2p, test_id=0, warmup=True
+2026-01-14 16:34:46,066 - root - INFO - Rank 2 创建新引擎: mode=p2p
+2026-01-14 16:34:46,067 - ZMQ-Rank-2 - INFO - 检测到 CUDA_VISIBLE_DEVICES=7，使用逻辑设备 cuda:0
+2026-01-14 16:34:46,067 - ZMQ-Rank-2 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
+2026-01-14 16:34:46,067 - ZMQComm-Rank2 - INFO - 设置P2P模式 ZMQ sockets
+2026-01-14 16:34:46,068 - ZMQComm-Rank2 - INFO - P2P模式 ZMQ sockets设置完成
+2026-01-14 16:34:46,068 - ZMQ-Rank-2 - INFO - 等待其他节点就绪 (0.5秒)...
+2026-01-14 16:34:46,569 - ZMQComm-Rank2 - INFO - 接收线程启动
+2026-01-14 16:34:46,569 - ZMQComm-Rank2 - INFO - P2P发送线程启动
+2026-01-14 16:34:46,570 - ZMQComm-Rank2 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-14 16:34:46,570 - ZMQ-Rank-2 - INFO - 初始化设备 Rank 2/3
+2026-01-14 16:34:47,354 - ZMQ-Rank-2 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 16:34:48,533 - ZMQ-Rank-2 - INFO - 模型加载完成，共36层
+2026-01-14 16:34:48,537 - ZMQ-Rank-2 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-14 16:34:48,537 - root - INFO - Rank 2 引擎创建完成
+2026-01-14 16:34:48,537 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 16:34:48,537 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 16:34:48,547 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 16:34:48,547 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 16:34:48,547 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 16:34:48,547 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 16:34:49,014 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 16:34:49,029 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 16:34:49,030 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 16:34:49,030 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 16:34:49,030 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 0.493s, cache同步耗时: 0.493s, 计算耗时: 0.477s
+2026-01-14 16:34:49,031 - root - INFO - Rank 2 完成测试: test_id=0
+2026-01-14 16:34:52,043 - root - INFO - Rank 2 开始测试: mode=p2p, test_id=1, warmup=True
+2026-01-14 16:34:52,043 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 16:34:52,043 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 16:34:52,048 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 16:34:52,048 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 16:34:52,048 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 16:34:52,049 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 16:34:52,430 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 16:34:52,432 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 16:34:52,433 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 16:34:52,433 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 16:34:52,433 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 0.390s, cache同步耗时: 0.390s, 计算耗时: 0.387s
+2026-01-14 16:34:52,433 - root - INFO - Rank 2 完成测试: test_id=1
+2026-01-14 16:34:52,438 - root - INFO - Rank 2 开始测试: mode=p2p, test_id=0, warmup=False
+2026-01-14 16:34:52,439 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 16:34:52,439 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 16:34:52,443 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 16:34:52,443 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 16:34:52,443 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 16:34:52,443 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 16:34:52,618 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 16:34:52,620 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 16:34:52,621 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 16:34:52,621 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 16:34:52,621 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 0.182s, cache同步耗时: 0.182s, 计算耗时: 0.180s
+2026-01-14 16:34:52,621 - root - INFO - Rank 2 完成测试: test_id=0
+2026-01-14 16:34:55,628 - root - INFO - Rank 2 开始测试: mode=p2p, test_id=1, warmup=False
+2026-01-14 16:34:55,628 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 16:34:55,628 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 16:34:55,630 - ZMQ-Rank-2 - INFO - Prompt长度: 17 tokens
+2026-01-14 16:34:55,630 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 16:34:55,630 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 16:34:55,630 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 16:34:55,813 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 16:34:55,815 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 16:34:55,816 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 16:34:55,816 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 16:34:55,816 - ZMQ-Rank-2 - INFO - Prefill 总耗时: 0.188s, cache同步耗时: 0.188s, 计算耗时: 0.185s
+2026-01-14 16:34:55,817 - root - INFO - Rank 2 完成测试: test_id=1

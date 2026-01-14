@@ -1,0 +1,44 @@
+2026-01-14 09:40:21,229 - root - INFO - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/logs/zmq_rank_2_20260114_094021.log
+2026-01-14 09:40:23,899 - ZMQ-Rank-2 - INFO - 检测到 CUDA_VISIBLE_DEVICES=7，使用逻辑设备 cuda:0
+2026-01-14 09:40:23,899 - ZMQ-Rank-2 - INFO - 初始化ZMQ通信管理器 (mode=pairwise)
+2026-01-14 09:40:23,899 - ZMQComm-Rank2 - INFO - 设置ZMQ sockets (mode=pairwise)
+2026-01-14 09:40:23,900 - ZMQComm-Rank2 - INFO - ZMQ sockets设置完成
+2026-01-14 09:40:23,900 - ZMQ-Rank-2 - INFO - 等待其他节点就绪 (1.0秒)...
+2026-01-14 09:40:24,901 - ZMQComm-Rank2 - INFO - 统一接收线程启动
+2026-01-14 09:40:24,910 - ZMQComm-Rank2 - INFO - 统一发送线程启动
+2026-01-14 09:40:24,911 - ZMQComm-Rank2 - INFO - 通信管理器已启动（统一收发模式）
+2026-01-14 09:40:24,911 - ZMQ-Rank-2 - INFO - 初始化设备 Rank 2/3
+2026-01-14 09:40:25,164 - ZMQ-Rank-2 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-14 09:40:26,041 - ZMQ-Rank-2 - INFO - 模型加载完成，共36层
+2026-01-14 09:40:26,044 - ZMQ-Rank-2 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-14 09:40:26,044 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 09:40:26,044 - ZMQ-Rank-2 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-14 09:40:26,057 - ZMQ-Rank-2 - INFO - Prompt长度: 7 tokens
+2026-01-14 09:40:26,057 - ZMQ-Rank-2 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-14 09:40:26,057 - ZMQ-Rank-2 - INFO - 负责层范围: [24, 36)
+2026-01-14 09:40:26,057 - ZMQ-Rank-2 - INFO - 处理 chunk 1/1
+2026-01-14 09:40:26,388 - ZMQ-Rank-2 - INFO -   chunk 1 处理完成
+2026-01-14 09:40:26,388 - ZMQ-Rank-2 - INFO - 等待接收 0 个cache...
+2026-01-14 09:40:26,388 - ZMQ-Rank-2 - INFO - 所有cache接收完成
+2026-01-14 09:40:26,388 - ZMQ-Rank-2 - INFO - Prefill 完成，耗时: 0.344s
+2026-01-14 09:40:26,397 - ZMQ-Rank-2 - INFO - First token 同步完成: 220
+2026-01-14 09:40:26,398 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 09:40:26,398 - ZMQ-Rank-2 - INFO - 开始 Decode 阶段 (全量冗余计算)
+2026-01-14 09:40:26,575 - ZMQ-Rank-2 - INFO - 已生成 10 tokens
+2026-01-14 09:40:26,750 - ZMQ-Rank-2 - INFO - 已生成 20 tokens
+2026-01-14 09:40:26,902 - ZMQ-Rank-2 - INFO - 已生成 30 tokens
+2026-01-14 09:40:27,053 - ZMQ-Rank-2 - INFO - 已生成 40 tokens
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO - 已生成 50 tokens
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO - Decode 完成，耗时: 0.805s
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO - 时间统计:
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO -   Prefill 时间:      0.344s
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO -   Decode 时间:       0.805s
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO -   总时间:           1.159s
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO -   Token 发送/接收:   2/0
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO -   Hidden 发送/接收:  0/1
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO -   Cache 发送/接收:   24/24
+2026-01-14 09:40:27,203 - ZMQ-Rank-2 - INFO - ============================================================
+2026-01-14 09:40:27,261 - ZMQComm-Rank2 - INFO - 统一接收线程退出
+2026-01-14 09:40:27,299 - ZMQComm-Rank2 - INFO - 统一发送线程退出
+2026-01-14 09:40:27,300 - ZMQComm-Rank2 - INFO - 通信管理器已停止

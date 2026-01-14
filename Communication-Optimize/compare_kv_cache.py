@@ -313,8 +313,8 @@ def run_distributed_rank(
             world_size=world_size,
             base_port=base_port,
             chunk_size=chunk_size,
-            comm_mode='pairwise',
-            startup_delay=2.0
+            comm_mode='ring',   # 'p2p' 或 'ring'
+            startup_delay=1.0
         )
         
         # 只运行prefill阶段
@@ -585,7 +585,7 @@ def analyze_kv_cache_difference(
 
 def main():
     parser = argparse.ArgumentParser(description='对比单设备和分布式推理的KV Cache')
-    parser.add_argument('--mode', type=str, default='all',
+    parser.add_argument('--mode', type=str, default='run',
                        choices=['run', 'analyze', 'all'],
                        help='运行模式: run(只运行推理), analyze(只分析), all(运行+分析)')
     parser.add_argument('--model_path', type=str, 
