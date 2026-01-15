@@ -138,7 +138,7 @@ def main():
 			start_time = time.time()
             
 			# === 调用核心方法: eagenerate (支持语义并行) ===
-			output_ids, avg_accept_len, num_para, avg_draft_time, avg_verify_time = model.eagenerate(
+			output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time = model.eagenerate(
 				task_prompt,
 				max_new_tokens=3000,
 				temperature=0.0,
@@ -151,7 +151,7 @@ def main():
 		response = tokenizer.decode(output_ids[0].tolist(), skip_special_tokens=True)
         
 		print(f"\n[Sample {i}] Time: {total_time:.2f}s, Memory: {monitor.peak_usage:.2f}MB")
-		# print("Response Preview:", response[:200])
+		print("Response Preview:", response[:200])
         
 		results.append({
 			"response": response,
