@@ -1,0 +1,355 @@
+2026-01-15 09:51:59,416 - root - INFO - Worker Rank 0 启动，日志: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/benchmark_logs/benchmark_worker_rank_0_20260115_095159.log
+2026-01-15 09:52:06,619 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=0, warmup=True
+2026-01-15 09:52:06,620 - root - INFO - Rank 0 创建新引擎: mode=p2p
+2026-01-15 09:52:06,620 - ZMQ-Rank-0 - INFO - 检测到 CUDA_VISIBLE_DEVICES=5，使用逻辑设备 cuda:0
+2026-01-15 09:52:06,620 - ZMQ-Rank-0 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
+2026-01-15 09:52:06,621 - ZMQComm-Rank0 - INFO - 设置P2P模式 ZMQ sockets
+2026-01-15 09:52:06,622 - ZMQComm-Rank0 - INFO - P2P模式 ZMQ sockets设置完成
+2026-01-15 09:52:06,622 - ZMQ-Rank-0 - INFO - 等待其他节点就绪 (0.5秒)...
+2026-01-15 09:52:07,123 - ZMQComm-Rank0 - INFO - 接收线程启动
+2026-01-15 09:52:07,123 - ZMQComm-Rank0 - INFO - P2P发送线程启动
+2026-01-15 09:52:07,123 - ZMQComm-Rank0 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-15 09:52:07,124 - ZMQ-Rank-0 - INFO - 初始化设备 Rank 0/3
+2026-01-15 09:52:07,433 - ZMQ-Rank-0 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-15 09:52:09,038 - ZMQ-Rank-0 - INFO - 模型加载完成，共36层
+2026-01-15 09:52:09,041 - ZMQ-Rank-0 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-15 09:52:09,041 - root - INFO - Rank 0 引擎创建完成
+2026-01-15 09:52:09,041 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:09,041 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:09,052 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:09,052 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:09,052 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:09,052 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:09,309 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:09,846 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:09,846 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:09,849 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:09,849 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.808s, cache同步耗时: 0.808s, 计算耗时: 0.268s
+2026-01-15 09:52:09,850 - root - INFO - Rank 0 完成测试: test_id=0
+2026-01-15 09:52:14,855 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=1, warmup=True
+2026-01-15 09:52:14,856 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:14,856 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:14,857 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:14,857 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:14,857 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:14,857 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:14,904 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:15,022 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:15,022 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:15,025 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:15,025 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.170s, cache同步耗时: 0.170s, 计算耗时: 0.049s
+2026-01-15 09:52:15,026 - root - INFO - Rank 0 完成测试: test_id=1
+2026-01-15 09:52:15,027 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=0, warmup=False
+2026-01-15 09:52:15,027 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:15,027 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:15,028 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:15,028 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:15,028 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:15,028 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:15,074 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:15,189 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:15,190 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:15,194 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:15,194 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.167s, cache同步耗时: 0.167s, 计算耗时: 0.048s
+2026-01-15 09:52:15,194 - root - INFO - Rank 0 完成测试: test_id=0
+2026-01-15 09:52:20,201 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=1, warmup=False
+2026-01-15 09:52:20,201 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:20,201 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:20,202 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:20,202 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:20,202 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:20,202 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:20,250 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:20,359 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:20,360 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:20,363 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:20,363 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.162s, cache同步耗时: 0.162s, 计算耗时: 0.049s
+2026-01-15 09:52:20,363 - root - INFO - Rank 0 完成测试: test_id=1
+2026-01-15 09:52:25,369 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=2, warmup=False
+2026-01-15 09:52:25,370 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:25,370 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:25,371 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:25,371 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:25,371 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:25,371 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:25,422 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:25,703 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:25,703 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:25,707 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:25,708 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.338s, cache同步耗时: 0.338s, 计算耗时: 0.053s
+2026-01-15 09:52:25,708 - root - INFO - Rank 0 完成测试: test_id=2
+2026-01-15 09:52:30,711 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=3, warmup=False
+2026-01-15 09:52:30,712 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:30,712 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:30,713 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:30,713 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:30,713 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:30,713 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:30,763 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:30,869 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:30,869 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:30,873 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:30,873 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.161s, cache同步耗时: 0.161s, 计算耗时: 0.051s
+2026-01-15 09:52:30,873 - root - INFO - Rank 0 完成测试: test_id=3
+2026-01-15 09:52:35,879 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=4, warmup=False
+2026-01-15 09:52:35,880 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:35,880 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:35,881 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:35,881 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:35,881 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:35,881 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:35,931 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:36,047 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:36,048 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:36,050 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:36,050 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.171s, cache同步耗时: 0.171s, 计算耗时: 0.052s
+2026-01-15 09:52:36,051 - root - INFO - Rank 0 完成测试: test_id=4
+2026-01-15 09:52:41,057 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=5, warmup=False
+2026-01-15 09:52:41,058 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:41,058 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:41,059 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:41,060 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:41,060 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:41,060 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:41,117 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:41,229 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:41,230 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:41,233 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:41,233 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.175s, cache同步耗时: 0.175s, 计算耗时: 0.059s
+2026-01-15 09:52:41,233 - root - INFO - Rank 0 完成测试: test_id=5
+2026-01-15 09:52:46,239 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=6, warmup=False
+2026-01-15 09:52:46,240 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:46,240 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:46,241 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:46,241 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:46,241 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:46,241 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:46,294 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:46,408 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:46,408 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:46,412 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:46,412 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.173s, cache同步耗时: 0.173s, 计算耗时: 0.054s
+2026-01-15 09:52:46,413 - root - INFO - Rank 0 完成测试: test_id=6
+2026-01-15 09:52:51,420 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=7, warmup=False
+2026-01-15 09:52:51,420 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:51,421 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:51,422 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:51,422 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:51,422 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:51,422 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:51,478 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:51,584 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:51,584 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:51,587 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:51,587 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.167s, cache同步耗时: 0.167s, 计算耗时: 0.058s
+2026-01-15 09:52:51,588 - root - INFO - Rank 0 完成测试: test_id=7
+2026-01-15 09:52:56,593 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=8, warmup=False
+2026-01-15 09:52:56,594 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:52:56,594 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:52:56,595 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:52:56,595 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:52:56,596 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:52:56,596 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:52:56,653 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:52:56,760 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:52:56,761 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:52:56,764 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:52:56,764 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.170s, cache同步耗时: 0.170s, 计算耗时: 0.060s
+2026-01-15 09:52:56,765 - root - INFO - Rank 0 完成测试: test_id=8
+2026-01-15 09:53:01,771 - root - INFO - Rank 0 开始测试: mode=p2p, test_id=9, warmup=False
+2026-01-15 09:53:01,772 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:01,772 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:01,774 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:01,774 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:01,774 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:01,774 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:01,817 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:01,919 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:01,920 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:53:01,923 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:01,923 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.151s, cache同步耗时: 0.151s, 计算耗时: 0.045s
+2026-01-15 09:53:01,923 - root - INFO - Rank 0 完成测试: test_id=9
+2026-01-15 09:53:16,939 - root - INFO - Rank 0 开始测试: mode=ring, test_id=0, warmup=True
+2026-01-15 09:53:16,939 - root - INFO - Rank 0 切换模式: p2p -> ring，清理旧引擎
+2026-01-15 09:53:16,940 - ZMQComm-Rank0 - INFO - P2P发送线程退出
+2026-01-15 09:53:16,941 - ZMQComm-Rank0 - INFO - 接收线程退出
+2026-01-15 09:53:16,942 - ZMQComm-Rank0 - INFO - 通信管理器已停止
+2026-01-15 09:53:17,157 - ZMQ-Rank-0 - INFO - 资源清理完成
+2026-01-15 09:53:17,261 - root - INFO - Rank 0 等待5秒让资源完全释放...
+2026-01-15 09:53:22,267 - root - INFO - Rank 0 创建新引擎: mode=ring
+2026-01-15 09:53:22,270 - ZMQ-Rank-0 - INFO - 检测到 CUDA_VISIBLE_DEVICES=5，使用逻辑设备 cuda:0
+2026-01-15 09:53:22,271 - ZMQ-Rank-0 - INFO - 初始化ZMQ通信管理器 (mode=ring)
+2026-01-15 09:53:22,272 - ZMQComm-Rank0 - INFO - 设置Ring模式 ZMQ sockets
+2026-01-15 09:53:22,272 - ZMQComm-Rank0 - INFO - Ring模式 ZMQ sockets设置完成 (prev=2, next=1)
+2026-01-15 09:53:22,272 - ZMQComm-Rank0 - INFO - Ring拓扑: prev=2 <- rank0 -> next=1
+2026-01-15 09:53:22,272 - ZMQ-Rank-0 - INFO - 等待其他节点就绪 (0.5秒)...
+2026-01-15 09:53:22,773 - ZMQComm-Rank0 - INFO - 接收线程启动
+2026-01-15 09:53:22,773 - ZMQComm-Rank0 - INFO - Ring发送线程启动
+2026-01-15 09:53:22,773 - ZMQComm-Rank0 - INFO - 通信管理器已启动 (RingCommManager)
+2026-01-15 09:53:22,774 - ZMQ-Rank-0 - INFO - 初始化设备 Rank 0/3
+2026-01-15 09:53:23,078 - ZMQ-Rank-0 - INFO - 加载模型: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-15 09:53:23,794 - ZMQ-Rank-0 - INFO - 模型加载完成，共36层
+2026-01-15 09:53:23,795 - ZMQ-Rank-0 - INFO - KV Cache 预分配完成（最大长度: 2200）
+2026-01-15 09:53:23,795 - root - INFO - Rank 0 引擎创建完成
+2026-01-15 09:53:23,795 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:23,795 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:23,796 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:23,796 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:23,796 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:23,796 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:23,828 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:24,071 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:24,072 - ZMQ-Rank-0 - INFO - 等待接收 24 个cache...
+2026-01-15 09:53:24,077 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:24,077 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.282s, cache同步耗时: 0.282s, 计算耗时: 0.033s
+2026-01-15 09:53:24,111 - root - INFO - Rank 0 完成测试: test_id=0
+2026-01-15 09:53:29,132 - root - INFO - Rank 0 开始测试: mode=ring, test_id=1, warmup=True
+2026-01-15 09:53:29,133 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:29,133 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:29,134 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:29,134 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:29,135 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:29,135 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:29,174 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:29,301 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:29,301 - ZMQ-Rank-0 - INFO - 等待接收 23 个cache...
+2026-01-15 09:53:29,306 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:29,306 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.173s, cache同步耗时: 0.173s, 计算耗时: 0.041s
+2026-01-15 09:53:29,307 - root - INFO - Rank 0 完成测试: test_id=1
+2026-01-15 09:53:29,324 - root - INFO - Rank 0 开始测试: mode=ring, test_id=0, warmup=False
+2026-01-15 09:53:29,324 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:29,324 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:29,325 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:29,325 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:29,325 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:29,326 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:29,366 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:29,471 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:29,472 - ZMQ-Rank-0 - INFO - 等待接收 22 个cache...
+2026-01-15 09:53:29,476 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:29,476 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.151s, cache同步耗时: 0.151s, 计算耗时: 0.042s
+2026-01-15 09:53:29,476 - root - INFO - Rank 0 完成测试: test_id=0
+2026-01-15 09:53:34,486 - root - INFO - Rank 0 开始测试: mode=ring, test_id=1, warmup=False
+2026-01-15 09:53:34,487 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:34,487 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:34,488 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:34,489 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:34,489 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:34,489 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:34,536 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:34,667 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:34,668 - ZMQ-Rank-0 - INFO - 等待接收 21 个cache...
+2026-01-15 09:53:34,672 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:34,673 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.185s, cache同步耗时: 0.185s, 计算耗时: 0.049s
+2026-01-15 09:53:34,673 - root - INFO - Rank 0 完成测试: test_id=1
+2026-01-15 09:53:39,682 - root - INFO - Rank 0 开始测试: mode=ring, test_id=2, warmup=False
+2026-01-15 09:53:39,682 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:39,682 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:39,684 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:39,684 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:39,684 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:39,684 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:39,721 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:39,852 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:39,853 - ZMQ-Rank-0 - INFO - 等待接收 20 个cache...
+2026-01-15 09:53:39,857 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:39,857 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.174s, cache同步耗时: 0.174s, 计算耗时: 0.039s
+2026-01-15 09:53:39,857 - root - INFO - Rank 0 完成测试: test_id=2
+2026-01-15 09:53:44,875 - root - INFO - Rank 0 开始测试: mode=ring, test_id=3, warmup=False
+2026-01-15 09:53:44,875 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:44,875 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:44,877 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:44,877 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:44,877 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:44,877 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:44,922 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:45,056 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:45,056 - ZMQ-Rank-0 - INFO - 等待接收 19 个cache...
+2026-01-15 09:53:45,060 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:45,061 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.185s, cache同步耗时: 0.185s, 计算耗时: 0.047s
+2026-01-15 09:53:45,061 - root - INFO - Rank 0 完成测试: test_id=3
+2026-01-15 09:53:50,071 - root - INFO - Rank 0 开始测试: mode=ring, test_id=4, warmup=False
+2026-01-15 09:53:50,072 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:50,073 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:50,074 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:50,074 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:50,074 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:50,074 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:50,116 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:50,234 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:50,235 - ZMQ-Rank-0 - INFO - 等待接收 18 个cache...
+2026-01-15 09:53:50,239 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:50,240 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.167s, cache同步耗时: 0.167s, 计算耗时: 0.044s
+2026-01-15 09:53:50,240 - root - INFO - Rank 0 完成测试: test_id=4
+2026-01-15 09:53:55,247 - root - INFO - Rank 0 开始测试: mode=ring, test_id=5, warmup=False
+2026-01-15 09:53:55,248 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:53:55,248 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:53:55,249 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:53:55,250 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:53:55,250 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:53:55,250 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:53:55,291 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:53:55,407 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:53:55,407 - ZMQ-Rank-0 - INFO - 等待接收 17 个cache...
+2026-01-15 09:53:55,411 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:53:55,411 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.163s, cache同步耗时: 0.163s, 计算耗时: 0.043s
+2026-01-15 09:53:55,411 - root - INFO - Rank 0 完成测试: test_id=5
+2026-01-15 09:54:00,435 - root - INFO - Rank 0 开始测试: mode=ring, test_id=6, warmup=False
+2026-01-15 09:54:00,436 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:54:00,436 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:54:00,437 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:54:00,437 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:54:00,437 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:54:00,437 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:54:00,476 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:54:00,586 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:54:00,587 - ZMQ-Rank-0 - INFO - 等待接收 16 个cache...
+2026-01-15 09:54:00,591 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:54:00,591 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.155s, cache同步耗时: 0.155s, 计算耗时: 0.040s
+2026-01-15 09:54:00,592 - root - INFO - Rank 0 完成测试: test_id=6
+2026-01-15 09:54:05,614 - root - INFO - Rank 0 开始测试: mode=ring, test_id=7, warmup=False
+2026-01-15 09:54:05,615 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:54:05,615 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:54:05,616 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:54:05,616 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:54:05,617 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:54:05,617 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:54:05,657 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:54:05,774 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:54:05,775 - ZMQ-Rank-0 - INFO - 等待接收 15 个cache...
+2026-01-15 09:54:05,779 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:54:05,779 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.164s, cache同步耗时: 0.164s, 计算耗时: 0.042s
+2026-01-15 09:54:05,779 - root - INFO - Rank 0 完成测试: test_id=7
+2026-01-15 09:54:10,793 - root - INFO - Rank 0 开始测试: mode=ring, test_id=8, warmup=False
+2026-01-15 09:54:10,794 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:54:10,794 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:54:10,795 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:54:10,795 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:54:10,795 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:54:10,795 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:54:10,839 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:54:10,953 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:54:10,954 - ZMQ-Rank-0 - INFO - 等待接收 14 个cache...
+2026-01-15 09:54:10,957 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:54:10,957 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.163s, cache同步耗时: 0.163s, 计算耗时: 0.045s
+2026-01-15 09:54:10,957 - root - INFO - Rank 0 完成测试: test_id=8
+2026-01-15 09:54:15,972 - root - INFO - Rank 0 开始测试: mode=ring, test_id=9, warmup=False
+2026-01-15 09:54:15,973 - ZMQ-Rank-0 - INFO - ============================================================
+2026-01-15 09:54:15,973 - ZMQ-Rank-0 - INFO - 开始 Prefill 阶段 (SP+PP with ZMQ)
+2026-01-15 09:54:15,974 - ZMQ-Rank-0 - INFO - Prompt长度: 17 tokens
+2026-01-15 09:54:15,974 - ZMQ-Rank-0 - INFO - 切分为 1 个chunks (chunk_size=128)
+2026-01-15 09:54:15,975 - ZMQ-Rank-0 - INFO - 负责层范围: [0, 12)
+2026-01-15 09:54:15,975 - ZMQ-Rank-0 - INFO - 处理 chunk 1/1
+2026-01-15 09:54:16,021 - ZMQ-Rank-0 - INFO -   chunk 1 处理完成
+2026-01-15 09:54:16,141 - ZMQ-Rank-0 - INFO - First token 同步完成: 220
+2026-01-15 09:54:16,141 - ZMQ-Rank-0 - INFO - 等待接收 13 个cache...
+2026-01-15 09:54:16,144 - ZMQ-Rank-0 - INFO - 所有cache接收完成
+2026-01-15 09:54:16,144 - ZMQ-Rank-0 - INFO - Prefill 总耗时: 0.171s, cache同步耗时: 0.171s, 计算耗时: 0.049s
+2026-01-15 09:54:16,145 - root - INFO - Rank 0 完成测试: test_id=9
+2026-01-15 09:54:16,149 - root - INFO - Rank 0 收到停止信号
+2026-01-15 09:54:16,150 - root - INFO - Rank 0 清理引擎
+2026-01-15 09:54:16,158 - ZMQComm-Rank0 - INFO - Ring发送线程退出
+2026-01-15 09:54:16,241 - ZMQComm-Rank0 - INFO - 接收线程退出
+2026-01-15 09:54:16,242 - ZMQComm-Rank0 - INFO - 通信管理器已停止
+2026-01-15 09:54:16,462 - ZMQ-Rank-0 - INFO - 资源清理完成
+2026-01-15 09:54:16,535 - root - INFO - Rank 0 退出

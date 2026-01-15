@@ -411,9 +411,9 @@ def main():
     }
     
     # 测试配置
-    NUM_WARMUP = 1  # 预热次数
-    NUM_TESTS = 1   # 每种模式测试次数
-    TEST_INTERVAL = 3  # 测试间隔（秒）
+    NUM_WARMUP = 2  # 预热次数
+    NUM_TESTS = 10   # 每种模式测试次数
+    TEST_INTERVAL = 5  # 测试间隔（秒）
     # ==================================================
     
     os.makedirs(BASE_CONFIG['log_dir'], exist_ok=True)
@@ -490,9 +490,9 @@ def main():
         
         # 模式间切换间隔 - 给worker足够时间清理旧引擎
         if mode == 'p2p':
-            print(f"\n等待 100 秒后切换到Ring模式...")
+            print(f"\n等待 15 秒后切换到Ring模式...")
             print("(给workers足够时间清理P2P引擎、释放GPU内存和端口)")
-            time.sleep(100)
+            time.sleep(15)
     
     # 发送停止信号
     print(f"\n发送停止信号给所有worker...")

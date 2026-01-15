@@ -1,8 +1,0 @@
-2026-01-14 16:33:06,155 - root - INFO - Worker Rank 2 启动，日志: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/benchmark_logs/benchmark_worker_rank_2_20260114_163306.log
-2026-01-14 16:33:08,975 - root - ERROR - Worker Rank 2 严重错误: No module named 'transformers'
-Traceback (most recent call last):
-  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_performance_benchmark.py", line 113, in benchmark_worker
-    from zmq_distributed_inference import ZMQDistributedInferenceEngine
-  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/Communication-Optimize/zmq_distributed_inference.py", line 22, in <module>
-    from transformers import AutoTokenizer, AutoConfig
-ModuleNotFoundError: No module named 'transformers'
