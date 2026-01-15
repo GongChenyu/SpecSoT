@@ -161,12 +161,14 @@ def main():
     parser.add_argument(
         "--base_model_path", 
         type=str, 
+        # default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct",
         default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B",
         help="Base Model 路径"
     )
     parser.add_argument(
         "--eagle_model_path", 
         type=str, 
+        # default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B",
         default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3",
         help="Eagle Model 路径"
     )
@@ -216,9 +218,9 @@ def main():
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
         device_map="auto",
-        total_token=60,
-        depth=7,
-        top_k=10,
+        total_token=40,
+        depth=4,
+        top_k=6,
     )
     
     tokenizer = model.get_tokenizer()
@@ -283,7 +285,7 @@ def main():
         
         # 打印响应预览
         print(f"\n[Response Preview]")
-        print(response)
+        # print(response)
         # print(response[:500] + "..." if len(response) > 500 else response)
 
         results.append({
@@ -326,7 +328,7 @@ def main():
 
 if __name__ == "__main__":
     # 设置随机种子
-    seed = 42
+    seed = 45
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

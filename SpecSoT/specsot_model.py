@@ -322,9 +322,7 @@ class SpecSoTModel(nn.Module):
         top_k: int,
     ) -> Tuple[torch.Tensor, float, int, float, float, float]:
         """标准投机解码生成（不使用骨架）"""
-        input_ids = self.tokenizer(
-            [task_prompt], return_tensors="pt"
-        ).input_ids.to(self.base_model.device)
+        input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(self.base_model.device)
         
         output_ids, avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time = \
             self._decode_loop_single(
@@ -357,12 +355,8 @@ class SpecSoTModel(nn.Module):
         # Stage 1: Skeleton Generation (骨架生成)
         # =====================================================================
         task_input = base_prompt.format(user_question=task_prompt)
-        task_input_ids = self.tokenizer(
-            [task_input], return_tensors="pt"
-        ).input_ids.to(device)
-        skeleton_input_ids = self.tokenizer(
-            [skeleton_trigger_zh], return_tensors="pt"
-        ).input_ids.to(device)
+        task_input_ids = self.tokenizer([task_input], return_tensors="pt").input_ids.to(device)
+        skeleton_input_ids = self.tokenizer([skeleton_trigger_zh], return_tensors="pt").input_ids.to(device)
         input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
 
         # 构造语义约束 Logits Processor
@@ -570,9 +564,7 @@ class SpecSoTModel(nn.Module):
             total_draft_time += evt_after_update.elapsed_time(evt_after_draft) / 1000
 
             # 停止条件检查
-            if self._check_stop_conditions(
-                input_ids, input_len, stop_token_id, max_kv_len
-            ):
+            if self._check_stop_conditions(input_ids, input_len, stop_token_id, max_kv_len):
                 break
 
         # 计算平均值
@@ -1195,11 +1187,6 @@ class SpecSoTModel(nn.Module):
         mask.masked_fill_(valid_mask, 0)
 
         return mask
-
-    # 为了兼容性保留的别名方法
-    def _construct_parallel_mask(self, prefix_len: int, branch_len: int, dtype=torch.float32):
-        """构建并行掩码（兼容旧接口）"""
-        return self._build_parallel_prefill_mask(prefix_len, branch_len, dtype)
 
     # =========================================================================
     # 骨架解析 (Skeleton Parsing)

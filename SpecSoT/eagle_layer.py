@@ -714,11 +714,6 @@ class EagleLayer(nn.Module):
             sample_token, self.total_tokens, self.top_k
         )
 
-    # 保留旧接口的兼容性
-    def topK_generate(self, hidden_states, input_ids, prefix_len=-1, active_branch=None):
-        """兼容旧接口"""
-        return self.generate_draft_tree(hidden_states, input_ids, prefix_len, active_branch)
-
     # =========================================================================
     # Phase 1: Root Expansion (根节点扩展)
     # =========================================================================
