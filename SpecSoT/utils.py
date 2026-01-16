@@ -907,9 +907,9 @@ def parse_skeleton(
     tokenizer,
     skeleton_ids: torch.Tensor,
     para_token_ids: Dict[str, int],
-) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
+) -> Tuple[Optional[List[List[int]]], Optional[List[int]], Optional[List[int]]]:
     """
-    解析骨架，提取并行分支
+    解析骨架，提取并行分支和预测长度
     
     骨架格式示例：
     ####标题1(100):...
@@ -922,6 +922,7 @@ def parse_skeleton(
         
     Returns:
         clean_branches: 清洗后的分支列表（含指令前缀）
+        branch_lengths: 每个分支的预测长度（从括号中解析）
         instruction_len: 每个分支的指令长度
     """
     seq_list = skeleton_ids[0].tolist()
@@ -943,7 +944,7 @@ def parse_skeleton(
             para_end_idx = len(seq_list)
     except ValueError:
         print("Warning: No '####' found in generated output.")
-        return None, None
+        return None, None, None
 
     # 提取并行片段
     para_segment = seq_list[para_begin_idx:para_end_idx - 1]
@@ -961,8 +962,11 @@ def parse_skeleton(
     if current_branch:
         raw_branches.append(current_branch)
 
-    # 清洗分支（截取到冒号）
+    # 清洗分支（截取到冒号）并解析长度
+    import re
     clean_branches = []
+    predicted_branch_lengths = []
+    
     for br in raw_branches:
         cut_idx = -1
         for i, token in enumerate(br):
@@ -971,9 +975,22 @@ def parse_skeleton(
                 break
         
         if cut_idx != -1:
-            clean_branches.append(br[:cut_idx + 1])
+            branch_tokens = br[:cut_idx + 1]
+            clean_branches.append(branch_tokens)
+            
+            # 解析长度：从 token 中提取括号内的数字
+            branch_text = tokenizer.decode(branch_tokens)
+            # 匹配格式：####标题(123):
+            length_match = re.search(r'\((\d+)\)', branch_text)
+            if length_match:
+                predicted_length = int(length_match.group(1))
+                predicted_branch_lengths.append(predicted_length)
+            else:
+                # 如果没有找到长度，使用默认值
+                predicted_branch_lengths.append(200)  # 默认 200 tokens
         else:
             clean_branches.append(br)
+            predicted_branch_lengths.append(200)
 
     # 构建骨架上下文
     result_skeleton = []
@@ -993,7 +1010,7 @@ def parse_skeleton(
         clean_branches[i] = instruction_ids + br
         instruction_len.append(len(instruction_ids))
 
-    return clean_branches, instruction_len
+    return clean_branches, predicted_branch_lengths, instruction_len
 
 
 

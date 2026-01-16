@@ -328,7 +328,7 @@ def main():
 
 if __name__ == "__main__":
     # 设置随机种子
-    seed = 45
+    seed = 42
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

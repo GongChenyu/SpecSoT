@@ -61,7 +61,10 @@ from .utils import (
     check_stop_conditions,
 )
 
-from .prompts import base_prompt, skeleton_trigger_zh, parallel_trigger_zh
+from .prompts import (
+    base_prompt, skeleton_trigger_zh, parallel_trigger_zh,
+    base_prompt_en, skeleton_trigger_en, parallel_trigger_en,
+)
 
 
 # =============================================================================
@@ -273,6 +276,24 @@ class SpecSoTModel(nn.Module):
         """获取 tokenizer"""
         return self.tokenizer
 
+    def _get_model_type(self) -> str:
+        """
+        检测模型类型
+        
+        Returns:
+            'qwen': Qwen 系列模型
+            'llama': Llama 系列模型
+            'other': 其他模型
+        """
+        model_name = self.base_model_name_or_path.lower()
+        
+        if 'qwen' in model_name:
+            return 'qwen'
+        elif 'llama' in model_name:
+            return 'llama'
+        else:
+            return 'other'
+
     # =========================================================================
     # 基础前向传播 (Base Forward)
     # =========================================================================
@@ -401,12 +422,27 @@ class SpecSoTModel(nn.Module):
         """
         device = self.base_model.device
         
+        # 检测模型类型，选择对应的 prompt
+        model_type = self._get_model_type()
+        if model_type == 'qwen':
+            # Qwen 模型使用中文 prompt
+            base_prompt_template = base_prompt
+            skeleton_trigger = skeleton_trigger_zh
+            parallel_trigger = parallel_trigger_zh
+            print(f"Using Chinese prompts for {model_type} model")
+        else:
+            # Llama 和其他模型使用英文 prompt
+            base_prompt_template = base_prompt_en
+            skeleton_trigger = skeleton_trigger_en
+            parallel_trigger = parallel_trigger_en
+            print(f"Using English prompts for {model_type} model")
+        
         # =====================================================================
         # Stage 1: Skeleton Generation (骨架生成)
         # =====================================================================
-        task_input = base_prompt.format(user_question=task_prompt)
+        task_input = base_prompt_template.format(user_question=task_prompt)
         task_input_ids = self.tokenizer([task_input], return_tensors="pt").input_ids.to(device)
-        skeleton_input_ids = self.tokenizer([skeleton_trigger_zh], return_tensors="pt").input_ids.to(device)
+        skeleton_input_ids = self.tokenizer([skeleton_trigger], return_tensors="pt").input_ids.to(device)
         input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
 
         # 构造语义约束 Logits Processor
@@ -437,7 +473,9 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # Stage 2: Skeleton Parsing (骨架解析)
         # =====================================================================
-        clean_branches, instruction_len = parse_skeleton(self.tokenizer, skeleton_ids, para_token_ids)
+        clean_branches, predicted_branch_lengths, instruction_len = parse_skeleton(
+            self.tokenizer, skeleton_ids, para_token_ids
+        )
         
         if not clean_branches:
             print("Parsing failed or no branches found. Returning skeleton.")
@@ -446,15 +484,24 @@ class SpecSoTModel(nn.Module):
         num_para = len(clean_branches)
         self.parallel_branches_output = [list(br) for br in clean_branches]
         self.instruction_len = instruction_len
-        print(f"Detected {num_para} parallel branches.")
+        print(f"Detected {num_para} parallel branches with predicted lengths: {predicted_branch_lengths}")
 
         # =====================================================================
         # Stage 3: Parallel Decoding (并行分支解码)
         # =====================================================================
+        # 前缀复用：复用 Skeleton KV Cache + 初始化并行状态
+        input_ids, tips_indices, branch_begins, branch_lengths_actual, draft_input_ids = \
+            self.reuse_prefix_for_parallel(task_input_ids, clean_branches, max_new_tokens)
+        
         avg_accept_len, avg_draft_time, avg_update_time, avg_verify_time = \
             self._decode_loop_parallel(
                 prefix_ids=task_input_ids,
-                branches_prompts=clean_branches,
+                prefix_len=task_input_ids.shape[1],
+                input_ids=input_ids,
+                tips_indices=tips_indices,
+                branch_begins=branch_begins,
+                branch_lengths=branch_lengths_actual,
+                draft_input_ids=draft_input_ids,
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
@@ -643,7 +690,12 @@ class SpecSoTModel(nn.Module):
     def _decode_loop_parallel(
         self,
         prefix_ids: torch.Tensor,
-        branches_prompts: List[List[int]],
+        prefix_len: int,
+        input_ids: torch.Tensor,
+        tips_indices: torch.Tensor,
+        branch_begins: List[int],
+        branch_lengths: List[int],
+        draft_input_ids: torch.Tensor,
         max_new_tokens: int,
         temperature: float = 0.0,
         top_p: float = 0.0,
@@ -660,7 +712,12 @@ class SpecSoTModel(nn.Module):
         
         Args:
             prefix_ids: 共享前缀的 token IDs
-            branches_prompts: 各分支的 prompt token 列表
+            prefix_len: 前缀长度
+            input_ids: 打包后的输入
+            tips_indices: 各分支 tip 位置
+            branch_begins: 各分支起始位置
+            branch_lengths: 各分支长度
+            draft_input_ids: Draft 模型输入
             max_new_tokens: 最大生成 token 数
             temperature: 采样温度
             
@@ -668,16 +725,9 @@ class SpecSoTModel(nn.Module):
             各项统计指标
         """
         device = self.base_model.device
-        prefix_len = prefix_ids.shape[1]
 
         if temperature > 1e-5:
             logits_processor = prepare_logits_processor(temperature, top_p, top_k)
-
-        # ---------------------------------------------------------------------
-        # 前缀复用：复用 Skeleton KV Cache + 初始化并行状态
-        # ---------------------------------------------------------------------
-        input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
-            self.reuse_prefix_for_parallel(prefix_ids, branches_prompts, max_new_tokens)
 
         # 1. Prefill 阶段: Base Model 并行处理各分支 + Eagle Layer 生成首次 Draft Tree
         input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = \

@@ -1,6 +1,8 @@
 # coding=utf-8
-import torch
 
+# =============================================================================
+# Chinese Prompts (中文提示词) - for Qwen models
+# =============================================================================
 
 base_prompt = (
     "【系统角色】\n"
@@ -16,18 +18,13 @@ skeleton_trigger_zh = (
     " 1. 具体要求：当回复复杂且适合**并行处理**（如多工具和智能体调用、多角度分析、多方面列举、长文写作规划）时，请按以下格式输出骨架：\n"
     "   - 每个分支独立一行，以 '####' 开头。\n"
     "   - 紧接着是简短的【分支标题】。\n"
-    "   - 在标题后的括号 '()' 内，标注你预测该分支生成内容的【Token数量】（纯数字）。\n"  # <--- 新增要求
+    "   - 在标题后的括号 '()' 内，标注你预测该分支生成内容的【Token数量】（纯数字）。\n"
     "   - 以英文冒号 ':' 结尾。\n"
     "   - 冒号后必须紧跟省略号 '...'，禁止在此生成内容。\n"
     "   - 结尾输出 '####%%%%'。\n"
     "   - 示例：\n"
-    "     ####标题1(长度):...\n"
-    "     ####标题2(长度):...\n"
-    "     ####%%%%\n\n"
-    "   - 具体示例：\n"
-    "     ####背景介绍(169):...\n" 
-    "     ####核心论点分析(764):...\n" 
-    "     ####总结与建议(431):...\n"
+    "     ####标题1(169):...\n"
+    "     ####标题2(431):...\n"
     "     ####%%%%\n\n"
     " 2. 如果用户输入的回答很简单或者具备强烈的逻辑顺序依赖，请直接回答问题，无需生成骨架。\n"
     "【回答】：禁止输出分析和开场白，回答：\n"
@@ -46,6 +43,51 @@ parallel_trigger_zh = (
     "4. 内容需独立完整，表达简洁，逻辑上能衔接整体骨架。\n"
     "5. 禁止重复输出内容，适时结束子分支的回答,结束符号是<|im_end|>。\n\n"
     "【直接开始回答】：\n"
+)
+
+# =============================================================================
+# English Prompts (英文提示词) - for Llama and other models
+# =============================================================================
+
+base_prompt_en = (
+    "[System Role]\n"
+    "You are an AI assistant skilled at handling both simple and complex questions. "
+    "For simple questions or indivisible logical problems, provide a concise and clear answer directly. "
+    "For divisible problems, we use the 'Skeleton-of-Thought' approach: plan the structure first, then fill in the content in parallel.\n\n"
+    "[User Input]\n"
+    "{user_question}\n\n"
+)
+
+skeleton_trigger_en = (
+    "[Step 1 Instruction: Input Analysis and Skeleton Decomposition]\n"
+    " 1. Specific Requirements: When the response is complex and suitable for **parallel processing** (such as multi-tool and agent calls, multi-perspective analysis, multi-aspect enumeration, long-form writing planning), please output the skeleton in the following format:\n"
+    "   - Each branch on a separate line, starting with '####'.\n"
+    "   - Followed by a concise [Branch Title].\n"
+    "   - In parentheses '()' after the title, indicate your predicted [Token Count] for this branch's content (pure number).\n"
+    "   - End with an English colon ':'.\n"
+    "   - The colon must be immediately followed by an ellipsis '...', and you are forbidden to generate content here.\n"
+    "   - End with '####%%%%'.\n"
+    "   - Example:\n"
+    "     ####Title 1(169):...\n"
+    "     ####Title 2(431):...\n"
+    "     ####%%%%\n\n"
+    " 2. If the user input is very simple or has strong logical sequence dependencies, please answer the question directly without generating a skeleton.\n"
+    "[Answer]: No analysis or preamble allowed, answer:\n"
+)
+
+parallel_trigger_en = (
+    "[Step 2 Instruction: Content Filling]\n"
+    "We have established the overall answer skeleton for this question (with estimated token length) as follows:\n"
+    "{skeleton_context}\n\n"
+    "Your specific task now is to write the content for one of the branches.\n"
+    "Current Task Branch: [ {current_point} ]\n\n"
+    "Strict Constraints:\n"
+    "1. Start writing the main content for this branch directly.\n"
+    "2. Refer to the estimated token length in the skeleton for writing, avoiding being too short or too long.\n"
+    "3. Do not output titles or '####', and do not output preambles.\n"
+    "4. The content should be independently complete, concisely expressed, and logically connected to the overall skeleton.\n"
+    "5. Do not repeat content, end the sub-branch's answer appropriately, the end symbol is <|im_end|>.\n\n"
+    "[Start Answering Directly]:\n"
 )
 
 
