@@ -381,7 +381,7 @@ class SpecSoTModel(nn.Module):
             )
         
         # 骨架并行模式
-        return self._generate_with_skeleton(
+        return self._generate_specsot(
             task_prompt, max_new_tokens, temperature, top_p, top_k, para_token_ids
         )
 
@@ -404,7 +404,7 @@ class SpecSoTModel(nn.Module):
         
         return output_ids, avg_accept_len, 0, avg_draft_time, avg_update_time, avg_verify_time
 
-    def _generate_with_skeleton(
+    def _generate_specsot(
         self,
         task_prompt: str,
         max_new_tokens: int,
@@ -636,7 +636,7 @@ class SpecSoTModel(nn.Module):
             # -----------------------------------------------------------------
             # Step 3: Update State
             # -----------------------------------------------------------------
-            input_ids, draft_input_ids, accept_hidden = self._update_inference_inputs(
+            input_ids, draft_input_ids, accept_hidden = self._update_state_single(
                 input_ids, candidates, best_candidate, accept_length,
                 retrieve_indices, logits_processor, hidden_state_new, sample_p
             )
@@ -672,7 +672,7 @@ class SpecSoTModel(nn.Module):
             total_verify_time / num_steps,
         )
 
-    def _update_inference_inputs(
+    def _update_state_single(
         self,
         input_ids: torch.Tensor,
         candidates: torch.Tensor,
@@ -739,145 +739,6 @@ class SpecSoTModel(nn.Module):
         accept_hidden = retrieve_hidden[:, best_candidate[0], :accept_length[0] + 1]
 
         return input_ids, draft_input_ids, accept_hidden
-
-    # =========================================================================
-    # 并行序列解码循环 (Parallel Sequence Decode Loop)
-    # =========================================================================
-
-    def _decode_loop_parallel(
-        self,
-        prefix_ids: torch.Tensor,
-        prefix_len: int,
-        input_ids: torch.Tensor,
-        tips_indices: torch.Tensor,
-        branch_begins: List[int],
-        branch_lengths: List[int],
-        draft_input_ids: torch.Tensor,
-        max_new_tokens: int,
-        temperature: float = 0.0,
-        top_p: float = 0.0,
-        top_k: int = 0,
-        logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Tuple[float, float, float, float]:
-        """
-        并行分支解码循环
-        
-        特点：
-        - 多个分支共享 prefix 的 KV Cache
-        - 使用 Branch Index Map (BIM) 管理分支归属
-        - 支持动态分支剪枝（分支完成后移除）
-        
-        Args:
-            prefix_ids: 共享前缀的 token IDs
-            prefix_len: 前缀长度
-            input_ids: 打包后的输入
-            tips_indices: 各分支 tip 位置
-            branch_begins: 各分支起始位置
-            branch_lengths: 各分支长度
-            draft_input_ids: Draft 模型输入
-            max_new_tokens: 最大生成 token 数
-            temperature: 采样温度
-            
-        Returns:
-            各项统计指标
-        """
-        device = self.base_model.device
-
-        if temperature > 1e-5:
-            logits_processor = prepare_logits_processor(temperature, top_p, top_k)
-
-        # 1. Prefill 阶段: Base Model 并行处理各分支 + Eagle Layer 生成首次 Draft Tree
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = \
-            prefill_parallel(
-                prefix_len, input_ids, self, tips_indices,
-                branch_begins, branch_lengths, draft_input_ids, logits_processor
-            )
-
-        # ---------------------------------------------------------------------
-        # Parallel Decode Loop
-        # ---------------------------------------------------------------------
-        total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
-        total_verify_time = 0.0
-        total_update_time = 0.0
-        total_draft_time = 0.0
-        
-        evt_start = torch.cuda.Event(enable_timing=True)
-        evt_after_verify = torch.cuda.Event(enable_timing=True)
-        evt_after_update = torch.cuda.Event(enable_timing=True)
-        evt_after_draft = torch.cuda.Event(enable_timing=True)
-
-        for step in range(max_new_tokens):
-            evt_start.record()
-            
-            # -----------------------------------------------------------------
-            # Step 1: Verify (Parallel Base Model Forward)
-            # -----------------------------------------------------------------
-            num_nodes = draft_tokens.shape[1]
-            
-            logits, hidden_states = verify_step_parallel(
-                self, draft_tokens, tree_position_ids, tree_mask, num_nodes,
-                self.branch_index_map, self.active_branches, self.eagle_layer.full_position_ids
-            )
-            evt_after_verify.record()
-
-            # -----------------------------------------------------------------
-            # Step 2: Evaluate (Per-Branch Evaluation)
-            # -----------------------------------------------------------------
-            best_candidate, accept_length, sample_logits = evaluate_parallel(
-                logits, draft_tokens, retrieve_indices, logits_processor
-            )
-            total_accept_len += accept_length.sum()
-
-            # 采样 Bonus Token
-            if logits_processor is not None:
-                sample_tokens = torch.multinomial(sample_logits, 1)
-                if sample_tokens.ndim == 1:
-                    sample_tokens = sample_tokens.unsqueeze(0)
-            else:
-                sample_tokens = torch.argmax(sample_logits, dim=-1, keepdim=True)
-
-            # -----------------------------------------------------------------
-            # Step 3: Update State & Prepare Next Draft
-            # -----------------------------------------------------------------
-            next_tips_hidden, next_tips_tokens = self._update_parallel_state(
-                best_candidate, accept_length, draft_tokens,
-                retrieve_indices, hidden_states, sample_tokens, num_nodes
-            )
-            
-            if not self.active_branches:
-                print("All branches finished generation.")
-                break
-            evt_after_update.record()
-
-            # -----------------------------------------------------------------
-            # Step 4: Generate Next Draft
-            # -----------------------------------------------------------------
-            draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-                self.eagle_layer.generate_draft_tree(
-                    next_tips_hidden, next_tips_tokens, active_branch=self.active_branches
-                )
-            evt_after_draft.record()
-
-            # 计时统计
-            torch.cuda.synchronize()
-            total_verify_time += evt_start.elapsed_time(evt_after_verify) / 1000
-            total_update_time += evt_after_verify.elapsed_time(evt_after_update) / 1000
-            total_draft_time += evt_after_update.elapsed_time(evt_after_draft) / 1000
-
-        # 统计输出
-        num_steps = max(step, 1)
-        avg_accept_len = total_accept_len.item() / num_steps
-        print(f"Avg accepted lengths: {avg_accept_len}, "
-              f"Avg draft time: {total_draft_time/num_steps:.4f}s, "
-              f"Avg update time: {total_update_time/num_steps:.4f}s, "
-              f"Avg verify time: {total_verify_time/num_steps:.4f}s")
-
-        return (
-            avg_accept_len,
-            total_draft_time / num_steps,
-            total_update_time / num_steps,
-            total_verify_time / num_steps,
-        )
 
     # =========================================================================
     # 前缀复用：从 Skeleton 到 Parallel 的状态转换
@@ -1004,7 +865,146 @@ class SpecSoTModel(nn.Module):
 
         return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
 
-    def _update_parallel_state(
+    # =========================================================================
+    # 并行序列解码循环 (Parallel Sequence Decode Loop)
+    # =========================================================================
+
+    def _decode_loop_parallel(
+        self,
+        prefix_ids: torch.Tensor,
+        prefix_len: int,
+        input_ids: torch.Tensor,
+        tips_indices: torch.Tensor,
+        branch_begins: List[int],
+        branch_lengths: List[int],
+        draft_input_ids: torch.Tensor,
+        max_new_tokens: int,
+        temperature: float = 0.0,
+        top_p: float = 0.0,
+        top_k: int = 0,
+        logits_processor: Optional[LogitsProcessorList] = None,
+    ) -> Tuple[float, float, float, float]:
+        """
+        并行分支解码循环
+        
+        特点：
+        - 多个分支共享 prefix 的 KV Cache
+        - 使用 Branch Index Map (BIM) 管理分支归属
+        - 支持动态分支剪枝（分支完成后移除）
+        
+        Args:
+            prefix_ids: 共享前缀的 token IDs
+            prefix_len: 前缀长度
+            input_ids: 打包后的输入
+            tips_indices: 各分支 tip 位置
+            branch_begins: 各分支起始位置
+            branch_lengths: 各分支长度
+            draft_input_ids: Draft 模型输入
+            max_new_tokens: 最大生成 token 数
+            temperature: 采样温度
+            
+        Returns:
+            各项统计指标
+        """
+        device = self.base_model.device
+
+        if temperature > 1e-5:
+            logits_processor = prepare_logits_processor(temperature, top_p, top_k)
+
+        # 1. Prefill 阶段: Base Model 并行处理各分支 + Eagle Layer 生成首次 Draft Tree
+        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = \
+            prefill_parallel(
+                prefix_len, input_ids, self, tips_indices,
+                branch_begins, branch_lengths, draft_input_ids, logits_processor
+            )
+
+        # ---------------------------------------------------------------------
+        # Parallel Decode Loop
+        # ---------------------------------------------------------------------
+        total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
+        total_verify_time = 0.0
+        total_update_time = 0.0
+        total_draft_time = 0.0
+        
+        evt_start = torch.cuda.Event(enable_timing=True)
+        evt_after_verify = torch.cuda.Event(enable_timing=True)
+        evt_after_update = torch.cuda.Event(enable_timing=True)
+        evt_after_draft = torch.cuda.Event(enable_timing=True)
+
+        for step in range(max_new_tokens):
+            evt_start.record()
+            
+            # -----------------------------------------------------------------
+            # Step 1: Verify (Parallel Base Model Forward)
+            # -----------------------------------------------------------------
+            num_nodes = draft_tokens.shape[1]
+            
+            logits, hidden_states = verify_step_parallel(
+                self, draft_tokens, tree_position_ids, tree_mask, num_nodes,
+                self.branch_index_map, self.active_branches, self.eagle_layer.full_position_ids
+            )
+            evt_after_verify.record()
+
+            # -----------------------------------------------------------------
+            # Step 2: Evaluate (Per-Branch Evaluation)
+            # -----------------------------------------------------------------
+            best_candidate, accept_length, sample_logits = evaluate_parallel(
+                logits, draft_tokens, retrieve_indices, logits_processor
+            )
+            total_accept_len += accept_length.sum()
+
+            # 采样 Bonus Token
+            if logits_processor is not None:
+                sample_tokens = torch.multinomial(sample_logits, 1)
+                if sample_tokens.ndim == 1:
+                    sample_tokens = sample_tokens.unsqueeze(0)
+            else:
+                sample_tokens = torch.argmax(sample_logits, dim=-1, keepdim=True)
+
+            # -----------------------------------------------------------------
+            # Step 3: Update State & Prepare Next Draft
+            # -----------------------------------------------------------------
+            next_tips_hidden, next_tips_tokens = self._update_state_parallel(
+                best_candidate, accept_length, draft_tokens,
+                retrieve_indices, hidden_states, sample_tokens, num_nodes
+            )
+            
+            if not self.active_branches:
+                print("All branches finished generation.")
+                break
+            evt_after_update.record()
+
+            # -----------------------------------------------------------------
+            # Step 4: Generate Next Draft
+            # -----------------------------------------------------------------
+            draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
+                self.eagle_layer.generate_draft_tree(
+                    next_tips_hidden, next_tips_tokens, active_branch=self.active_branches
+                )
+            evt_after_draft.record()
+
+            # 计时统计
+            torch.cuda.synchronize()
+            total_verify_time += evt_start.elapsed_time(evt_after_verify) / 1000
+            total_update_time += evt_after_verify.elapsed_time(evt_after_update) / 1000
+            total_draft_time += evt_after_update.elapsed_time(evt_after_draft) / 1000
+
+        # 统计输出
+        num_steps = max(step, 1)
+        avg_accept_len = total_accept_len.item() / num_steps
+        print(f"Avg accepted lengths: {avg_accept_len}, "
+              f"Avg draft time: {total_draft_time/num_steps:.4f}s, "
+              f"Avg update time: {total_update_time/num_steps:.4f}s, "
+              f"Avg verify time: {total_verify_time/num_steps:.4f}s")
+
+        return (
+            avg_accept_len,
+            total_draft_time / num_steps,
+            total_update_time / num_steps,
+            total_verify_time / num_steps,
+        )
+
+    def _update_state_parallel(
         self,
         best_candidate: torch.Tensor,
         accept_length: torch.Tensor,

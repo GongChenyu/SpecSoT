@@ -474,6 +474,64 @@ def verify_step_parallel(
     return logits, hidden_states
 
 
+# =============================================================================
+# 4. Parallel Evaluation (并行评估)
+# =============================================================================
+
+def evaluate_parallel(
+    logits: torch.Tensor,
+    draft_tokens: torch.Tensor,
+    retrieve_indices: torch.Tensor,
+    logits_processor: Optional[LogitsProcessorList],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    并行评估：为每个分支选择最佳候选
+    
+    Args:
+        logits: 验证后的 logits [num_para, seq_len, vocab]
+        draft_tokens: 候选 tokens [num_para, tree_size]
+        retrieve_indices: 检索索引 [num_para, num_leaves, depth]
+        logits_processor: logits 处理器
+        
+    Returns:
+        best_candidate: 最佳候选索引 [num_para]
+        accept_length: 接受长度 [num_para]
+        sample_logits: 采样 logits [num_para, vocab]
+    """
+    num_para = logits.shape[0]
+    device = logits.device
+    
+    retrieve_indices = retrieve_indices.to(device)
+    draft_tokens = draft_tokens.to(device)
+    
+    # 处理无效索引
+    padding_mask = (retrieve_indices == -1)
+    safe_indices = retrieve_indices.clone()
+    safe_indices[padding_mask] = 0
+    
+    # 提取候选 tokens
+    candidates = torch.gather(
+        draft_tokens.unsqueeze(1).expand(-1, retrieve_indices.size(1), -1),
+        2, safe_indices
+    )
+    candidates.masked_fill_(padding_mask, 0)
+    
+    # 提取候选 logits
+    vocab_size = logits.size(-1)
+    flat_indices = safe_indices.view(num_para, -1).unsqueeze(-1).expand(-1, -1, vocab_size)
+    candidate_logits = torch.gather(logits, 1, flat_indices)
+    candidate_logits = candidate_logits.view(
+        num_para, retrieve_indices.size(1), retrieve_indices.size(2), -1
+    )
+    
+    # 评估
+    best_candidate, accept_length, sample_logits = evaluate_posterior(
+        candidate_logits, candidates, logits_processor
+    )
+    
+    return best_candidate, accept_length, sample_logits
+
+
 def evaluate_posterior(
     logits: torch.Tensor,
     candidates: torch.Tensor,
@@ -672,7 +730,7 @@ def _evaluate_posterior_single(
 
 
 # =============================================================================
-# 4. State Update (状态更新)
+# 5. State Update (状态更新)
 # =============================================================================
 
 def reset_tree_mode(model):
@@ -698,7 +756,7 @@ def reset_past_key_values(passed_key_values: List[torch.Tensor]) -> List[torch.T
 
 
 # =============================================================================
-# 5. Utility Functions (工具函数)
+# 6. Utility Functions (工具函数)
 # =============================================================================
 
 def stack_with_left_padding(
@@ -836,10 +894,6 @@ def check_stop_conditions(
     return False
 
 
-# =============================================================================
-# 7. Output Merge (输出合并)
-# =============================================================================
-
 def merge_outputs(
     skeleton_output: torch.Tensor,
     parallel_branches_output: List[List[int]],
@@ -876,64 +930,6 @@ def merge_outputs(
     merged_ids.append(para_token_ids['para_end_token_id'])
 
     return torch.tensor([merged_ids], device=device)
-
-
-# =============================================================================
-# 8. Parallel Evaluation (并行评估)
-# =============================================================================
-
-def evaluate_parallel(
-    logits: torch.Tensor,
-    draft_tokens: torch.Tensor,
-    retrieve_indices: torch.Tensor,
-    logits_processor: Optional[LogitsProcessorList],
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    并行评估：为每个分支选择最佳候选
-    
-    Args:
-        logits: 验证后的 logits [num_para, seq_len, vocab]
-        draft_tokens: 候选 tokens [num_para, tree_size]
-        retrieve_indices: 检索索引 [num_para, num_leaves, depth]
-        logits_processor: logits 处理器
-        
-    Returns:
-        best_candidate: 最佳候选索引 [num_para]
-        accept_length: 接受长度 [num_para]
-        sample_logits: 采样 logits [num_para, vocab]
-    """
-    num_para = logits.shape[0]
-    device = logits.device
-    
-    retrieve_indices = retrieve_indices.to(device)
-    draft_tokens = draft_tokens.to(device)
-    
-    # 处理无效索引
-    padding_mask = (retrieve_indices == -1)
-    safe_indices = retrieve_indices.clone()
-    safe_indices[padding_mask] = 0
-    
-    # 提取候选 tokens
-    candidates = torch.gather(
-        draft_tokens.unsqueeze(1).expand(-1, retrieve_indices.size(1), -1),
-        2, safe_indices
-    )
-    candidates.masked_fill_(padding_mask, 0)
-    
-    # 提取候选 logits
-    vocab_size = logits.size(-1)
-    flat_indices = safe_indices.view(num_para, -1).unsqueeze(-1).expand(-1, -1, vocab_size)
-    candidate_logits = torch.gather(logits, 1, flat_indices)
-    candidate_logits = candidate_logits.view(
-        num_para, retrieve_indices.size(1), retrieve_indices.size(2), -1
-    )
-    
-    # 评估
-    best_candidate, accept_length, sample_logits = evaluate_posterior(
-        candidate_logits, candidates, logits_processor
-    )
-    
-    return best_candidate, accept_length, sample_logits
 
 
 def parse_skeleton(
