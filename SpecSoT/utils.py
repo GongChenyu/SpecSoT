@@ -550,7 +550,7 @@ def _check_processors(logits_processor: Optional[LogitsProcessorList],) -> Tuple
     return use_sampling, has_semantic
 
 
-def _greedy_evaluate(
+def greedy_sampling(
     logits: torch.Tensor,
     candidates: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -590,7 +590,7 @@ def _greedy_evaluate(
     return best_candidate, accept_length, sample_p
 
 
-def _rejection_sampling_evaluate(
+def rejection_sampling(
     logits: torch.Tensor,
     candidates: torch.Tensor,
     logits_processor: LogitsProcessorList,
@@ -690,7 +690,7 @@ def _rejection_sampling_evaluate(
     )
 
 
-def _evaluate_batch(
+def batched_sampling(
     logits: torch.Tensor,
     candidates: torch.Tensor,
     logits_processor: Optional[LogitsProcessorList] = None,
@@ -727,7 +727,7 @@ def _evaluate_batch(
         sample_logits_list = []
         
         for b in range(batch_size):
-            bc, al, sl = _greedy_evaluate(logits[b], candidates[b])
+            bc, al, sl = greedy_sampling(logits[b], candidates[b])
             best_candidates.append(bc)
             accept_lengths.append(al)
             sample_logits_list.append(sl)
@@ -746,7 +746,7 @@ def _evaluate_batch(
     sample_logits_list = []
     
     for b in range(batch_size):
-        bc, al, sl = _rejection_sampling_evaluate(
+        bc, al, sl = rejection_sampling(
             logits[b], candidates[b], logits_processor, has_semantic
         )
         best_candidates.append(bc)
@@ -798,7 +798,7 @@ def evaluate_single(
         candidates = candidates.unsqueeze(0)
         squeeze_output = True
     
-    best_candidate, accept_length, sample_logits = _evaluate_batch(
+    best_candidate, accept_length, sample_logits = batched_sampling(
         logits, candidates, logits_processor
     )
     
@@ -862,7 +862,7 @@ def evaluate_parallel(
     # 调用核心评估逻辑
     # candidate_logits: [num_para, num_leaves, depth, vocab]
     # candidates: [num_para, num_leaves, depth]
-    return _evaluate_batch(candidate_logits, candidates, logits_processor)
+    return batched_sampling(candidate_logits, candidates, logits_processor)
 
 
 # =============================================================================

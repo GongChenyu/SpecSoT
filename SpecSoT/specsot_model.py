@@ -54,7 +54,6 @@ from .utils import (
     prefill_parallel,
     verify_step_single,
     verify_step_parallel,
-    evaluate_posterior,
     stack_with_left_padding,
     parse_skeleton,
     check_stop_conditions,
