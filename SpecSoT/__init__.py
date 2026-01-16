@@ -26,7 +26,7 @@ from .eagle_layer import EagleLayer
 from .logits_processor import SemanticLogitsProcessor
 
 # 工具函数
-from .inference_utils import (
+from .utils import (
     prepare_logits_processor,
     initialize_tree_single,
     initialize_tree_parallel,
@@ -35,6 +35,7 @@ from .inference_utils import (
     update_inference_inputs,
     reset_tree_mode,
     stack_with_left_padding,
+    parse_skeleton,
 )
 
 # KV Cache
@@ -66,6 +67,7 @@ __all__ = [
     "reset_tree_mode",
     "stack_with_left_padding",
     "initialize_past_key_values",
+    "parse_skeleton",
     
     # Config
     "EConfig",

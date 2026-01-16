@@ -1,33 +1,40 @@
 # coding=utf-8
 """
-Inference Utilities for SpecSoT
+SpecSoT 工具函数模块 (Utils)
 
 该模块提供推理过程中的各种工具函数，按功能分类组织：
 
 1. Logits Processing (Logits 处理)
    - prepare_logits_processor: 准备温度、top-p、top-k 等 logits 处理器
 
-2. Tree Initialization (树初始化)
-   - initialize_tree_single: 单序列模式的 prefill 和 draft tree 初始化
-   - initialize_tree_parallel: 并行模式的 prefill 和 draft tree 初始化
+2. Single Mode Helpers (单序列模式辅助函数)
+   - initialize_tree_single: 单序列 Prefill 和 Draft Tree 初始化
+   - tree_decoding_single: 单序列 Base Model 验证
+   - update_inference_inputs: 单序列状态更新
 
-3. Verification (验证)
-   - tree_decoding_single: 单序列模式的 Base Model 验证
+3. Parallel Mode Helpers (并行模式辅助函数)
+   - initialize_tree_parallel: 并行 Prefill 和 Draft Tree 初始化
+
+4. Evaluation (评估)
    - evaluate_posterior: 评估候选序列，选择最佳路径
-   - evaluate_posterior_single: 单样本评估 (带 rejection sampling)
+   - _evaluate_posterior_single: 单样本评估 (带 rejection sampling)
 
-4. State Update (状态更新)
-   - update_inference_inputs: 更新推理状态和生成下一轮 draft
+5. State Utilities (状态工具)
    - reset_tree_mode: 重置 tree mode
    - reset_past_key_values: 重置 KV Cache
 
-5. Utility Functions (工具函数)
+6. Tensor Utilities (张量工具)
    - stack_with_left_padding: 左填充堆叠不等长序列
+   - generate_candidates: 生成候选序列
+   - pad_path: 路径填充
+
+7. Skeleton Parsing (骨架解析)
+   - parse_skeleton: 解析骨架，提取并行分支
 """
 
 import copy
 import random
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 import torch
 from transformers.generation.logits_process import (
@@ -37,6 +44,7 @@ from transformers.generation.logits_process import (
     TopKLogitsWarper,
     TopPLogitsWarper,
 )
+from .prompts import parallel_trigger_zh
 
 
 # =============================================================================
@@ -503,15 +511,15 @@ def update_inference_inputs(
     model,
     hidden_state_new: torch.Tensor,
     sample_p: torch.Tensor,
-) -> Tuple[torch.Tensor, ...]:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    更新推理状态并生成下一轮 Draft Tree
+    更新推理状态（单序列模式）
     
     操作：
     1. 将接受的 tokens 添加到 input_ids
     2. 更新 KV Cache (搬运接受的 KV)
     3. 采样 Bonus Token
-    4. 生成下一轮 Draft Tree
+    4. 提取接受路径的 Hidden States (供上层生成 Draft Tree)
     
     Args:
         input_ids: 当前输入 [1, seq_len]
@@ -526,10 +534,8 @@ def update_inference_inputs(
         
     Returns:
         input_ids: 更新后的输入
-        draft_tokens: 新的候选 tokens
-        retrieve_indices: 新的检索索引
-        tree_mask: 新的树掩码
-        tree_position_ids: 新的位置编码
+        draft_input_ids: Draft 模型的输入 (含 Bonus Token)
+        accept_hidden: 接受路径的隐藏状态 (供生成下一轮 Draft Tree)
     """
     prev_input_len = input_ids.shape[1]
     bc = best_candidate[0]
@@ -562,11 +568,7 @@ def update_inference_inputs(
     retrieve_hidden = hidden_state_new[:, retrieve_indices[0]]
     accept_hidden = retrieve_hidden[:, best_candidate[0], :accept_length[0] + 1]
 
-    # 生成下一轮 Draft Tree
-    draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-        model.eagle_layer.generate_draft_tree(accept_hidden, input_ids=draft_input_ids)
-
-    return input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids
+    return input_ids, draft_input_ids, accept_hidden
 
 
 def reset_tree_mode(model):
@@ -694,3 +696,99 @@ def pad_path(path: List[int], length: int, pad_value: int = -2) -> List[int]:
         填充后的路径
     """
     return path + [pad_value] * (length - len(path))
+
+
+
+
+def parse_skeleton(
+    tokenizer,
+    skeleton_ids: torch.Tensor,
+    para_token_ids: Dict[str, int],
+) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
+    """
+    解析骨架，提取并行分支
+    
+    骨架格式示例：
+    ####标题1(100):...
+    ####标题2(200):...
+    ####%%%%
+    
+    Args:
+        skeleton_ids: 骨架 token IDs
+        para_token_ids: 特殊 token IDs 字典
+        
+    Returns:
+        clean_branches: 清洗后的分支列表（含指令前缀）
+        instruction_len: 每个分支的指令长度
+    """
+    seq_list = skeleton_ids[0].tolist()
+    para_begin_id = para_token_ids['para_begin_token_id']
+    para_end_id = para_token_ids['para_end_token_id']
+    
+    colon_ids = [
+        para_token_ids['colon_token_id'],
+        para_token_ids['cn_colon_token_id'],
+        para_token_ids['colon_new_line_token_id'],
+    ]
+
+    # 查找骨架边界
+    try:
+        para_begin_idx = seq_list.index(para_begin_id)
+        try:
+            para_end_idx = seq_list.index(para_end_id, para_begin_idx)
+        except ValueError:
+            para_end_idx = len(seq_list)
+    except ValueError:
+        print("Warning: No '####' found in generated output.")
+        return None, None
+
+    # 提取并行片段
+    para_segment = seq_list[para_begin_idx:para_end_idx - 1]
+
+    # 分割分支
+    raw_branches = []
+    current_branch = []
+    for token in para_segment:
+        if token == para_begin_id:
+            if current_branch:
+                raw_branches.append(current_branch)
+            current_branch = [token]
+        else:
+            current_branch.append(token)
+    if current_branch:
+        raw_branches.append(current_branch)
+
+    # 清洗分支（截取到冒号）
+    clean_branches = []
+    for br in raw_branches:
+        cut_idx = -1
+        for i, token in enumerate(br):
+            if token in colon_ids:
+                cut_idx = i
+                break
+        
+        if cut_idx != -1:
+            clean_branches.append(br[:cut_idx + 1])
+        else:
+            clean_branches.append(br)
+
+    # 构建骨架上下文
+    result_skeleton = []
+    for br in clean_branches:
+        result_skeleton.extend(br)
+    result_skeleton_str = tokenizer.decode(result_skeleton)
+
+    # 为每个分支添加指令前缀
+    instruction_len = []
+    for i, br in enumerate(clean_branches):
+        branch_str = tokenizer.decode(br)
+        instruction = parallel_trigger_zh.format(
+            skeleton_context=result_skeleton_str,
+            current_point=branch_str
+        )
+        instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
+        clean_branches[i] = instruction_ids + br
+        instruction_len.append(len(instruction_ids))
+
+    return clean_branches, instruction_len
+

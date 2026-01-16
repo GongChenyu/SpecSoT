@@ -47,7 +47,7 @@ from .kv_cache import initialize_past_key_values
 from .configs import EConfig
 from .logits_processor import SemanticLogitsProcessor
 
-from .inference_utils import (
+from .utils import (
     prepare_logits_processor,
     reset_tree_mode,
     initialize_tree_single,
@@ -56,6 +56,7 @@ from .inference_utils import (
     update_inference_inputs,
     initialize_tree_parallel,
     stack_with_left_padding,
+    parse_skeleton,
 )
 
 from .prompts import base_prompt, skeleton_trigger_zh, parallel_trigger_zh
@@ -387,7 +388,7 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # Stage 2: Skeleton Parsing (骨架解析)
         # =====================================================================
-        clean_branches, instruction_len = self._parse_skeleton(skeleton_ids, para_token_ids)
+        clean_branches, instruction_len = parse_skeleton(self.tokenizer, skeleton_ids, para_token_ids)
         
         if not clean_branches:
             print("Parsing failed or no branches found. Returning skeleton.")
@@ -548,13 +549,19 @@ class SpecSoTModel(nn.Module):
             evt_after_update.record()
 
             # -----------------------------------------------------------------
-            # Step 3: Update & Generate Next Draft
+            # Step 3: Update State
             # -----------------------------------------------------------------
-            input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-                update_inference_inputs(
-                    input_ids, candidates, best_candidate, accept_length,
-                    retrieve_indices, logits_processor, self, hidden_state_new, sample_p
-                )
+            input_ids, draft_input_ids, accept_hidden = update_inference_inputs(
+                input_ids, candidates, best_candidate, accept_length,
+                retrieve_indices, logits_processor, self, hidden_state_new, sample_p
+            )
+            evt_after_update.record()
+
+            # -----------------------------------------------------------------
+            # Step 4: Generate Next Draft
+            # -----------------------------------------------------------------
+            draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
+                self.eagle_layer.generate_draft_tree(accept_hidden, input_ids=draft_input_ids)
             evt_after_draft.record()
 
             # 计时统计
@@ -1188,101 +1195,6 @@ class SpecSoTModel(nn.Module):
 
         return mask
 
-    # =========================================================================
-    # 骨架解析 (Skeleton Parsing)
-    # =========================================================================
-
-    def _parse_skeleton(
-        self,
-        skeleton_ids: torch.Tensor,
-        para_token_ids: Dict[str, int],
-    ) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
-        """
-        解析骨架，提取并行分支
-        
-        骨架格式示例：
-        ####标题1(100):...
-        ####标题2(200):...
-        ####%%%%
-        
-        Args:
-            skeleton_ids: 骨架 token IDs
-            para_token_ids: 特殊 token IDs 字典
-            
-        Returns:
-            clean_branches: 清洗后的分支列表（含指令前缀）
-            instruction_len: 每个分支的指令长度
-        """
-        seq_list = skeleton_ids[0].tolist()
-        para_begin_id = para_token_ids['para_begin_token_id']
-        para_end_id = para_token_ids['para_end_token_id']
-        
-        colon_ids = [
-            para_token_ids['colon_token_id'],
-            para_token_ids['cn_colon_token_id'],
-            para_token_ids['colon_new_line_token_id'],
-        ]
-
-        # 查找骨架边界
-        try:
-            para_begin_idx = seq_list.index(para_begin_id)
-            try:
-                para_end_idx = seq_list.index(para_end_id, para_begin_idx)
-            except ValueError:
-                para_end_idx = len(seq_list)
-        except ValueError:
-            print("Warning: No '####' found in generated output.")
-            return None, None
-
-        # 提取并行片段
-        para_segment = seq_list[para_begin_idx:para_end_idx - 1]
-
-        # 分割分支
-        raw_branches = []
-        current_branch = []
-        for token in para_segment:
-            if token == para_begin_id:
-                if current_branch:
-                    raw_branches.append(current_branch)
-                current_branch = [token]
-            else:
-                current_branch.append(token)
-        if current_branch:
-            raw_branches.append(current_branch)
-
-        # 清洗分支（截取到冒号）
-        clean_branches = []
-        for br in raw_branches:
-            cut_idx = -1
-            for i, token in enumerate(br):
-                if token in colon_ids:
-                    cut_idx = i
-                    break
-            
-            if cut_idx != -1:
-                clean_branches.append(br[:cut_idx + 1])
-            else:
-                clean_branches.append(br)
-
-        # 构建骨架上下文
-        result_skeleton = []
-        for br in clean_branches:
-            result_skeleton.extend(br)
-        result_skeleton_str = self.tokenizer.decode(result_skeleton)
-
-        # 为每个分支添加指令前缀
-        instruction_len = []
-        for i, br in enumerate(clean_branches):
-            branch_str = self.tokenizer.decode(br)
-            instruction = parallel_trigger_zh.format(
-                skeleton_context=result_skeleton_str,
-                current_point=branch_str
-            )
-            instruction_ids = self.tokenizer.encode(instruction, add_special_tokens=False)
-            clean_branches[i] = instruction_ids + br
-            instruction_len.append(len(instruction_ids))
-
-        return clean_branches, instruction_len
 
     # =========================================================================
     # 类方法：模型加载
