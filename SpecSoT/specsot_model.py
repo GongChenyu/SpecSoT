@@ -51,12 +51,14 @@ from .utils import (
     prepare_logits_processor,
     reset_tree_mode,
     initialize_tree_single,
-    tree_decoding_single,
+    verify_step_single,
+    verify_step_parallel,
     evaluate_posterior,
     update_inference_inputs,
     initialize_tree_parallel,
     stack_with_left_padding,
     parse_skeleton,
+    check_stop_conditions,
 )
 
 from .prompts import base_prompt, skeleton_trigger_zh, parallel_trigger_zh
@@ -522,7 +524,7 @@ class SpecSoTModel(nn.Module):
             self.base_model.model.tree_mask = tree_mask
             draft_tokens = draft_tokens.to(device)
             
-            logits, hidden_state_new, _ = tree_decoding_single(
+            logits, hidden_state_new, _ = verify_step_single(
                 self, draft_tokens, self.past_key_values,
                 tree_position_ids, input_ids, retrieve_indices
             )
@@ -571,7 +573,10 @@ class SpecSoTModel(nn.Module):
             total_draft_time += evt_after_update.elapsed_time(evt_after_draft) / 1000
 
             # 停止条件检查
-            if self._check_stop_conditions(input_ids, input_len, stop_token_id, max_kv_len):
+            if check_stop_conditions(
+                input_ids, input_len, stop_token_id, self.tokenizer.eos_token_id,
+                self.current_length_data[0].item(), max_kv_len
+            ):
                 break
 
         # 计算平均值
@@ -583,25 +588,6 @@ class SpecSoTModel(nn.Module):
             total_update_time / num_steps,
             total_verify_time / num_steps,
         )
-
-    def _check_stop_conditions(
-        self,
-        input_ids: torch.Tensor,
-        input_len: int,
-        stop_token_id: Optional[int],
-        max_kv_len: int,
-    ) -> bool:
-        """检查停止条件"""
-        generated_tokens = input_ids[0, input_len:].tolist()
-        
-        if stop_token_id and stop_token_id in generated_tokens:
-            return True
-        if self.tokenizer.eos_token_id in generated_tokens:
-            return True
-        if self.current_length_data[0].item() >= max_kv_len - 200:
-            return True
-        
-        return False
 
     # =========================================================================
     # 并行序列解码循环 (Parallel Sequence Decode Loop)
@@ -672,14 +658,11 @@ class SpecSoTModel(nn.Module):
             # -----------------------------------------------------------------
             # Step 1: Verify (Parallel Base Model Forward)
             # -----------------------------------------------------------------
-            current_length = self.current_length_data[0].item()
             num_nodes = draft_tokens.shape[1]
-            combined_mask = self._build_parallel_verify_mask(
-                current_length, tree_mask, num_nodes, device
-            )
             
-            logits, hidden_states = self._verify_step_parallel(
-                draft_tokens, tree_position_ids, combined_mask, num_nodes
+            logits, hidden_states = verify_step_parallel(
+                self, draft_tokens, tree_position_ids, tree_mask, num_nodes,
+                self.branch_index_map, self.active_branches, self.eagle_layer.full_position_ids
             )
             evt_after_verify.record()
 
@@ -848,125 +831,6 @@ class SpecSoTModel(nn.Module):
         self.eagle_layer.full_position_ids = torch.cat([prefix_pos, padded_branch_pos], dim=1)
 
         return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
-
-    def _build_parallel_verify_mask(
-        self,
-        history_len: int,
-        tree_mask: torch.Tensor,
-        num_nodes: int,
-        device: torch.device,
-        dtype: torch.dtype = torch.float32,
-    ) -> torch.Tensor:
-        """
-        构建并行验证的注意力掩码
-        
-        Mask 由两部分组成：
-        1. Cross Mask: Draft tokens 对 History 的可见性
-           - Prefix (BIM=-1): 所有分支可见
-           - Branch tokens: 只有对应分支可见
-        2. Draft Block Mask: Draft tokens 内部的 Tree Mask
-        
-        Args:
-            history_len: 历史 token 长度
-            tree_mask: Draft Tree 的掩码
-            num_nodes: 每个分支的 Draft 节点数
-            device: 设备
-            dtype: 数据类型
-            
-        Returns:
-            combined_mask: [1, 1, packed_draft_len, history_len + packed_draft_len]
-        """
-        history_bim = self.branch_index_map[:history_len]
-        num_para = len(self.active_branches)
-        packed_draft_len = num_para * num_nodes
-        
-        # 初始化 Cross Mask (全部遮蔽)
-        cross_mask = torch.full(
-            (1, 1, packed_draft_len, history_len),
-            torch.finfo(dtype).min, device=device
-        )
-        
-        # 计算 Draft tokens 的分支归属
-        active_ids_tensor = torch.tensor(self.active_branches, device=device)
-        draft_branch_ids = active_ids_tensor.repeat_interleave(num_nodes)
-        
-        # Prefix 全部可见 (BIM == -1)
-        is_prefix = (history_bim == -1).view(1, 1, 1, -1)
-        cross_mask.masked_fill_(is_prefix, 0)
-        
-        # 同分支可见
-        draft_ids_view = draft_branch_ids.view(1, 1, -1, 1)
-        hist_ids_view = history_bim.view(1, 1, 1, -1)
-        is_same_branch = (draft_ids_view == hist_ids_view)
-        cross_mask.masked_fill_(is_same_branch, 0)
-        
-        # 构建 Draft Block Mask (块对角)
-        converted_tree_mask = torch.where(
-            tree_mask == 1, 0.0, torch.finfo(dtype).min
-        )
-        draft_block_mask = torch.full(
-            (packed_draft_len, packed_draft_len),
-            torch.finfo(dtype).min, device=device
-        )
-        for i in range(num_para):
-            st, ed = i * num_nodes, (i + 1) * num_nodes
-            draft_block_mask[st:ed, st:ed] = converted_tree_mask[i, 0, :, :]
-
-        draft_block_mask = draft_block_mask.unsqueeze(0).unsqueeze(0)
-        
-        # 合并
-        combined_mask = torch.cat([cross_mask, draft_block_mask], dim=-1)
-        
-        return combined_mask
-
-    def _verify_step_parallel(
-        self,
-        draft_tokens: torch.Tensor,
-        tree_position_ids: torch.Tensor,
-        combined_mask: torch.Tensor,
-        num_nodes: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        并行验证步骤：执行 Base Model Forward
-        
-        Args:
-            draft_tokens: Draft tokens [num_para, num_nodes]
-            tree_position_ids: Tree 位置编码 [num_para, num_nodes]
-            combined_mask: 注意力掩码
-            num_nodes: 节点数
-            
-        Returns:
-            logits: [num_para, num_nodes, vocab_size]
-            hidden_states: 隐藏状态
-        """
-        num_para = draft_tokens.shape[0]
-        flat_draft_tokens = draft_tokens.reshape(1, -1)
-        
-        # 计算绝对位置
-        current_tip_pos = self.eagle_layer.full_position_ids[:, -1].unsqueeze(-1)
-        abs_draft_pos = tree_position_ids + current_tip_pos + 1
-        flat_draft_pos = abs_draft_pos.view(1, -1)
-        
-        # Base Model Forward
-        outputs, hidden_states = self(
-            flat_draft_tokens,
-            past_key_values=self.past_key_values,
-            attention_mask=combined_mask,
-            position_ids=flat_draft_pos,
-            output_orig=False,
-        )
-        
-        # 计算 Logits
-        logits = self.base_model.lm_head(hidden_states)
-        logits = logits.view(num_para, num_nodes, -1)
-        
-        # 处理 Hidden States for Eagle Layer
-        ea_device = self.eagle_layer.lm_head.weight.device
-        if outputs["hidden_states"][0].device != ea_device:
-            outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-        hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
-        
-        return logits, hidden_states
 
     def _evaluate_parallel(
         self,

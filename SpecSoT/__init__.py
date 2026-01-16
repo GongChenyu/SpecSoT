@@ -30,12 +30,16 @@ from .utils import (
     prepare_logits_processor,
     initialize_tree_single,
     initialize_tree_parallel,
-    tree_decoding_single,
+    verify_step_single,
+    verify_step_parallel,
     evaluate_posterior,
     update_inference_inputs,
     reset_tree_mode,
     stack_with_left_padding,
     parse_skeleton,
+    check_stop_conditions,
+    # 向后兼容的别名
+    tree_decoding_single,
 )
 
 # KV Cache
@@ -61,13 +65,16 @@ __all__ = [
     "prepare_logits_processor",
     "initialize_tree_single",
     "initialize_tree_parallel",
-    "tree_decoding_single",
+    "verify_step_single",
+    "verify_step_parallel",
+    "tree_decoding_single",  # 向后兼容别名
     "evaluate_posterior",
     "update_inference_inputs",
     "reset_tree_mode",
     "stack_with_left_padding",
     "initialize_past_key_values",
     "parse_skeleton",
+    "check_stop_conditions",
     
     # Config
     "EConfig",
