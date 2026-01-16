@@ -8,12 +8,13 @@ SpecSoT 工具函数模块 (Utils)
    - prepare_logits_processor: 准备温度、top-p、top-k 等 logits 处理器
 
 2. Single Mode Helpers (单序列模式辅助函数)
-   - initialize_tree_single: 单序列 Prefill 和 Draft Tree 初始化
-   - tree_decoding_single: 单序列 Base Model 验证
+   - prefill_single: 单序列 Prefill 阶段（处理输入 prompt，初始化 KV Cache 和首次 Draft）
+   - verify_step_single: 单序列 Verify 阶段（Base Model 验证 Draft Tree）
    - update_inference_inputs: 单序列状态更新
 
 3. Parallel Mode Helpers (并行模式辅助函数)
-   - initialize_tree_parallel: 并行 Prefill 和 Draft Tree 初始化
+   - prefill_parallel: 并行 Prefill 阶段（处理各分支 prompt，初始化并行状态和首次 Draft）
+   - verify_step_parallel: 并行 Verify 阶段（Base Model 验证多分支 Draft Tree）
 
 4. Evaluation (评估)
    - evaluate_posterior: 评估候选序列，选择最佳路径
@@ -85,17 +86,16 @@ def prepare_logits_processor(
 
 
 # =============================================================================
-# 2. Tree Initialization (树初始化)
+# 2. Single Mode Helpers (单序列模式辅助函数)
 # =============================================================================
 
-def initialize_tree_single(
+def prefill_single(
     input_ids: torch.Tensor,
     model,
-    past_key_values,
     logits_processor: Optional[LogitsProcessorList] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """
-    单序列模式的 Prefill 和 Draft Tree 初始化
+    单序列模式：Prefill 阶段（处理输入 prompt，初始化 KV Cache 和首次 Draft）
     
     流程：
     1. Base Model Prefill: 处理输入，获取最后一个 token 的 logits
@@ -119,7 +119,7 @@ def initialize_tree_single(
     """
     # Base Model Prefill
     outputs, orig, hidden_states = model(
-        input_ids, past_key_values=past_key_values, output_orig=True
+        input_ids, past_key_values=model.past_key_values, output_orig=True
     )
 
     # Sample Root Token
@@ -151,7 +151,66 @@ def initialize_tree_single(
     )
 
 
-def initialize_tree_parallel(
+# =============================================================================
+# 3. Parallel Mode Helpers (并行模式辅助函数)
+# =============================================================================
+
+def build_parallel_prefill_mask(
+    branch_index_map: torch.Tensor,
+    prefix_len: int,
+    branch_len: int,
+    device: torch.device,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    """
+    构建并行 Prefill 阶段的注意力掩码
+    
+    该掩码确保：
+    1. 所有分支都能看到共享的 prefix
+    2. 每个分支只能看到自己的内容
+    3. 遵循因果约束（当前位置只能看到之前的位置）
+    
+    Args:
+        branch_index_map: 分支索引映射 (BIM)
+        prefix_len: 共享前缀长度
+        branch_len: 分支区域长度
+        device: 目标设备
+        dtype: 数据类型
+        
+    Returns:
+        attention_mask: [1, 1, branch_len, total_len]
+    """
+    total_len = prefix_len + branch_len
+
+    total_ids = branch_index_map[:total_len]
+    branch_ids = branch_index_map[prefix_len:total_len]
+
+    # 初始化为全部遮蔽
+    mask = torch.full(
+        (1, 1, branch_len, total_len),
+        torch.finfo(dtype).min, device=device
+    )
+
+    # 1. Prefix 全部可见 (BIM == -1)
+    is_prefix = (total_ids == -1).unsqueeze(0)
+    mask.masked_fill_(is_prefix, 0)
+
+    # 2. 同分支可见 + 因果约束
+    branch_ids_view = branch_ids.unsqueeze(1)  # [branch_len, 1]
+    total_ids_view = total_ids.unsqueeze(0)     # [1, total_len]
+    block_mask = (branch_ids_view == total_ids_view)
+
+    branch_idx = torch.arange(prefix_len, total_len, device=device).unsqueeze(1)
+    total_idx = torch.arange(total_len, device=device).unsqueeze(0)
+    causal_mask = (total_idx <= branch_idx)
+
+    valid_mask = block_mask & causal_mask
+    mask.masked_fill_(valid_mask, 0)
+
+    return mask
+
+
+def prefill_parallel(
     prefix_len: int,
     input_ids: torch.Tensor,
     model,
@@ -162,7 +221,7 @@ def initialize_tree_parallel(
     logits_processor: Optional[LogitsProcessorList] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """
-    并行模式的 Prefill 和 Draft Tree 初始化
+    并行模式：Prefill 阶段（处理各分支 prompt，初始化并行状态和首次 Draft）
     
     处理多个分支的并行 Prefill，共享 prefix 的 KV Cache。
     
@@ -188,8 +247,12 @@ def initialize_tree_parallel(
     num_para = len(branch_lengths)
 
     # 构建并行 Prefill 的 Attention Mask
-    attention_mask = model._build_parallel_prefill_mask(
-        prefix_len, branch_len=input_ids.shape[1] - prefix_len, dtype=torch.float32
+    attention_mask = build_parallel_prefill_mask(
+        model.branch_index_map,
+        prefix_len,
+        branch_len=input_ids.shape[1] - prefix_len,
+        device=device,
+        dtype=torch.float32,
     )
 
     # 从 KV Cache 中获取已处理的长度
@@ -298,10 +361,6 @@ def verify_step_single(
     logits = tree_logits[0, retrieve_indices]
     
     return logits, hidden_state, outputs
-
-
-# 为了兼容性保留旧名称
-tree_decoding_single = verify_step_single
 
 
 def verify_step_parallel(
@@ -935,4 +994,6 @@ def parse_skeleton(
         instruction_len.append(len(instruction_ids))
 
     return clean_branches, instruction_len
+
+
 

@@ -28,8 +28,9 @@ from .logits_processor import SemanticLogitsProcessor
 # 工具函数
 from .utils import (
     prepare_logits_processor,
-    initialize_tree_single,
-    initialize_tree_parallel,
+    prefill_single,
+    prefill_parallel,
+    build_parallel_prefill_mask,
     verify_step_single,
     verify_step_parallel,
     evaluate_posterior,
@@ -38,8 +39,6 @@ from .utils import (
     stack_with_left_padding,
     parse_skeleton,
     check_stop_conditions,
-    # 向后兼容的别名
-    tree_decoding_single,
 )
 
 # KV Cache
@@ -63,11 +62,11 @@ __all__ = [
     
     # Utils
     "prepare_logits_processor",
-    "initialize_tree_single",
-    "initialize_tree_parallel",
+    "prefill_single",
+    "prefill_parallel",
+    "build_parallel_prefill_mask",
     "verify_step_single",
     "verify_step_parallel",
-    "tree_decoding_single",  # 向后兼容别名
     "evaluate_posterior",
     "update_inference_inputs",
     "reset_tree_mode",

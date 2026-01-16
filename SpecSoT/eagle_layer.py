@@ -471,21 +471,33 @@ class EagleLayer(nn.Module):
         self.embed_tokens.weight.data = tensor
 
     # =========================================================================
-    # 初始化和状态管理
+    # 初始化和状态管理 (Initialization & State Management)
     # =========================================================================
 
     def init_tree(self):
-        """初始化 tree 相关的 buffer"""
+        """
+        初始化 Draft Tree 相关的 buffer
+        
+        在模型加载后调用一次，准备 tree 生成所需的基础数据结构。
+        """
         device = self.embed_tokens.weight.device
         self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
 
     def reset(self):
-        """重置 tree mask"""
+        """
+        重置 Tree Mask
+        
+        在每轮新生成前调用，清除上一轮的 tree mask。
+        """
         self.tree_mask = None
 
     def reset_kv(self):
-        """重置 KV Cache"""
+        """
+        重置 KV Cache
+        
+        在每轮新生成前调用，清除上一轮的 KV Cache。
+        """
         self.stable_kv = None
 
     # =========================================================================

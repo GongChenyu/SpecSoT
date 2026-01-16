@@ -50,12 +50,12 @@ from .logits_processor import SemanticLogitsProcessor
 from .utils import (
     prepare_logits_processor,
     reset_tree_mode,
-    initialize_tree_single,
+    prefill_single,
+    prefill_parallel,
     verify_step_single,
     verify_step_parallel,
     evaluate_posterior,
     update_inference_inputs,
-    initialize_tree_parallel,
     stack_with_left_padding,
     parse_skeleton,
     check_stop_conditions,
@@ -111,6 +111,11 @@ class SpecSoTModel(nn.Module):
         """
         初始化 SpecSoT 模型
         
+        初始化流程：
+        1. Base Model 初始化: 设置基础模型和配置
+        2. Eagle Layer 初始化: 创建并配置草稿层
+        3. 推理状态初始化: 重置所有运行时状态
+        
         Args:
             base_model: 预加载的基础模型
             base_model_name_or_path: 基础模型路径，用于加载 tokenizer
@@ -124,7 +129,9 @@ class SpecSoTModel(nn.Module):
         """
         super().__init__()
         
-        # 核心组件
+        # =====================================================================
+        # 1. Base Model 初始化
+        # =====================================================================
         self.base_model = base_model
         self.config = base_model.config
         self.hidden_size = base_model.lm_head.weight.shape[-1]
@@ -137,13 +144,21 @@ class SpecSoTModel(nn.Module):
             self.base_model_name_or_path, use_fast=False
         )
         
-        # 初始化 Eagle Layer
+        # =====================================================================
+        # 2. Eagle Layer 初始化
+        # =====================================================================
         self._init_eagle_layer(
             ea_model_path, use_eagle3, total_token, depth, top_k, threshold, ea_layer_state_dict
         )
         
-        # 初始化状态
-        self.reset_state()
+        # =====================================================================
+        # 3. 推理状态初始化
+        # =====================================================================
+        self._init_inference_state()
+
+    # =========================================================================
+    # 初始化方法 (Initialization Methods)
+    # =========================================================================
 
     def _init_eagle_layer(
         self,
@@ -155,12 +170,24 @@ class SpecSoTModel(nn.Module):
         threshold: float,
         ea_layer_state_dict: dict,
     ):
-        """初始化 Eagle Layer"""
+        """
+        初始化 Eagle Layer (草稿层)
+        
+        步骤：
+        1. 加载配置: 从 config.json 加载 Eagle 配置
+        2. 创建 Eagle Layer: 初始化草稿模型
+        3. 设备管理: 处理跨设备权重
+        4. 词表映射: 配置 draft vocab 到 target vocab 的映射 (Eagle3)
+        5. 加载权重: 加载预训练的 Eagle 权重
+        6. Tree 初始化: 初始化 draft tree 相关 buffer
+        """
+        # 1. 加载配置
         config = EConfig.from_pretrained(ea_model_path)
         with open(ea_model_path, "r") as f:
             con = json.loads(f.read())
         bias = con.get("bias", True)
 
+        # 2. 创建 Eagle Layer
         self.eagle_layer = EagleLayer(
             config=config,
             bias=bias,
@@ -172,7 +199,7 @@ class SpecSoTModel(nn.Module):
             load_emb=True,
         )
 
-        # 设备管理
+        # 3. 设备管理
         device = self.base_model.model.layers[-1].self_attn.q_proj.weight.device
         if device != self.base_model.lm_head.weight.device:
             self.eagle_layer.diff_device = True
@@ -180,28 +207,34 @@ class SpecSoTModel(nn.Module):
         else:
             self.eagle_layer.diff_device = False
 
-        # 词表映射处理 (Eagle3 特有)
+        # 4. 词表映射处理 (Eagle3 特有)
         if use_eagle3 and config.vocab_size == config.draft_vocab_size:
             if hasattr(self.eagle_layer, 'd2t'):
                 del self.eagle_layer.d2t
             if hasattr(self.eagle_layer, 't2d'):
                 del self.eagle_layer.t2d
 
-        # 加载权重
+        # 5. 加载权重
         self.eagle_layer.load_state_dict(ea_layer_state_dict, strict=False)
         self.eagle_layer.to(self.base_model.dtype).to(device)
+        
+        # 6. Tree 初始化
         self.eagle_layer.init_tree()
 
-    # =========================================================================
-    # 状态管理 (State Management)
-    # =========================================================================
-
-    def reset_state(self):
-        """重置所有推理状态，为新一轮生成做准备"""
+    def _init_inference_state(self):
+        """
+        初始化推理状态
+        
+        包括：
+        - Eagle Layer KV Cache
+        - Base Model KV Cache
+        - 并行解码状态 (BIM, position_ids 等)
+        - 输出存储
+        """
         # Eagle Layer 状态
         self.eagle_layer.reset_kv()
         
-        # Base Model KV Cache
+        # Base Model KV Cache (将在 generate 时动态分配)
         self.past_key_values = None
         self.past_key_values_data = None
         self.current_length_data = None
@@ -221,6 +254,20 @@ class SpecSoTModel(nn.Module):
         self.skeleton_output = None
         self.parallel_branches_output = None
         self.instruction_len = None
+
+    # =========================================================================
+    # 状态管理 (State Management)
+    # =========================================================================
+
+    def reset_state(self):
+        """
+        重置所有推理状态，为新一轮生成做准备
+        
+        调用时机：
+        - 开始新的对话或任务
+        - 清空所有历史状态
+        """
+        self._init_inference_state()
 
     def get_tokenizer(self):
         """获取 tokenizer"""
@@ -494,12 +541,12 @@ class SpecSoTModel(nn.Module):
         
         reset_tree_mode(self)
         
-        # 初始化 Draft Tree (包含 Prefill)
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, sample_token = \
-            initialize_tree_single(input_ids, self, self.past_key_values, logits_processor)
+        # 1. Prefill 阶段: Base Model 处理输入 + Eagle Layer 生成首次 Draft Tree
+        draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
+            prefill_single(input_ids, self, logits_processor)
 
         # ---------------------------------------------------------------------
-        # Decode Loop: Draft -> Verify -> Update
+        # Decode Loop: Verify -> Evaluate -> Update -> Draft
         # ---------------------------------------------------------------------
         padding = torch.full((1, 1), -1, dtype=torch.long, device=device)
         total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
@@ -627,14 +674,14 @@ class SpecSoTModel(nn.Module):
             logits_processor = prepare_logits_processor(temperature, top_p, top_k)
 
         # ---------------------------------------------------------------------
-        # Parallel Prefill: 初始化并行状态
+        # 前缀复用：复用 Skeleton KV Cache + 初始化并行状态
         # ---------------------------------------------------------------------
         input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
-            self._init_parallel_state(prefix_ids, branches_prompts, max_new_tokens)
+            self.reuse_prefix_for_parallel(prefix_ids, branches_prompts, max_new_tokens)
 
-        # 初始化并行 Draft Tree
+        # 1. Prefill 阶段: Base Model 并行处理各分支 + Eagle Layer 生成首次 Draft Tree
         input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = \
-            initialize_tree_parallel(
+            prefill_parallel(
                 prefix_len, input_ids, self, tips_indices,
                 branch_begins, branch_lengths, draft_input_ids, logits_processor
             )
@@ -726,47 +773,62 @@ class SpecSoTModel(nn.Module):
         )
 
     # =========================================================================
-    # 并行状态管理 (Parallel State Management)
+    # 前缀复用：从 Skeleton 到 Parallel 的状态转换
     # =========================================================================
 
-    def _init_parallel_state(
+    def reuse_prefix_for_parallel(
         self,
         prefix_ids: torch.Tensor,
         branches_prompts: List[List[int]],
         max_new_tokens: int,
     ) -> Tuple[torch.Tensor, torch.Tensor, List[int], List[int], torch.Tensor]:
         """
-        初始化并行解码状态
+        前缀复用：从 Skeleton 模式复用 KV Cache 到 Parallel 模式
+        
+        该方法在 Skeleton 生成完成后调用，复用 skeleton 的 prefix KV Cache，
+        为各分支初始化并行解码状态。
+        
+        核心步骤：
+        1. 复制 KV Cache: 将 skeleton 的 prefix KV 复制为多分支
+        2. 构建 BIM: 创建 Branch Index Map，追踪每个 token 的分支归属
+        3. 打包输入: 将所有分支的 prompt 打包成一个序列
+        4. 位置编码: 为各分支构建正确的位置编码
         
         关键数据结构：
         - Branch Index Map (BIM): 记录每个 token 属于哪个分支
           - -1: 共享 prefix
-          - -2: 空位置
+          - -2: 空位置 (预留空间)
           - >=0: 分支索引
         - Packed Input: 将所有分支的 token 打包成一个序列
+          格式: [prefix | branch_0 | branch_1 | ... | branch_n]
         
         Args:
-            prefix_ids: 共享前缀 [1, prefix_len]
-            branches_prompts: 各分支的 token 列表
-            max_new_tokens: 最大生成长度
+            prefix_ids: 共享前缀 (skeleton) [1, prefix_len]
+            branches_prompts: 各分支的 prompt token 列表
+            max_new_tokens: 每个分支最大生成长度
             
         Returns:
             input_ids: 打包后的输入 [1, total_len]
-            tips_indices: 各分支 tip 位置
+            tips_indices: 各分支 tip 位置 (最后一个 token 的索引)
             branch_begins: 各分支起始位置
-            branch_lengths: 各分支长度
+            branch_lengths: 各分支初始长度
             draft_input_ids: Draft 模型的输入 [num_para, max_len]
         """
         device = self.base_model.device
         num_para = len(branches_prompts)
         prefix_len = prefix_ids.shape[1]
         
+        # 初始化活跃分支列表
         self.active_branches = list(range(num_para))
 
-        # 重置 Cache 到 prefix 长度
+        # ---------------------------------------------------------------------
+        # 1. Base Model KV Cache: 重置到 prefix 长度
+        # ---------------------------------------------------------------------
         self.current_length_data.fill_(prefix_len)
         
-        # 复制 Eagle Layer 的 KV Cache 为多分支
+        # ---------------------------------------------------------------------
+        # 2. Eagle Layer KV Cache: 复制 prefix KV 为多分支
+        # ---------------------------------------------------------------------
         if self.eagle_layer.stable_kv is not None:
             k_draft, v_draft = self.eagle_layer.stable_kv[0]
             k_prefix = k_draft[..., :prefix_len, :].clone()
@@ -775,7 +837,9 @@ class SpecSoTModel(nn.Module):
             v_expanded = v_prefix.expand(num_para, -1, -1, -1).clone()
             self.eagle_layer.stable_kv = ((k_expanded, v_expanded),)
 
-        # 构建打包输入和 BIM
+        # ---------------------------------------------------------------------
+        # 3. 构建打包输入序列和 Branch Index Map
+        # ---------------------------------------------------------------------
         flat_branch_ids = []
         branch_index_list = [-1] * prefix_len  # Prefix 标记为 -1
         
@@ -797,6 +861,7 @@ class SpecSoTModel(nn.Module):
             current_offset += curr_len
             tips_indices.append(current_offset - 1)
             
+            # 位置编码: 每个分支从 prefix_len 开始独立计数
             curr_pos = list(range(prefix_len, prefix_len + curr_len))
             pos_ids_list.extend(curr_pos)
             
@@ -1022,43 +1087,6 @@ class SpecSoTModel(nn.Module):
         )
 
         return batched_draft_hiddens, batched_draft_tokens
-
-    def _build_parallel_prefill_mask(
-        self,
-        prefix_len: int,
-        branch_len: int,
-        dtype: torch.dtype = torch.float32,
-    ) -> torch.Tensor:
-        """构建并行 Prefill 阶段的注意力掩码"""
-        device = self.base_model.device
-        total_len = prefix_len + branch_len
-
-        total_ids = self.branch_index_map[:total_len]
-        branch_ids = self.branch_index_map[prefix_len:total_len]
-
-        mask = torch.full(
-            (1, 1, branch_len, total_len),
-            torch.finfo(dtype).min, device=device
-        )
-
-        # Prefix 可见
-        is_prefix = (total_ids == -1).unsqueeze(0)
-        mask.masked_fill_(is_prefix, 0)
-
-        # 同分支 + 因果约束
-        branch_ids_view = branch_ids.unsqueeze(1)
-        total_ids_view = total_ids.unsqueeze(0)
-        block_mask = (branch_ids_view == total_ids_view)
-
-        branch_idx = torch.arange(prefix_len, total_len, device=device).unsqueeze(1)
-        total_idx = torch.arange(total_len, device=device).unsqueeze(0)
-        causal_mask = (total_idx <= branch_idx)
-
-        valid_mask = block_mask & causal_mask
-        mask.masked_fill_(valid_mask, 0)
-
-        return mask
-
 
     # =========================================================================
     # 类方法：模型加载
