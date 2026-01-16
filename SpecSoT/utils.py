@@ -16,9 +16,12 @@ SpecSoT 工具函数模块 (Utils)
    - verify_step_parallel: 并行 Verify 阶段（Base Model 验证多分支 Draft Tree）
 
 4. Evaluation (评估)
-   - evaluate_posterior: 评估候选序列，选择最佳路径
-   - _evaluate_posterior_single: 单样本评估 (带 rejection sampling)
-   - evaluate_parallel: 并行评估，为每个分支选择最佳候选
+   - evaluate_single: 单序列评估 (Eagle 投机解码、SpecSoT Skeleton 阶段)
+   - evaluate_parallel: 并行评估 (SpecSoT 并行分支解码阶段)
+   - evaluate_posterior: 向后兼容别名，等价于 evaluate_single
+   - _evaluate_batch: 核心评估逻辑
+   - _greedy_evaluate: Greedy 采样
+   - _rejection_sampling_evaluate: Rejection Sampling 采样
 
 5. State Utilities (状态工具)
    - reset_tree_mode: 重置 tree mode
@@ -478,25 +481,357 @@ def verify_step_parallel(
 # 4. Parallel Evaluation (并行评估)
 # =============================================================================
 
+# =============================================================================
+# Evaluation 模块重构
+# 
+# 采样逻辑说明：
+# 1. Semantic Logits Processors 与温度等 Logits Processors 是正交关系
+# 2. 通过有没有温度等 logits processors 判断是否使用 greedy 采样
+# 3. 通过有没有 semantic logits processors 判断采样前的 logits 是否需要特殊语义处理
+#
+# 调用场景：
+# - Single (单序列): Eagle 投机解码、SpecSoT Skeleton 阶段
+# - Parallel (并行): SpecSoT 并行分支解码阶段（无语义约束）
+#
+# 架构：
+# ┌─────────────────────┐     ┌─────────────────────┐
+# │  evaluate_single    │     │  evaluate_parallel  │
+# │  [batch, paths,     │     │  [num_para, paths,  │
+# │   seq, vocab]       │     │   seq, vocab]       │
+# └─────────┬───────────┘     └─────────┬───────────┘
+#           │                           │
+#           └───────────┬───────────────┘
+#                       ▼
+#           ┌───────────────────────┐
+#           │  _evaluate_batch      │
+#           │  (核心评估逻辑)        │
+#           └───────────┬───────────┘
+#                       │
+#         ┌─────────────┴─────────────┐
+#         ▼                           ▼
+# ┌───────────────────┐     ┌───────────────────────┐
+# │  _greedy_evaluate │     │ _rejection_sampling   │
+# │                   │     │ _evaluate             │
+# └───────────────────┘     └───────────────────────┘
+# =============================================================================
+
+
+def _check_processors(logits_processor: Optional[LogitsProcessorList],) -> Tuple[bool, bool]:
+    """
+    检查 logits processor 的类型
+    
+    Args:
+        logits_processor: logits 处理器列表
+        
+    Returns:
+        use_sampling: 是否使用采样模式（有温度等 processor）
+        has_semantic: 是否有语义约束 processor
+    """
+    if logits_processor is None or len(logits_processor) == 0:
+        return False, False
+    
+    use_sampling = False
+    has_semantic = False
+    
+    for processor in logits_processor:
+        class_name = processor.__class__.__name__
+        # 检测语义处理器
+        if "SemanticLogitsProcessor" in class_name:
+            has_semantic = True
+        # 检测温度等采样处理器
+        elif class_name in (
+            "TemperatureLogitsWarper", 
+            "TopKLogitsWarper", 
+            "TopPLogitsWarper",
+            "RepetitionPenaltyLogitsProcessor",
+        ):
+            use_sampling = True
+    
+    return use_sampling, has_semantic
+
+
+def _greedy_evaluate(
+    logits: torch.Tensor,
+    candidates: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Greedy 评估：直接比较 argmax 选择最佳路径
+    
+    Args:
+        logits: [num_paths, seq_len, vocab]
+        candidates: [num_paths, seq_len]
+        
+    Returns:
+        best_candidate: 最佳候选索引 (scalar tensor)
+        accept_length: 接受长度，不含 root (scalar tensor)
+        sample_p: 用于采样下一 token 的概率分布 [vocab]（softmax 后）
+    """
+    device = logits.device
+    num_paths, seq_len, vocab_size = logits.shape
+    
+    # candidates[:, 1:] 因为第一个是 root (已知正确)
+    # logits[:, :-1] 预测的是下一个位置
+    posterior_mask = (
+        candidates[:, 1:].to(device) == torch.argmax(logits[:, :-1, :], dim=-1)
+    ).int()
+    
+    # 累积接受长度
+    candidates_accept_length = torch.cumprod(posterior_mask, dim=-1).sum(dim=-1)
+    accept_length, best_candidate = candidates_accept_length.max(dim=0)
+    
+    # 获取最佳路径的采样 logits
+    best_path_logits = logits[best_candidate, :, :]  # [seq_len, vocab]
+    next_token_pos = accept_length.clamp(max=seq_len - 1)
+    sample_logits = best_path_logits[next_token_pos]  # [vocab]
+    
+    # 返回 softmax 后的概率分布，保持与 rejection sampling 输出一致
+    sample_p = torch.softmax(sample_logits, dim=-1)
+    
+    return best_candidate, accept_length, sample_p
+
+
+def _rejection_sampling_evaluate(
+    logits: torch.Tensor,
+    candidates: torch.Tensor,
+    logits_processor: LogitsProcessorList,
+    has_semantic_processor: bool,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Rejection Sampling 评估：逐 token 验证，使用 rejection sampling 决定是否接受
+    
+    Args:
+        logits: [num_paths, seq_len, vocab]
+        candidates: [num_paths, seq_len]
+        logits_processor: logits 处理器（用于温度、top-p 等）
+        has_semantic_processor: 是否有语义处理器（影响 reject 时的 mask 策略）
+        
+    Returns:
+        best_candidate: 最佳候选索引 (scalar tensor)
+        accept_length: 接受长度，不含 root (scalar tensor)
+        sample_p: 用于采样下一 token 的概率分布 [vocab]（softmax 后）
+    """
+    device = logits.device
+    num_paths, seq_len = candidates.shape
+    
+    # 初始化：接受 root (位置 0)
+    accept_cand = candidates[0, :1]  # [1]
+    accept_length = 1
+    best_candidate = 0
+    active_mask = torch.ones(num_paths, dtype=torch.bool, device=device)
+    
+    for i in range(1, seq_len):
+        # 找到与已接受前缀匹配的路径
+        prefix_match = (candidates[:, :accept_length] == accept_cand).all(dim=1)
+        active_mask = active_mask & prefix_match
+        
+        if not active_mask.any():
+            break
+        
+        # 获取第一个匹配路径来计算处理后的 logits
+        fi = torch.nonzero(active_mask, as_tuple=True)[0][0].item()
+        
+        current_logits_input = logits[fi, i - 1].unsqueeze(0)  # [1, vocab]
+        current_context = candidates[fi, :i].unsqueeze(0)  # [1, i]
+        
+        gt_logits = logits_processor(current_context, current_logits_input)[0]  # [vocab]
+        gtp = torch.softmax(gt_logits, dim=0)
+        
+        # 收集活跃路径在位置 i 的候选 tokens
+        candidate_tokens = candidates[active_mask, i]
+        unique_tokens = torch.unique(candidate_tokens)
+        accepted = False
+        
+        for tok in unique_tokens:
+            xi = tok.item()
+            if xi == -1:
+                continue
+            
+            r = random.random()
+            px = gtp[xi].item()
+            acp = min(1.0, px) if px > 0 else 0.0
+            
+            if r <= acp:
+                # Accept
+                accept_cand = torch.cat([accept_cand, tok.unsqueeze(0)], dim=0)
+                accept_length += 1
+                tok_mask = (candidates[:, i] == tok) & active_mask
+                best_candidate = torch.nonzero(tok_mask, as_tuple=True)[0][0].item()
+                accepted = True
+                break
+            else:
+                # Reject: 语义处理器时不 mask（保留语义约束的 token）
+                # 非语义处理器时正常 mask
+                if not has_semantic_processor:
+                    gtp[xi] = 0.0
+                    gtp_sum = gtp.sum()
+                    if gtp_sum > 0:
+                        gtp = gtp / gtp_sum
+                    else:
+                        break
+        
+        if not accepted:
+            break
+    
+    # 计算最终采样 logits
+    if accept_length < seq_len:
+        final_logits = logits[best_candidate, accept_length - 1].unsqueeze(0)
+        final_context = candidates[best_candidate, :accept_length].unsqueeze(0)
+    else:
+        final_logits = logits[best_candidate, -1].unsqueeze(0)
+        final_context = candidates[best_candidate, :].unsqueeze(0)
+    
+    processed = logits_processor(final_context, final_logits)[0]
+    sample_logits = torch.softmax(processed, dim=0)
+    
+    return (
+        torch.tensor(best_candidate, device=device),
+        torch.tensor(accept_length - 1, device=device),  # 不含 root
+        sample_logits,
+    )
+
+
+def _evaluate_batch(
+    logits: torch.Tensor,
+    candidates: torch.Tensor,
+    logits_processor: Optional[LogitsProcessorList] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    批量评估候选序列（核心评估逻辑）
+    
+    根据 logits_processor 的组成自动选择采样策略：
+    - 无 processor 或仅有 semantic processor -> Greedy
+    - 有温度等 processor -> Rejection Sampling
+    
+    Args:
+        logits: [batch, num_paths, seq_len, vocab]
+        candidates: [batch, num_paths, seq_len]
+        logits_processor: logits 处理器（可包含 semantic 和/或温度等 processor）
+        
+    Returns:
+        best_candidate: 最佳候选索引 [batch]
+        accept_length: 接受长度 [batch]
+        sample_p: 采样概率分布 [batch, vocab]（softmax 后）
+    """
+    batch_size = logits.shape[0]
+    device = logits.device
+    
+    # 检查 processor 类型
+    use_sampling, has_semantic = _check_processors(logits_processor)
+    
+    # =========================================================================
+    # Greedy Mode: 无温度等 processor，或仅有 semantic processor
+    # =========================================================================
+    if not use_sampling:
+        best_candidates = []
+        accept_lengths = []
+        sample_logits_list = []
+        
+        for b in range(batch_size):
+            bc, al, sl = _greedy_evaluate(logits[b], candidates[b])
+            best_candidates.append(bc)
+            accept_lengths.append(al)
+            sample_logits_list.append(sl)
+        
+        return (
+            torch.stack(best_candidates),
+            torch.stack(accept_lengths),
+            torch.stack(sample_logits_list),
+        )
+    
+    # =========================================================================
+    # Sampling Mode: 有温度等 processor
+    # =========================================================================
+    best_candidates = []
+    accept_lengths = []
+    sample_logits_list = []
+    
+    for b in range(batch_size):
+        bc, al, sl = _rejection_sampling_evaluate(
+            logits[b], candidates[b], logits_processor, has_semantic
+        )
+        best_candidates.append(bc)
+        accept_lengths.append(al)
+        sample_logits_list.append(sl)
+    
+    return (
+        torch.stack(best_candidates),
+        torch.stack(accept_lengths),
+        torch.stack(sample_logits_list),
+    )
+
+
+# =============================================================================
+# 上层 API: evaluate_single 和 evaluate_parallel
+# =============================================================================
+
+
+def evaluate_single(
+    logits: torch.Tensor,
+    candidates: torch.Tensor,
+    logits_processor: Optional[LogitsProcessorList] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    单序列评估：用于 Eagle 投机解码和 SpecSoT Skeleton 阶段
+    
+    支持两种输入格式：
+    - 带 batch 维度: logits [batch, num_paths, seq_len, vocab], candidates [batch, num_paths, seq_len]
+    - 不带 batch 维度: logits [num_paths, seq_len, vocab], candidates [num_paths, seq_len]
+    
+    Args:
+        logits: 验证 logits
+        candidates: 候选 tokens
+        logits_processor: logits 处理器
+            - None: Greedy 采样
+            - 仅 SemanticLogitsProcessor: Greedy 采样 + 语义约束
+            - 含温度等 processor: Rejection Sampling
+        
+    Returns:
+        best_candidate: 最佳候选索引 [batch] 或 scalar
+        accept_length: 接受长度 [batch] 或 scalar
+        sample_p: 采样概率分布 [batch, vocab] 或 [vocab]（softmax 后）
+    """
+    # 处理维度：如果没有 batch 维度，添加一个
+    squeeze_output = False
+    if logits.ndim == 3:
+        # [num_paths, seq_len, vocab] -> [1, num_paths, seq_len, vocab]
+        logits = logits.unsqueeze(0)
+        candidates = candidates.unsqueeze(0)
+        squeeze_output = True
+    
+    best_candidate, accept_length, sample_logits = _evaluate_batch(
+        logits, candidates, logits_processor
+    )
+    
+    # 如果输入没有 batch 维度，输出也去掉 batch 维度
+    if squeeze_output:
+        best_candidate = best_candidate.squeeze(0)
+        accept_length = accept_length.squeeze(0)
+        sample_logits = sample_logits.squeeze(0)
+    
+    return best_candidate, accept_length, sample_logits
+
+
 def evaluate_parallel(
     logits: torch.Tensor,
     draft_tokens: torch.Tensor,
     retrieve_indices: torch.Tensor,
-    logits_processor: Optional[LogitsProcessorList],
+    logits_processor: Optional[LogitsProcessorList] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    并行评估：为每个分支选择最佳候选
+    并行评估：用于 SpecSoT 并行分支解码阶段
+    
+    注意：并行阶段通常无语义约束，但可能有温度等 processor
     
     Args:
         logits: 验证后的 logits [num_para, seq_len, vocab]
         draft_tokens: 候选 tokens [num_para, tree_size]
         retrieve_indices: 检索索引 [num_para, num_leaves, depth]
-        logits_processor: logits 处理器
+        logits_processor: logits 处理器（通常无语义约束）
         
     Returns:
         best_candidate: 最佳候选索引 [num_para]
         accept_length: 接受长度 [num_para]
-        sample_logits: 采样 logits [num_para, vocab]
+        sample_p: 采样概率分布 [num_para, vocab]（softmax 后）
     """
     num_para = logits.shape[0]
     device = logits.device
@@ -509,14 +844,14 @@ def evaluate_parallel(
     safe_indices = retrieve_indices.clone()
     safe_indices[padding_mask] = 0
     
-    # 提取候选 tokens
+    # 提取候选 tokens: [num_para, num_leaves, depth]
     candidates = torch.gather(
         draft_tokens.unsqueeze(1).expand(-1, retrieve_indices.size(1), -1),
         2, safe_indices
     )
     candidates.masked_fill_(padding_mask, 0)
     
-    # 提取候选 logits
+    # 提取候选 logits: [num_para, num_leaves, depth, vocab]
     vocab_size = logits.size(-1)
     flat_indices = safe_indices.view(num_para, -1).unsqueeze(-1).expand(-1, -1, vocab_size)
     candidate_logits = torch.gather(logits, 1, flat_indices)
@@ -524,12 +859,15 @@ def evaluate_parallel(
         num_para, retrieve_indices.size(1), retrieve_indices.size(2), -1
     )
     
-    # 评估
-    best_candidate, accept_length, sample_logits = evaluate_posterior(
-        candidate_logits, candidates, logits_processor
-    )
-    
-    return best_candidate, accept_length, sample_logits
+    # 调用核心评估逻辑
+    # candidate_logits: [num_para, num_leaves, depth, vocab]
+    # candidates: [num_para, num_leaves, depth]
+    return _evaluate_batch(candidate_logits, candidates, logits_processor)
+
+
+# =============================================================================
+# 向后兼容：保留 evaluate_posterior 别名
+# =============================================================================
 
 
 def evaluate_posterior(
@@ -539,194 +877,22 @@ def evaluate_posterior(
     para_token_ids: Optional[dict] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    评估候选序列，选择最佳路径
+    评估候选序列，选择最佳路径（向后兼容接口）
     
-    支持两种模式：
-    1. Greedy (logits_processor=None): 直接比较 argmax
-    2. Sampling (logits_processor!=None): 使用 rejection sampling
+    注意：para_token_ids 参数已废弃，语义约束现在通过 SemanticLogitsProcessor 自动处理
     
     Args:
         logits: 验证 logits [batch, num_paths, seq_len, vocab]
         candidates: 候选 tokens [batch, num_paths, seq_len]
         logits_processor: logits 处理器
-        para_token_ids: 特殊 token IDs (用于骨架模式)
+        para_token_ids: (已废弃) 特殊 token IDs
         
     Returns:
         best_candidate: 最佳候选索引 [batch]
         accept_length: 接受长度 [batch]
-        sample_logits: 用于采样下一 token 的 logits [batch, vocab]
+        sample_p: 采样概率分布 [batch, vocab]（softmax 后）
     """
-    # 检测是否有语义约束处理器
-    has_semantic_processor = False
-    special_tokens = None
-    
-    if logits_processor is not None:
-        for processor in logits_processor:
-            if "SemanticLogitsProcessor" in processor.__class__.__name__:
-                has_semantic_processor = True
-                if para_token_ids:
-                    special_tokens = [
-                        para_token_ids['ellipsis_token_id'],
-                        para_token_ids['line_break_token_id'],
-                        para_token_ids['para_begin_token_id'],
-                    ]
-                break
-
-    batch_size = logits.shape[0]
-
-    # =========================================================================
-    # Greedy Mode
-    # =========================================================================
-    if logits_processor is None:
-        # candidates[:, :, 1:] 因为第一个是 root (已知正确)
-        # logits[:, :, :-1] 预测的是下一个位置
-        posterior_mask = (
-            candidates[:, :, 1:].to(logits.device) == torch.argmax(logits[:, :, :-1, :], dim=-1)
-        ).int()
-        
-        # 累积接受长度
-        candidates_accept_length = (torch.cumprod(posterior_mask, dim=-1)).sum(dim=-1)
-        accept_length, best_candidate = candidates_accept_length.max(dim=-1)
-
-        # 获取最佳路径的采样 logits
-        batch_indices = torch.arange(batch_size, device=logits.device)
-        best_path_logits = logits[batch_indices, best_candidate, :, :]
-        
-        seq_len = best_path_logits.shape[1]
-        next_token_pos = accept_length.clamp(max=seq_len - 1)
-        sample_logits = best_path_logits[batch_indices, next_token_pos]
-        
-        return best_candidate, accept_length, sample_logits
-
-    # =========================================================================
-    # Sampling Mode (with logits_processor)
-    # =========================================================================
-    best_candidates = []
-    accept_lengths = []
-    sample_logits_list = []
-
-    for b in range(batch_size):
-        bc, al, sl = _evaluate_posterior_single(
-            logits[b], candidates[b], logits_processor,
-            has_semantic_processor, special_tokens
-        )
-        best_candidates.append(bc)
-        accept_lengths.append(al)
-        sample_logits_list.append(sl)
-
-    best_candidate = torch.stack(best_candidates)
-    accept_length = torch.stack(accept_lengths)
-    sample_logits = torch.stack(sample_logits_list)
-
-    return best_candidate, accept_length, sample_logits
-
-
-def _evaluate_posterior_single(
-    logits: torch.Tensor,
-    candidates: torch.Tensor,
-    logits_processor: LogitsProcessorList,
-    has_semantic_processor: bool,
-    special_tokens: Optional[List[int]],
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    单样本评估（带 rejection sampling）
-    
-    逐 token 进行验证，使用 rejection sampling 决定是否接受。
-    
-    Args:
-        logits: [num_paths, seq_len, vocab]
-        candidates: [num_paths, seq_len]
-        logits_processor: logits 处理器
-        has_semantic_processor: 是否有语义处理器
-        special_tokens: 特殊 token 列表
-        
-    Returns:
-        best_candidate: 最佳候选索引
-        accept_length: 接受长度 (不含 root)
-        sample_logits: 采样 logits [vocab]
-    """
-    device = logits.device
-    num_paths, seq_len = candidates.shape
-
-    # 初始化：接受 root (位置 0)
-    accept_cand = candidates[0, :1]  # [1]
-    accept_length = 1
-    best_candidate = 0
-    active_mask = torch.ones(num_paths, dtype=torch.bool, device=device)
-
-    for i in range(1, seq_len):
-        # 找到与已接受前缀匹配的路径
-        prefix_match = (candidates[:, :accept_length] == accept_cand).all(dim=1)
-        active_mask = active_mask & prefix_match
-
-        if not active_mask.any():
-            break
-
-        # 获取第一个匹配路径来计算处理后的 logits
-        fi = torch.nonzero(active_mask, as_tuple=True)[0][0].item()
-        
-        current_logits_input = logits[fi, i - 1].unsqueeze(0)
-        current_context = candidates[fi, :i].unsqueeze(0)
-        
-        gt_logits = logits_processor(current_context, current_logits_input)[0]
-        gtp = torch.softmax(gt_logits, dim=0)
-
-        # 收集活跃路径在位置 i 的候选 tokens
-        candidate_tokens = candidates[active_mask, i]
-        unique_tokens = torch.unique(candidate_tokens)
-        accepted = False
-
-        for tok in unique_tokens:
-            xi = tok.item()
-            if xi == -1:
-                continue
-
-            r = random.random()
-            px = gtp[xi].item()
-            acp = min(1.0, px) if px > 0 else 0.0
-
-            if r <= acp:
-                # Accept
-                accept_cand = torch.cat([accept_cand, tok.unsqueeze(0)], dim=0)
-                accept_length += 1
-                tok_mask = (candidates[:, i] == tok) & active_mask
-                best_candidate = torch.nonzero(tok_mask, as_tuple=True)[0][0].item()
-                accepted = True
-                break
-            else:
-                # Reject: 对于语义处理器，只 mask 非特殊 token
-                if has_semantic_processor and special_tokens:
-                    if xi not in special_tokens:
-                        gtp[xi] = 0.0
-                else:
-                    gtp[xi] = 0.0
-                
-                gtp_sum = gtp.sum()
-                if gtp_sum > 0:
-                    gtp = gtp / gtp_sum
-                else:
-                    break
-
-        if not accepted:
-            break
-
-    # 计算最终采样 logits
-    if accept_length < seq_len:
-        final_logits = logits[best_candidate, accept_length - 1].unsqueeze(0)
-        final_context = candidates[best_candidate, :accept_length].unsqueeze(0)
-        processed = logits_processor(final_context, final_logits)[0]
-    else:
-        final_logits = logits[best_candidate, -1].unsqueeze(0)
-        final_context = candidates[best_candidate, :].unsqueeze(0)
-        processed = logits_processor(final_context, final_logits)[0]
-
-    sample_logits = torch.softmax(processed, dim=0)
-
-    return (
-        torch.tensor(best_candidate, device=device),
-        torch.tensor(accept_length - 1, device=device),  # 不含 root
-        sample_logits,
-    )
+    return evaluate_single(logits, candidates, logits_processor)
 
 
 # =============================================================================

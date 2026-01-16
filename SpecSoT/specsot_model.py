@@ -59,6 +59,7 @@ from .utils import (
     parse_skeleton,
     check_stop_conditions,
     merge_outputs,
+    evaluate_single,
     evaluate_parallel,
 )
 
@@ -619,9 +620,7 @@ class SpecSoTModel(nn.Module):
             draft_tokens = torch.cat((draft_tokens, padding), dim=1)
             candidates = draft_tokens[0, retrieve_indices]
             
-            best_candidate, accept_length, sample_p = evaluate_posterior(
-                logits, candidates, logits_processor
-            )
+            best_candidate, accept_length, sample_p = evaluate_single(logits, candidates, logits_processor)
             
             # 规范化维度
             if isinstance(accept_length, int):
