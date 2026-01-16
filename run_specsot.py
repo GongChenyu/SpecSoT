@@ -250,6 +250,7 @@ def main():
     
     for i in tqdm(range(len(df)), desc="Generating"):
         task_prompt = df.loc[i, "task_prompt"]
+        task_prompt = "请问打篮球时，如何提高投篮命中率？请给出详细的步骤和建议。\n"  # 测试长输入
         print(f"\n{'='*60}")
         print(f"Sample {i+1}: {task_prompt[:100]}...")
         print("=" * 60)
@@ -328,7 +329,7 @@ def main():
 
 if __name__ == "__main__":
     # 设置随机种子
-    seed = 42
+    seed = 7
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

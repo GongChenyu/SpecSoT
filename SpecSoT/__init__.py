@@ -34,11 +34,12 @@ from .utils import (
     verify_step_single,
     verify_step_parallel,
     evaluate_posterior,
-    update_inference_inputs,
+    evaluate_parallel,
     reset_tree_mode,
     stack_with_left_padding,
     parse_skeleton,
     check_stop_conditions,
+    merge_outputs,
 )
 
 # KV Cache
@@ -68,12 +69,13 @@ __all__ = [
     "verify_step_single",
     "verify_step_parallel",
     "evaluate_posterior",
-    "update_inference_inputs",
+    "evaluate_parallel",
     "reset_tree_mode",
     "stack_with_left_padding",
     "initialize_past_key_values",
     "parse_skeleton",
     "check_stop_conditions",
+    "merge_outputs",
     
     # Config
     "EConfig",

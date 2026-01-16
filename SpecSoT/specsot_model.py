@@ -55,10 +55,11 @@ from .utils import (
     verify_step_single,
     verify_step_parallel,
     evaluate_posterior,
-    update_inference_inputs,
     stack_with_left_padding,
     parse_skeleton,
     check_stop_conditions,
+    merge_outputs,
+    evaluate_parallel,
 )
 
 from .prompts import (
@@ -509,28 +510,16 @@ class SpecSoTModel(nn.Module):
             )
 
         # 合并结果
-        merged_ids = self._merge_outputs(para_token_ids, num_para)
+        merged_ids = merge_outputs(
+            skeleton_output=self.skeleton_output,
+            parallel_branches_output=self.parallel_branches_output,
+            instruction_len=self.instruction_len,
+            para_token_ids=para_token_ids,
+            num_para=num_para,
+            device=self.base_model.device,
+        )
         
         return merged_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
-
-    def _merge_outputs(
-        self, para_token_ids: Dict[str, int], num_para: int
-    ) -> torch.Tensor:
-        """合并骨架和并行分支的输出"""
-        skeleton_part = self.skeleton_output[0].tolist()
-        skeleton_part.append(para_token_ids['line_break_token_id'])
-
-        parallel_part = []
-        for i in range(num_para):
-            branch_output = self.parallel_branches_output[i][self.instruction_len[i]:]
-            parallel_part.extend(branch_output)
-            parallel_part.append(para_token_ids['line_break_token_id'])
-            print(f"Branch {i} Length: {len(branch_output)}")
-
-        merged_ids = skeleton_part + parallel_part
-        merged_ids.append(para_token_ids['para_end_token_id'])
-
-        return torch.tensor([merged_ids], device=self.base_model.device)
 
     # =========================================================================
     # 单序列解码循环 (Single Sequence Decode Loop)
@@ -647,9 +636,9 @@ class SpecSoTModel(nn.Module):
             # -----------------------------------------------------------------
             # Step 3: Update State
             # -----------------------------------------------------------------
-            input_ids, draft_input_ids, accept_hidden = update_inference_inputs(
+            input_ids, draft_input_ids, accept_hidden = self._update_inference_inputs(
                 input_ids, candidates, best_candidate, accept_length,
-                retrieve_indices, logits_processor, self, hidden_state_new, sample_p
+                retrieve_indices, logits_processor, hidden_state_new, sample_p
             )
             evt_after_update.record()
 
@@ -682,6 +671,74 @@ class SpecSoTModel(nn.Module):
             total_update_time / num_steps,
             total_verify_time / num_steps,
         )
+
+    def _update_inference_inputs(
+        self,
+        input_ids: torch.Tensor,
+        candidates: torch.Tensor,
+        best_candidate: torch.Tensor,
+        accept_length: torch.Tensor,
+        retrieve_indices: torch.Tensor,
+        logits_processor: Optional[LogitsProcessorList],
+        hidden_state_new: torch.Tensor,
+        sample_p: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        更新推理状态（单序列模式）
+        
+        操作：
+        1. 将接受的 tokens 添加到 input_ids
+        2. 更新 KV Cache (搬运接受的 KV)
+        3. 采样 Bonus Token
+        4. 提取接受路径的 Hidden States (供上层生成 Draft Tree)
+        
+        Args:
+            input_ids: 当前输入 [1, seq_len]
+            candidates: 候选 tokens [num_leaves, depth]
+            best_candidate: 最佳候选索引 [1]
+            accept_length: 接受长度 [1]
+            retrieve_indices: 检索索引 [num_leaves, depth]
+            logits_processor: logits 处理器
+            hidden_state_new: 新的隐藏状态
+            sample_p: 采样概率分布
+            
+        Returns:
+            input_ids: 更新后的输入
+            draft_input_ids: Draft 模型的输入 (含 Bonus Token)
+            accept_hidden: 接受路径的隐藏状态 (供生成下一轮 Draft Tree)
+        """
+        prev_input_len = input_ids.shape[1]
+        bc = best_candidate[0]
+        al = accept_length[0]
+        
+        # 提取接受的 tokens
+        new_tokens = candidates[0, bc, :al + 1].unsqueeze(0)
+        select_indices = retrieve_indices[0, bc, :al + 1] + prev_input_len
+
+        # 更新 input_ids
+        input_ids = torch.cat([input_ids, new_tokens.to(input_ids.device)], dim=-1)
+
+        # 更新 KV Cache (搬运接受的 KV 到正确位置)
+        for past_kv_data in self.past_key_values_data:
+            tgt = past_kv_data.index_select(dim=-2, index=select_indices.to(past_kv_data.device))
+            dst = past_kv_data[..., prev_input_len:prev_input_len + tgt.shape[-2], :]
+            dst.copy_(tgt, non_blocking=True)
+            self.current_length_data.fill_(prev_input_len + tgt.shape[-2])
+
+        # 采样 Bonus Token
+        if logits_processor is not None:
+            token = torch.multinomial(sample_p, 1)
+            token = token[None] if token.ndim == 1 else token
+        else:
+            token = torch.argmax(sample_p, dim=-1, keepdim=True)
+        
+        draft_input_ids = torch.cat((input_ids, token.to(input_ids.device)), dim=1)
+
+        # 提取接受路径的 Hidden States
+        retrieve_hidden = hidden_state_new[:, retrieve_indices[0]]
+        accept_hidden = retrieve_hidden[:, best_candidate[0], :accept_length[0] + 1]
+
+        return input_ids, draft_input_ids, accept_hidden
 
     # =========================================================================
     # 并行序列解码循环 (Parallel Sequence Decode Loop)
@@ -766,7 +823,7 @@ class SpecSoTModel(nn.Module):
             # -----------------------------------------------------------------
             # Step 2: Evaluate (Per-Branch Evaluation)
             # -----------------------------------------------------------------
-            best_candidate, accept_length, sample_logits = self._evaluate_parallel(
+            best_candidate, accept_length, sample_logits = evaluate_parallel(
                 logits, draft_tokens, retrieve_indices, logits_processor
             )
             total_accept_len += accept_length.sum()
@@ -946,47 +1003,6 @@ class SpecSoTModel(nn.Module):
         self.eagle_layer.full_position_ids = torch.cat([prefix_pos, padded_branch_pos], dim=1)
 
         return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
-
-    def _evaluate_parallel(
-        self,
-        logits: torch.Tensor,
-        draft_tokens: torch.Tensor,
-        retrieve_indices: torch.Tensor,
-        logits_processor: Optional[LogitsProcessorList],
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """并行评估：为每个分支选择最佳候选"""
-        num_para = logits.shape[0]
-        device = logits.device
-        
-        retrieve_indices = retrieve_indices.to(device)
-        draft_tokens = draft_tokens.to(device)
-        
-        # 处理无效索引
-        padding_mask = (retrieve_indices == -1)
-        safe_indices = retrieve_indices.clone()
-        safe_indices[padding_mask] = 0
-        
-        # 提取候选 tokens
-        candidates = torch.gather(
-            draft_tokens.unsqueeze(1).expand(-1, retrieve_indices.size(1), -1),
-            2, safe_indices
-        )
-        candidates.masked_fill_(padding_mask, 0)
-        
-        # 提取候选 logits
-        vocab_size = logits.size(-1)
-        flat_indices = safe_indices.view(num_para, -1).unsqueeze(-1).expand(-1, -1, vocab_size)
-        candidate_logits = torch.gather(logits, 1, flat_indices)
-        candidate_logits = candidate_logits.view(
-            num_para, retrieve_indices.size(1), retrieve_indices.size(2), -1
-        )
-        
-        # 评估
-        best_candidate, accept_length, sample_logits = evaluate_posterior(
-            candidate_logits, candidates, logits_processor
-        )
-        
-        return best_candidate, accept_length, sample_logits
 
     def _update_parallel_state(
         self,

@@ -10,7 +10,6 @@ SpecSoT 工具函数模块 (Utils)
 2. Single Mode Helpers (单序列模式辅助函数)
    - prefill_single: 单序列 Prefill 阶段（处理输入 prompt，初始化 KV Cache 和首次 Draft）
    - verify_step_single: 单序列 Verify 阶段（Base Model 验证 Draft Tree）
-   - update_inference_inputs: 单序列状态更新
 
 3. Parallel Mode Helpers (并行模式辅助函数)
    - prefill_parallel: 并行 Prefill 阶段（处理各分支 prompt，初始化并行状态和首次 Draft）
@@ -19,6 +18,7 @@ SpecSoT 工具函数模块 (Utils)
 4. Evaluation (评估)
    - evaluate_posterior: 评估候选序列，选择最佳路径
    - _evaluate_posterior_single: 单样本评估 (带 rejection sampling)
+   - evaluate_parallel: 并行评估，为每个分支选择最佳候选
 
 5. State Utilities (状态工具)
    - reset_tree_mode: 重置 tree mode
@@ -29,7 +29,10 @@ SpecSoT 工具函数模块 (Utils)
    - generate_candidates: 生成候选序列
    - pad_path: 路径填充
 
-7. Skeleton Parsing (骨架解析)
+7. Output Merge (输出合并)
+   - merge_outputs: 合并骨架和并行分支的输出
+
+8. Skeleton Parsing (骨架解析)
    - parse_skeleton: 解析骨架，提取并行分支
 """
 
@@ -672,76 +675,6 @@ def _evaluate_posterior_single(
 # 4. State Update (状态更新)
 # =============================================================================
 
-def update_inference_inputs(
-    input_ids: torch.Tensor,
-    candidates: torch.Tensor,
-    best_candidate: torch.Tensor,
-    accept_length: torch.Tensor,
-    retrieve_indices: torch.Tensor,
-    logits_processor: Optional[LogitsProcessorList],
-    model,
-    hidden_state_new: torch.Tensor,
-    sample_p: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    更新推理状态（单序列模式）
-    
-    操作：
-    1. 将接受的 tokens 添加到 input_ids
-    2. 更新 KV Cache (搬运接受的 KV)
-    3. 采样 Bonus Token
-    4. 提取接受路径的 Hidden States (供上层生成 Draft Tree)
-    
-    Args:
-        input_ids: 当前输入 [1, seq_len]
-        candidates: 候选 tokens [num_leaves, depth]
-        best_candidate: 最佳候选索引 [1]
-        accept_length: 接受长度 [1]
-        retrieve_indices: 检索索引 [num_leaves, depth]
-        logits_processor: logits 处理器
-        model: SpecSoT 模型
-        hidden_state_new: 新的隐藏状态
-        sample_p: 采样概率分布
-        
-    Returns:
-        input_ids: 更新后的输入
-        draft_input_ids: Draft 模型的输入 (含 Bonus Token)
-        accept_hidden: 接受路径的隐藏状态 (供生成下一轮 Draft Tree)
-    """
-    prev_input_len = input_ids.shape[1]
-    bc = best_candidate[0]
-    al = accept_length[0]
-    
-    # 提取接受的 tokens
-    new_tokens = candidates[0, bc, :al + 1].unsqueeze(0)
-    select_indices = retrieve_indices[0, bc, :al + 1] + prev_input_len
-
-    # 更新 input_ids
-    input_ids = torch.cat([input_ids, new_tokens.to(input_ids.device)], dim=-1)
-
-    # 更新 KV Cache (搬运接受的 KV 到正确位置)
-    for past_kv_data in model.past_key_values_data:
-        tgt = past_kv_data.index_select(dim=-2, index=select_indices.to(past_kv_data.device))
-        dst = past_kv_data[..., prev_input_len:prev_input_len + tgt.shape[-2], :]
-        dst.copy_(tgt, non_blocking=True)
-        model.current_length_data.fill_(prev_input_len + tgt.shape[-2])
-
-    # 采样 Bonus Token
-    if logits_processor is not None:
-        token = torch.multinomial(sample_p, 1)
-        token = token[None] if token.ndim == 1 else token
-    else:
-        token = torch.argmax(sample_p, dim=-1, keepdim=True)
-    
-    draft_input_ids = torch.cat((input_ids, token.to(input_ids.device)), dim=1)
-
-    # 提取接受路径的 Hidden States
-    retrieve_hidden = hidden_state_new[:, retrieve_indices[0]]
-    accept_hidden = retrieve_hidden[:, best_candidate[0], :accept_length[0] + 1]
-
-    return input_ids, draft_input_ids, accept_hidden
-
-
 def reset_tree_mode(model):
     """重置 Base Model 的 tree mode"""
     model.base_model.model.tree_mask = None
@@ -901,6 +834,106 @@ def check_stop_conditions(
         return True
     
     return False
+
+
+# =============================================================================
+# 7. Output Merge (输出合并)
+# =============================================================================
+
+def merge_outputs(
+    skeleton_output: torch.Tensor,
+    parallel_branches_output: List[List[int]],
+    instruction_len: List[int],
+    para_token_ids: Dict[str, int],
+    num_para: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """
+    合并骨架和并行分支的输出
+    
+    Args:
+        skeleton_output: 骨架输出 tensor
+        parallel_branches_output: 各分支的输出列表
+        instruction_len: 各分支的指令长度
+        para_token_ids: 特殊 token IDs
+        num_para: 分支数量
+        device: 目标设备
+        
+    Returns:
+        合并后的 token IDs tensor
+    """
+    skeleton_part = skeleton_output[0].tolist()
+    skeleton_part.append(para_token_ids['line_break_token_id'])
+
+    parallel_part = []
+    for i in range(num_para):
+        branch_output = parallel_branches_output[i][instruction_len[i]:]
+        parallel_part.extend(branch_output)
+        parallel_part.append(para_token_ids['line_break_token_id'])
+        print(f"Branch {i} Length: {len(branch_output)}")
+
+    merged_ids = skeleton_part + parallel_part
+    merged_ids.append(para_token_ids['para_end_token_id'])
+
+    return torch.tensor([merged_ids], device=device)
+
+
+# =============================================================================
+# 8. Parallel Evaluation (并行评估)
+# =============================================================================
+
+def evaluate_parallel(
+    logits: torch.Tensor,
+    draft_tokens: torch.Tensor,
+    retrieve_indices: torch.Tensor,
+    logits_processor: Optional[LogitsProcessorList],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    并行评估：为每个分支选择最佳候选
+    
+    Args:
+        logits: 验证后的 logits [num_para, seq_len, vocab]
+        draft_tokens: 候选 tokens [num_para, tree_size]
+        retrieve_indices: 检索索引 [num_para, num_leaves, depth]
+        logits_processor: logits 处理器
+        
+    Returns:
+        best_candidate: 最佳候选索引 [num_para]
+        accept_length: 接受长度 [num_para]
+        sample_logits: 采样 logits [num_para, vocab]
+    """
+    num_para = logits.shape[0]
+    device = logits.device
+    
+    retrieve_indices = retrieve_indices.to(device)
+    draft_tokens = draft_tokens.to(device)
+    
+    # 处理无效索引
+    padding_mask = (retrieve_indices == -1)
+    safe_indices = retrieve_indices.clone()
+    safe_indices[padding_mask] = 0
+    
+    # 提取候选 tokens
+    candidates = torch.gather(
+        draft_tokens.unsqueeze(1).expand(-1, retrieve_indices.size(1), -1),
+        2, safe_indices
+    )
+    candidates.masked_fill_(padding_mask, 0)
+    
+    # 提取候选 logits
+    vocab_size = logits.size(-1)
+    flat_indices = safe_indices.view(num_para, -1).unsqueeze(-1).expand(-1, -1, vocab_size)
+    candidate_logits = torch.gather(logits, 1, flat_indices)
+    candidate_logits = candidate_logits.view(
+        num_para, retrieve_indices.size(1), retrieve_indices.size(2), -1
+    )
+    
+    # 评估
+    best_candidate, accept_length, sample_logits = evaluate_posterior(
+        candidate_logits, candidates, logits_processor
+    )
+    
+    return best_candidate, accept_length, sample_logits
 
 
 def parse_skeleton(
