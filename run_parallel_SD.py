@@ -120,7 +120,8 @@ def main():
 	results = []
 
 	for i in tqdm(range(len(df))):
-		task_prompt = df.loc[i, "task_prompt"]
+		# task_prompt = df.loc[i, "task_prompt"]
+		task_prompt = "请问打篮球时，如何提高投篮命中率？请给出详细的建议。"
 		# task_prompt = "请分析运动的好处"
 		# task_prompt = "请从两个方面分析运动的好处"
 		# task_prompt = "请从三个方面分析运动的好处"

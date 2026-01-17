@@ -250,7 +250,7 @@ def main():
     
     for i in tqdm(range(len(df)), desc="Generating"):
         # task_prompt = df.loc[i, "task_prompt"]
-        task_prompt = "请问打篮球时，如何提高投篮命中率？请给出详细的建议。\n"  
+        task_prompt = "请问打篮球时，如何提高投篮命中率？请给出详细的建议。"  
         # task_prompt = "How to improve your shooting percentage when playing basketball? Please give detailed suggestions."
         print(f"\n{'='*60}")
         print(f"Sample {i+1}: {task_prompt[:100]}...")
