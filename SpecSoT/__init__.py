@@ -35,10 +35,13 @@ from .utils import (
     verify_step_parallel,
     evaluate_single,
     evaluate_parallel,
-    reset_tree_mode,
     stack_with_left_padding,
     parse_skeleton,
+    prepare_parallel_branches,
+    prepare_skeleton_input,
+    create_skeleton_logits_processor,
     check_stop_conditions,
+    check_stop_conditions_parallel,
     merge_outputs,
 )
 

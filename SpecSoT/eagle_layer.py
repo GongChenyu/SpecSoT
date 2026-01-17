@@ -431,12 +431,87 @@ class EagleLayer(nn.Module):
         for param in self.embed_tokens.parameters():
             param.requires_grad = False
 
-        # 状态变量
-        self.stable_kv = None
-        self.cache_padding_mask = None
-        self.full_position_ids = None
-        self.tree_mask = None
-        self.diff_device = False
+        self.reset_state()
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        ea_model_path: str,
+        base_model,
+        base_model_name_or_path: str,
+        use_eagle3: bool,
+        total_token: int,
+        depth: int,
+        top_k: int,
+        threshold: float,
+        ea_layer_state_dict: dict,
+    ):
+        """
+        从预训练模型加载 Eagle Layer
+        
+        步骤：
+        1. 加载配置: 从 config.json 加载 Eagle 配置
+        2. 创建 Eagle Layer: 初始化草稿模型
+        3. 设备管理: 处理跨设备权重
+        4. 词表映射: 配置 draft vocab 到 target vocab 的映射 (Eagle3)
+        5. 加载权重: 加载预训练的 Eagle 权重
+        6. Tree 初始化: 初始化 draft tree 相关 buffer
+        
+        Args:
+            ea_model_path: Eagle 模型配置路径
+            base_model: 基础模型实例
+            base_model_name_or_path: 基础模型路径
+            use_eagle3: 是否使用 Eagle3 架构
+            total_token: 每次 draft 生成的总 token 数
+            depth: draft 树的深度
+            top_k: 每层选择的 top-k 数量
+            threshold: 接受阈值
+            ea_layer_state_dict: Eagle 层的预训练权重
+            
+        Returns:
+            初始化好的 EagleLayer 实例
+        """
+        # 1. 加载配置
+        from .configs import EConfig
+        config = EConfig.from_pretrained(ea_model_path)
+        with open(ea_model_path, "r") as f:
+            con = json.loads(f.read())
+        bias = con.get("bias", True)
+
+        # 2. 创建 Eagle Layer
+        eagle_layer = cls(
+            config=config,
+            bias=bias,
+            total_tokens=total_token,
+            depth=depth,
+            top_k=top_k,
+            threshold=threshold,
+            path=base_model_name_or_path,
+            load_emb=True,
+        )
+
+        # 3. 设备管理
+        device = base_model.model.layers[-1].self_attn.q_proj.weight.device
+        if device != base_model.lm_head.weight.device:
+            eagle_layer.diff_device = True
+            eagle_layer.headweight = base_model.lm_head.weight.clone().to(device)
+        else:
+            eagle_layer.diff_device = False
+
+        # 4. 词表映射处理 (Eagle3 特有)
+        if use_eagle3 and config.vocab_size == config.draft_vocab_size:
+            if hasattr(eagle_layer, 'd2t'):
+                del eagle_layer.d2t
+            if hasattr(eagle_layer, 't2d'):
+                del eagle_layer.t2d
+
+        # 5. 加载权重
+        eagle_layer.load_state_dict(ea_layer_state_dict, strict=False)
+        eagle_layer.to(base_model.dtype).to(device)
+        
+        eagle_layer.reset_state()
+        
+        return eagle_layer
 
     def _load_embeddings(self, path: str):
         """从基础模型加载预训练嵌入"""
@@ -474,31 +549,19 @@ class EagleLayer(nn.Module):
     # 初始化和状态管理 (Initialization & State Management)
     # =========================================================================
 
-    def init_tree(self):
-        """
-        初始化 Draft Tree 相关的 buffer
-        
-        在模型加载后调用一次，准备 tree 生成所需的基础数据结构。
-        """
+    def reset_state(self):
+        # 状态变量
+        self.stable_kv = None
+        self.cache_padding_mask = None
+        self.full_position_ids = None
+        self.tree_mask = None
+        self.diff_device = False
         device = self.embed_tokens.weight.device
         self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
 
-    def reset(self):
-        """
-        重置 Tree Mask
-        
-        在每轮新生成前调用，清除上一轮的 tree mask。
-        """
+        # Eagle Layer 状态
         self.tree_mask = None
-
-    def reset_kv(self):
-        """
-        重置 KV Cache
-        
-        在每轮新生成前调用，清除上一轮的 KV Cache。
-        """
-        self.stable_kv = None
 
     # =========================================================================
     # 注意力掩码构建
@@ -692,7 +755,7 @@ class EagleLayer(nn.Module):
         input_ids = input_ids.to(hidden_states.device)
         sample_token = input_ids[:, -1]
         len_posi = input_ids.shape[1]
-        self.reset()
+        self.tree_mask = None  # 重置 tree mask
 
         scores_list = []
         parents_list = []

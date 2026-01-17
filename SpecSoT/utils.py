@@ -41,6 +41,7 @@ SpecSoT 工具函数模块 (Utils)
 
 import copy
 import random
+import re
 from typing import List, Tuple, Optional, Dict
 
 import torch
@@ -51,7 +52,11 @@ from transformers.generation.logits_process import (
     TopKLogitsWarper,
     TopPLogitsWarper,
 )
-from .prompts import parallel_trigger_zh
+from .prompts import (
+    base_prompt, skeleton_trigger_zh, parallel_trigger_zh,
+    base_prompt_en, skeleton_trigger_en, parallel_trigger_en,
+)
+from .logits_processor import SemanticLogitsProcessor
 
 
 # =============================================================================
@@ -65,7 +70,7 @@ def prepare_logits_processor(
     top_k: int = 0,
 ) -> LogitsProcessorList:
     """
-    准备 logits 处理器列表
+    准备采样 logits 处理器列表（温度、top-p、top-k 等）
     
     Args:
         temperature: 采样温度 (0 表示 greedy)
@@ -91,8 +96,47 @@ def prepare_logits_processor(
     return processor_list
 
 
+def create_skeleton_logits_processor(
+    para_token_ids: Dict[str, int],
+    prefix_len: int,
+    sampling_processor: Optional[LogitsProcessorList] = None,
+) -> LogitsProcessorList:
+    """
+    创建 skeleton 生成阶段使用的 LogitsProcessor
+    
+    包含语义约束 processor 和可选的采样 processor
+    
+    Args:
+        para_token_ids: 特殊 token IDs
+        prefix_len: 输入前缀长度
+        sampling_processor: 采样相关的 processor (温度、top_p、top_k)
+        
+    Returns:
+        组合后的 LogitsProcessorList
+    """
+    # 构造语义约束 Logits Processor
+    sp_processor = SemanticLogitsProcessor(
+        para_end_token_id=para_token_ids['para_end_token_id'],
+        ellipsis_token_id=para_token_ids['ellipsis_token_id'],
+        line_break_token_id=para_token_ids['line_break_token_id'],
+        para_begin_token_id=para_token_ids['para_begin_token_id'],
+        colon_token_id=para_token_ids['colon_token_id'],
+        cn_colon_token_id=para_token_ids['cn_colon_token_id'],
+        colon_new_line_token_id=para_token_ids['colon_new_line_token_id'],
+        prefix_len=prefix_len
+    )
+    
+    logits_processor = LogitsProcessorList([sp_processor])
+    
+    # 添加采样 processor (如果有)
+    if sampling_processor is not None:
+        logits_processor.extend(sampling_processor)
+    
+    return logits_processor
+
+
 # =============================================================================
-# 2. Single Mode Helpers (单序列模式辅助函数)
+# 2. Prefill
 # =============================================================================
 
 def prefill_single(
@@ -156,10 +200,6 @@ def prefill_single(
         orig, hidden_states, token
     )
 
-
-# =============================================================================
-# 3. Parallel Mode Helpers (并行模式辅助函数)
-# =============================================================================
 
 def build_parallel_prefill_mask(
     branch_index_map: torch.Tensor,
@@ -866,62 +906,6 @@ def evaluate_parallel(
 
 
 # =============================================================================
-# 向后兼容：保留 evaluate_posterior 别名
-# =============================================================================
-
-
-def evaluate_posterior(
-    logits: torch.Tensor,
-    candidates: torch.Tensor,
-    logits_processor: Optional[LogitsProcessorList] = None,
-    para_token_ids: Optional[dict] = None,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    评估候选序列，选择最佳路径（向后兼容接口）
-    
-    注意：para_token_ids 参数已废弃，语义约束现在通过 SemanticLogitsProcessor 自动处理
-    
-    Args:
-        logits: 验证 logits [batch, num_paths, seq_len, vocab]
-        candidates: 候选 tokens [batch, num_paths, seq_len]
-        logits_processor: logits 处理器
-        para_token_ids: (已废弃) 特殊 token IDs
-        
-    Returns:
-        best_candidate: 最佳候选索引 [batch]
-        accept_length: 接受长度 [batch]
-        sample_p: 采样概率分布 [batch, vocab]（softmax 后）
-    """
-    return evaluate_single(logits, candidates, logits_processor)
-
-
-# =============================================================================
-# 5. State Update (状态更新)
-# =============================================================================
-
-def reset_tree_mode(model):
-    """重置 Base Model 的 tree mode"""
-    model.base_model.model.tree_mask = None
-    model.base_model.model.tree_mode = None
-
-
-def reset_past_key_values(passed_key_values: List[torch.Tensor]) -> List[torch.Tensor]:
-    """
-    重置 KV Cache 长度为零
-    
-    Args:
-        passed_key_values: KV Cache 列表
-        
-    Returns:
-        重置后的 KV Cache 列表
-    """
-    for i in range(len(passed_key_values)):
-        for j in range(2):
-            passed_key_values[i][j].current_length.fill_(0)
-    return passed_key_values
-
-
-# =============================================================================
 # 6. Utility Functions (工具函数)
 # =============================================================================
 
@@ -1033,9 +1017,13 @@ def check_stop_conditions(
     eos_token_id: int,
     current_length: int,
     max_kv_len: int,
+    tokens_per_step: int = 60,
 ) -> bool:
     """
-    检查停止条件
+    检查停止条件（单序列解码）
+    
+    改进：使用峰值 KV cache 长度计算来提前停止，避免溢出。
+    峰值长度 = current_length + tokens_per_step
     
     Args:
         input_ids: 当前生成的 token IDs [1, total_len]
@@ -1044,6 +1032,7 @@ def check_stop_conditions(
         eos_token_id: EOS token ID
         current_length: 当前 KV Cache 长度
         max_kv_len: 最大 KV Cache 长度
+        tokens_per_step: 每步可能增加的最大 token 数 (default: 60 for Eagle)
         
     Returns:
         是否应该停止生成
@@ -1054,7 +1043,45 @@ def check_stop_conditions(
         return True
     if eos_token_id in generated_tokens:
         return True
-    if current_length >= max_kv_len - 200:
+    
+    # 峰值长度检查：确保下一步不会溢出
+    peak_length = current_length + tokens_per_step
+    if peak_length >= max_kv_len:
+        print(f"Stopping due to KV cache limit: peak {peak_length} >= max {max_kv_len}")
+        return True
+    
+    return False
+
+
+def check_stop_conditions_parallel(
+    current_length: int,
+    max_kv_len: int,
+    num_active_branches: int,
+    tokens_per_branch: int = 60,
+) -> bool:
+    """
+    检查停止条件（并行解码）
+    
+    根据峰值 KV cache 长度计算，确定是否需要停止。
+    峰值长度 = current_length + num_active_branches × tokens_per_branch
+    
+    Args:
+        current_length: 当前 KV Cache 长度
+        max_kv_len: 最大 KV Cache 长度
+        num_active_branches: 当前活跃分支数量
+        tokens_per_branch: 每个分支每步可能增加的最大 token 数
+        
+    Returns:
+        should_stop: 是否应该停止
+    """
+    if num_active_branches == 0:
+        return True
+    
+    # 计算峰值长度
+    peak_length = current_length + num_active_branches * tokens_per_branch
+    
+    if peak_length >= max_kv_len:
+        print(f"Stopping due to KV cache limit: peak {peak_length} >= max {max_kv_len}")
         return True
     
     return False
@@ -1098,27 +1125,74 @@ def merge_outputs(
     return torch.tensor([merged_ids], device=device)
 
 
+# =============================================================================
+# 8. Skeleton & Parallel Input Preparation (骨架和并行输入准备)
+# =============================================================================
+
+def prepare_skeleton_input(
+    tokenizer,
+    task_prompt: str,
+    model_type: str,
+    device: torch.device,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    准备 skeleton 生成阶段的输入
+    
+    根据模型类型选择对应的 prompt 模板，构建完整的输入序列
+    
+    Args:
+        tokenizer: 分词器
+        task_prompt: 用户输入的任务描述
+        model_type: 模型类型 ('qwen', 'llama', 'other')
+        device: 目标设备
+        
+    Returns:
+        input_ids: 完整输入序列 [1, seq_len]
+        task_input_ids: 任务输入部分 [1, task_len] (用于后续并行阶段的前缀复用)
+    """
+    if model_type == 'qwen':
+        # Qwen 模型使用中文 prompt
+        base_prompt_template = base_prompt
+        skeleton_trigger = skeleton_trigger_zh
+        print(f"Using Chinese prompts for {model_type} model")
+    else:
+        # Llama 和其他模型使用英文 prompt
+        base_prompt_template = base_prompt_en
+        skeleton_trigger = skeleton_trigger_en
+        print(f"Using English prompts for {model_type} model")
+    
+    task_input = base_prompt_template.format(user_question=task_prompt)
+    task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
+    skeleton_input_ids = tokenizer([skeleton_trigger], return_tensors="pt").input_ids.to(device)
+    input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
+    
+    return input_ids, task_input_ids
+
+
 def parse_skeleton(
     tokenizer,
     skeleton_ids: torch.Tensor,
     para_token_ids: Dict[str, int],
-) -> Tuple[Optional[List[List[int]]], Optional[List[int]], Optional[List[int]]]:
+) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
     """
-    解析骨架，提取并行分支和预测长度
+    解析骨架，提取分支标题和预测长度
     
     骨架格式示例：
     ####标题1(100):...
     ####标题2(200):...
     ####%%%%
     
+    注意：此函数只解析骨架，不添加指令前缀。
+    要准备并行输入，请使用 prepare_parallel_branches。
+    
     Args:
+        tokenizer: 分词器
         skeleton_ids: 骨架 token IDs
         para_token_ids: 特殊 token IDs 字典
         
     Returns:
-        clean_branches: 清洗后的分支列表（含指令前缀）
-        branch_lengths: 每个分支的预测长度（从括号中解析）
-        instruction_len: 每个分支的指令长度
+        branch_headers: 分支标题列表（不含指令前缀）
+        predicted_lengths: 每个分支的预测长度（从括号中解析）
     """
     seq_list = skeleton_ids[0].tolist()
     para_begin_id = para_token_ids['para_begin_token_id']
@@ -1139,7 +1213,7 @@ def parse_skeleton(
             para_end_idx = len(seq_list)
     except ValueError:
         print("Warning: No '####' found in generated output.")
-        return None, None, None
+        return None, None
 
     # 提取并行片段
     para_segment = seq_list[para_begin_idx:para_end_idx - 1]
@@ -1158,9 +1232,8 @@ def parse_skeleton(
         raw_branches.append(current_branch)
 
     # 清洗分支（截取到冒号）并解析长度
-    import re
-    clean_branches = []
-    predicted_branch_lengths = []
+    branch_headers = []
+    predicted_lengths = []
     
     for br in raw_branches:
         cut_idx = -1
@@ -1171,7 +1244,7 @@ def parse_skeleton(
         
         if cut_idx != -1:
             branch_tokens = br[:cut_idx + 1]
-            clean_branches.append(branch_tokens)
+            branch_headers.append(branch_tokens)
             
             # 解析长度：从 token 中提取括号内的数字
             branch_text = tokenizer.decode(branch_tokens)
@@ -1179,33 +1252,64 @@ def parse_skeleton(
             length_match = re.search(r'\((\d+)\)', branch_text)
             if length_match:
                 predicted_length = int(length_match.group(1))
-                predicted_branch_lengths.append(predicted_length)
+                predicted_lengths.append(predicted_length)
             else:
                 # 如果没有找到长度，使用默认值
-                predicted_branch_lengths.append(200)  # 默认 200 tokens
+                predicted_lengths.append(200)  # 默认 200 tokens
         else:
-            clean_branches.append(br)
-            predicted_branch_lengths.append(200)
+            branch_headers.append(br)
+            predicted_lengths.append(200)
 
+    return branch_headers, predicted_lengths
+
+
+def prepare_parallel_branches(
+    tokenizer,
+    branch_headers: List[List[int]],
+    model_type: str = 'qwen',
+) -> Tuple[List[List[int]], List[int]]:
+    """
+    准备并行分支的输入（添加指令前缀）
+    
+    为每个分支添加上下文指令，构建完整的并行分支输入
+    
+    Args:
+        tokenizer: 分词器
+        branch_headers: 分支标题列表（来自 parse_skeleton）
+        model_type: 模型类型 ('qwen', 'llama', 'other')
+        
+    Returns:
+        clean_branches: 完整的分支列表（含指令前缀）
+        instruction_lengths: 每个分支的指令前缀长度
+    """
+    # 选择对应的 parallel trigger
+    if model_type == 'qwen':
+        parallel_trigger = parallel_trigger_zh
+    else:
+        parallel_trigger = parallel_trigger_en
+    
     # 构建骨架上下文
     result_skeleton = []
-    for br in clean_branches:
+    for br in branch_headers:
         result_skeleton.extend(br)
     result_skeleton_str = tokenizer.decode(result_skeleton)
 
     # 为每个分支添加指令前缀
-    instruction_len = []
-    for i, br in enumerate(clean_branches):
+    clean_branches = []
+    instruction_lengths = []
+    
+    for br in branch_headers:
         branch_str = tokenizer.decode(br)
-        instruction = parallel_trigger_zh.format(
+        instruction = parallel_trigger.format(
             skeleton_context=result_skeleton_str,
             current_point=branch_str
         )
         instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
-        clean_branches[i] = instruction_ids + br
-        instruction_len.append(len(instruction_ids))
+        full_branch = instruction_ids + br
+        clean_branches.append(full_branch)
+        instruction_lengths.append(len(instruction_ids))
 
-    return clean_branches, predicted_branch_lengths, instruction_len
+    return clean_branches, instruction_lengths
 
 
 

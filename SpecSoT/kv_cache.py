@@ -1,4 +1,5 @@
 import torch
+from typing import List
 
 
 class KVCache:
@@ -155,3 +156,20 @@ def initialize_past_key_values(model, max_length=2200):
             )
         bias+=1
     return past_key_values, past_key_values_data_list, current_length_data
+
+
+def reset_past_key_values(passed_key_values: List[torch.Tensor]) -> List[torch.Tensor]:
+    """
+    重置 KV Cache 长度为零
+    
+    Args:
+        passed_key_values: KV Cache 列表
+        
+    Returns:
+        重置后的 KV Cache 列表
+    """
+    for i in range(len(passed_key_values)):
+        for j in range(2):
+            passed_key_values[i][j].current_length.fill_(0)
+    return passed_key_values
+

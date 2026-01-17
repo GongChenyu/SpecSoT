@@ -49,14 +49,17 @@ from .logits_processor import SemanticLogitsProcessor
 
 from .utils import (
     prepare_logits_processor,
-    reset_tree_mode,
     prefill_single,
     prefill_parallel,
     verify_step_single,
     verify_step_parallel,
     stack_with_left_padding,
     parse_skeleton,
+    prepare_parallel_branches,
+    prepare_skeleton_input,
+    create_skeleton_logits_processor,
     check_stop_conditions,
+    check_stop_conditions_parallel,
     merge_outputs,
     evaluate_single,
     evaluate_parallel,
@@ -151,113 +154,65 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # 2. Eagle Layer 初始化
         # =====================================================================
-        self.init_eagle_layer(
-            ea_model_path, use_eagle3, total_token, depth, top_k, threshold, ea_layer_state_dict
+        self.eagle_layer = EagleLayer.from_pretrained(
+            ea_model_path=ea_model_path,
+            base_model=base_model,
+            base_model_name_or_path=base_model_name_or_path,
+            use_eagle3=use_eagle3,
+            total_token=total_token,
+            depth=depth,
+            top_k=top_k,
+            threshold=threshold,
+            ea_layer_state_dict=ea_layer_state_dict,
         )
         
         # =====================================================================
         # 3. 推理状态初始化
         # =====================================================================
-        self.init_inference_state()
+        self.reset_state()
+        self.eagle_layer.reset_state()
 
     # =========================================================================
     # 初始化方法 (Initialization Methods)
     # =========================================================================
 
-    def init_eagle_layer(
-        self,
-        ea_model_path: str,
-        use_eagle3: bool,
-        total_token: int,
-        depth: int,
-        top_k: int,
-        threshold: float,
-        ea_layer_state_dict: dict,
-    ):
+    def reset_state(self):
         """
-        初始化 Eagle Layer (草稿层)
+        初始化/重置推理状态（在每次推理开始前调用）
         
-        步骤：
-        1. 加载配置: 从 config.json 加载 Eagle 配置
-        2. 创建 Eagle Layer: 初始化草稿模型
-        3. 设备管理: 处理跨设备权重
-        4. 词表映射: 配置 draft vocab 到 target vocab 的映射 (Eagle3)
-        5. 加载权重: 加载预训练的 Eagle 权重
-        6. Tree 初始化: 初始化 draft tree 相关 buffer
+        重置内容：
+        1. Base Model: tree mode
+        2. Eagle Layer: KV Cache, tree mask, 并行状态
+        3. Base Model KV Cache 引用 (实际分配在 generate 中)
+        4. 并行解码状态: BIM, position_ids, active_branches
+        5. 输出存储
+        
+        注意：
+        - Base Model KV Cache 在 generate 方法中按需分配
+        - Eagle Layer init_tree 只需在模型加载时调用一次
         """
-        # 1. 加载配置
-        config = EConfig.from_pretrained(ea_model_path)
-        with open(ea_model_path, "r") as f:
-            con = json.loads(f.read())
-        bias = con.get("bias", True)
+        # Base Model tree mode
+        self.reset_tree_mode()
 
-        # 2. 创建 Eagle Layer
-        self.eagle_layer = EagleLayer(
-            config=config,
-            bias=bias,
-            total_tokens=total_token,
-            depth=depth,
-            top_k=top_k,
-            threshold=threshold,
-            path=self.base_model_name_or_path,
-            load_emb=True,
-        )
-
-        # 3. 设备管理
-        device = self.base_model.model.layers[-1].self_attn.q_proj.weight.device
-        if device != self.base_model.lm_head.weight.device:
-            self.eagle_layer.diff_device = True
-            self.eagle_layer.headweight = self.base_model.lm_head.weight.clone().to(device)
-        else:
-            self.eagle_layer.diff_device = False
-
-        # 4. 词表映射处理 (Eagle3 特有)
-        if use_eagle3 and config.vocab_size == config.draft_vocab_size:
-            if hasattr(self.eagle_layer, 'd2t'):
-                del self.eagle_layer.d2t
-            if hasattr(self.eagle_layer, 't2d'):
-                del self.eagle_layer.t2d
-
-        # 5. 加载权重
-        self.eagle_layer.load_state_dict(ea_layer_state_dict, strict=False)
-        self.eagle_layer.to(self.base_model.dtype).to(device)
-        
-        # 6. Tree 初始化
-        self.eagle_layer.init_tree()
-
-    def init_inference_state(self):
-        """
-        初始化推理状态
-        
-        包括：
-        - Eagle Layer KV Cache
-        - Base Model KV Cache
-        - 并行解码状态 (BIM, position_ids 等)
-        - 输出存储
-        """
-        # Eagle Layer 状态
-        self.eagle_layer.reset_kv()
-        
-        # Base Model KV Cache (将在 generate 时动态分配)
+        # Base Model KV Cache 引用 (实际分配在 generate 中)
         self.past_key_values = None
         self.past_key_values_data = None
         self.current_length_data = None
 
         # 并行解码状态
-        # Branch Index Map (BIM): 记录每个 token 属于哪个分支
-        # -1: 共享 prefix, -2: 空位置, >=0: 分支索引
+        # BIM: -1=共享prefix, -2=空位置, >=0=分支索引
         self.branch_index_map = None
         self.full_position_ids = None
         self.active_branches = None
-        
-        # Eagle Layer 并行状态
-        self.eagle_layer.cache_padding_mask = None
-        self.eagle_layer.full_position_ids = None
 
         # 输出存储
         self.skeleton_output = None
         self.parallel_branches_output = None
         self.instruction_len = None
+
+    def reset_tree_mode(self):
+        self.base_model.model.tree_mask = None
+        self.base_model.model.tree_mode = None 
 
     # =========================================================================
     # 信息获取 (Getters)
@@ -284,85 +239,6 @@ class SpecSoTModel(nn.Module):
             return 'llama'
         else:
             return 'other'
-
-    # =========================================================================
-    # Prompt 和 Processor 辅助函数
-    # =========================================================================
-
-    def _prepare_skeleton_input(
-        self, task_prompt: str
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        准备 skeleton 生成阶段的输入
-        
-        根据模型类型选择对应的 prompt 模板，构建完整的输入序列
-        
-        Args:
-            task_prompt: 用户输入的任务描述
-            
-        Returns:
-            input_ids: 完整输入序列 [1, seq_len]
-            task_input_ids: 任务输入部分 [1, task_len] (用于后续并行阶段的前缀复用)
-        """
-        device = self.base_model.device
-        model_type = self.get_model_type()
-        
-        if model_type == 'qwen':
-            # Qwen 模型使用中文 prompt
-            base_prompt_template = base_prompt
-            skeleton_trigger = skeleton_trigger_zh
-            print(f"Using Chinese prompts for {model_type} model")
-        else:
-            # Llama 和其他模型使用英文 prompt
-            base_prompt_template = base_prompt_en
-            skeleton_trigger = skeleton_trigger_en
-            print(f"Using English prompts for {model_type} model")
-        
-        task_input = base_prompt_template.format(user_question=task_prompt)
-        task_input_ids = self.tokenizer([task_input], return_tensors="pt").input_ids.to(device)
-        skeleton_input_ids = self.tokenizer([skeleton_trigger], return_tensors="pt").input_ids.to(device)
-        input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
-        
-        return input_ids, task_input_ids
-
-    def _create_skeleton_logits_processor(
-        self,
-        para_token_ids: Dict[str, int],
-        prefix_len: int,
-        sampling_processor: Optional[LogitsProcessorList] = None,
-    ) -> LogitsProcessorList:
-        """
-        创建 skeleton 生成阶段使用的 LogitsProcessor
-        
-        包含语义约束 processor 和可选的采样 processor
-        
-        Args:
-            para_token_ids: 特殊 token IDs
-            prefix_len: 输入前缀长度
-            sampling_processor: 采样相关的 processor (温度、top_p、top_k)
-            
-        Returns:
-            组合后的 LogitsProcessorList
-        """
-        # 构造语义约束 Logits Processor
-        sp_processor = SemanticLogitsProcessor(
-            para_end_token_id=para_token_ids['para_end_token_id'],
-            ellipsis_token_id=para_token_ids['ellipsis_token_id'],
-            line_break_token_id=para_token_ids['line_break_token_id'],
-            para_begin_token_id=para_token_ids['para_begin_token_id'],
-            colon_token_id=para_token_ids['colon_token_id'],
-            cn_colon_token_id=para_token_ids['cn_colon_token_id'],
-            colon_new_line_token_id=para_token_ids['colon_new_line_token_id'],
-            prefix_len=prefix_len
-        )
-        
-        logits_processor = LogitsProcessorList([sp_processor])
-        
-        # 添加采样 processor (如果有)
-        if sampling_processor is not None:
-            logits_processor.extend(sampling_processor)
-        
-        return logits_processor
 
     # =========================================================================
     # 基础前向传播 (Base Forward)
@@ -444,29 +320,28 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # 公共初始化
         # =====================================================================
-        self.init_inference_state()
+        self.reset_state()
+        self.eagle_layer.reset_state()
+        
         device = self.base_model.device
         
         # 准备采样 logits processor (温度、top_p、top_k)
         logits_processor = None
         if temperature > 1e-5:
             logits_processor = prepare_logits_processor(temperature, top_p, top_k)
-        
-        # 初始化 Eagle Layer KV Cache
-        self.eagle_layer.reset_kv()
 
         if not enable_parallel:
             # 普通投机解码模式
-            return self._generate_standard(
+            return self.generate_eagle(
                 task_prompt, max_new_tokens, logits_processor
             )
         
         # 骨架并行模式
-        return self._generate_specsot(
+        return self.generate_specsot(
             task_prompt, max_new_tokens, logits_processor, para_token_ids
         )
 
-    def _generate_standard(
+    def generate_eagle(
         self,
         task_prompt: str,
         max_new_tokens: int,
@@ -491,7 +366,7 @@ class SpecSoTModel(nn.Module):
         self.past_key_values, self.past_key_values_data, self.current_length_data = \
             initialize_past_key_values(self.base_model, max_length=max_kv_len)
         
-        reset_tree_mode(self)
+        self.reset_tree_mode()
         print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         # =====================================================================
@@ -551,7 +426,8 @@ class SpecSoTModel(nn.Module):
             # 停止条件检查
             if check_stop_conditions(
                 input_ids, input_len, stop_token_id, eos_token_id,
-                self.current_length_data[0].item(), max_kv_len
+                self.current_length_data[0].item(), max_kv_len,
+                tokens_per_step=self.eagle_layer.total_tokens
             ):
                 break
         
@@ -565,7 +441,7 @@ class SpecSoTModel(nn.Module):
         
         return output_ids, avg_accept_len, 0, avg_draft_time, avg_update_time, avg_verify_time
 
-    def _generate_specsot(
+    def generate_specsot(
         self,
         task_prompt: str,
         max_new_tokens: int,
@@ -581,15 +457,18 @@ class SpecSoTModel(nn.Module):
         3. Parallel Decoding - 并行解码各分支
         """
         device = self.base_model.device
+        model_type = self.get_model_type()
         
         # =====================================================================
         # Stage 1: Skeleton Generation (骨架生成)
         # =====================================================================
         # 准备 skeleton 阶段的 input_ids 和 logits_processor
-        input_ids, task_input_ids = self._prepare_skeleton_input(task_prompt)
+        input_ids, task_input_ids = prepare_skeleton_input(
+            self.tokenizer, task_prompt, model_type, device
+        )
         input_len = input_ids.shape[1]
         
-        skeleton_logits_processor = self._create_skeleton_logits_processor(
+        skeleton_logits_processor = create_skeleton_logits_processor(
             para_token_ids, input_len, logits_processor
         )
         
@@ -598,7 +477,7 @@ class SpecSoTModel(nn.Module):
         self.past_key_values, self.past_key_values_data, self.current_length_data = \
             initialize_past_key_values(self.base_model, max_length=max_kv_len)
         
-        reset_tree_mode(self)
+        self.reset_tree_mode()
         print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         # ---------------------------------------------------------------------
@@ -635,7 +514,8 @@ class SpecSoTModel(nn.Module):
             # 停止条件检查
             if check_stop_conditions(
                 input_ids, input_len, stop_token_id, eos_token_id,
-                self.current_length_data[0].item(), max_kv_len
+                self.current_length_data[0].item(), max_kv_len,
+                tokens_per_step=self.eagle_layer.total_tokens
             ):
                 break
         
@@ -646,13 +526,19 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # Stage 2: Skeleton Parsing (骨架解析)
         # =====================================================================
-        clean_branches, predicted_branch_lengths, instruction_len = parse_skeleton(
+        # 2.1: 解析骨架，提取分支标题和预测长度
+        branch_headers, predicted_branch_lengths = parse_skeleton(
             self.tokenizer, skeleton_ids, para_token_ids
         )
         
-        if not clean_branches:
+        if not branch_headers:
             print("Parsing failed or no branches found. Returning skeleton.")
             return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0
+        
+        # 2.2: 准备并行分支输入（添加上下文指令前缀）
+        clean_branches, instruction_len = prepare_parallel_branches(
+            self.tokenizer, branch_headers, model_type
+        )
 
         num_para = len(clean_branches)
         self.parallel_branches_output = [list(br) for br in clean_branches]
@@ -686,12 +572,25 @@ class SpecSoTModel(nn.Module):
         total_update_time_parallel = 0.0
         total_draft_time_parallel = 0.0
         
+        # 获取 Eagle Layer 每步每分支的最大 token 数（用于峰值 KV cache 计算）
+        tokens_per_branch = self.eagle_layer.total_tokens
+        
         evt_start_p = torch.cuda.Event(enable_timing=True)
         evt_after_verify_p = torch.cuda.Event(enable_timing=True)
         evt_after_update_p = torch.cuda.Event(enable_timing=True)
         evt_after_draft_p = torch.cuda.Event(enable_timing=True)
         
         for step_parallel in range(max_new_tokens):
+            # 峰值 KV cache 检查：确保下一步不会溢出
+            if check_stop_conditions_parallel(
+                current_length=self.current_length_data[0].item(),
+                max_kv_len=max_kv_len,
+                num_active_branches=len(self.active_branches),
+                tokens_per_branch=tokens_per_branch,
+            ):
+                print(f"Incomplete branches due to KV cache limit: {self.active_branches}")
+                break
+            
             evt_start_p.record()
             
             # 执行单步并行 decode
