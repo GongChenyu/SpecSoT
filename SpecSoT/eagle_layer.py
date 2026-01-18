@@ -490,22 +490,8 @@ class EagleLayer(nn.Module):
             load_emb=True,
         )
 
-        # 3. 设备管理
+        # 3. 加载权重
         device = base_model.model.layers[-1].self_attn.q_proj.weight.device
-        if device != base_model.lm_head.weight.device:
-            eagle_layer.diff_device = True
-            eagle_layer.headweight = base_model.lm_head.weight.clone().to(device)
-        else:
-            eagle_layer.diff_device = False
-
-        # 4. 词表映射处理 (Eagle3 特有)
-        if use_eagle3 and config.vocab_size == config.draft_vocab_size:
-            if hasattr(eagle_layer, 'd2t'):
-                del eagle_layer.d2t
-            if hasattr(eagle_layer, 't2d'):
-                del eagle_layer.t2d
-
-        # 5. 加载权重
         eagle_layer.load_state_dict(ea_layer_state_dict, strict=False)
         eagle_layer.to(base_model.dtype).to(device)
         
@@ -555,13 +541,10 @@ class EagleLayer(nn.Module):
         self.cache_padding_mask = None
         self.full_position_ids = None
         self.tree_mask = None
-        self.diff_device = False
+        
         device = self.embed_tokens.weight.device
         self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
-
-        # Eagle Layer 状态
-        self.tree_mask = None
 
     # =========================================================================
     # 注意力掩码构建
