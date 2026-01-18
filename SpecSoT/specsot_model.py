@@ -386,14 +386,10 @@ class SpecSoTModel(nn.Module):
             avg_update_time: 平均 update 时间
             avg_verify_time: 平均 verify 时间
         """
-        # =====================================================================
         # 公共初始化
-        # =====================================================================
         self.reset_state()
         self.eagle_layer.reset_state()
-        
-        device = self.base_model.device
-        
+                
         # 准备采样 logits processor (温度、top_p、top_k)
         logits_processor = None
         if temperature > 1e-5:
@@ -427,6 +423,7 @@ class SpecSoTModel(nn.Module):
         device = self.base_model.device
         input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(device)
         input_len = input_ids.shape[1]
+        print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         # =====================================================================
         # 1. 初始化 KV Cache
@@ -434,9 +431,6 @@ class SpecSoTModel(nn.Module):
         max_kv_len = input_len + max_new_tokens + 100
         self.past_key_values, self.past_key_values_data, self.current_length_data = \
             initialize_past_key_values(self.base_model, max_length=max_kv_len)
-        
-        self.reset_tree_mode()
-        print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         # =====================================================================
         # 2. Prefill 阶段
@@ -496,7 +490,7 @@ class SpecSoTModel(nn.Module):
             if check_stop_conditions(
                 input_ids, input_len, stop_token_id, eos_token_id,
                 self.current_length_data[0].item(), max_kv_len,
-                tokens_per_step=self.eagle_layer.total_tokens
+                tokens_per_step=self.eagle_layer.total_tokens + 1
             ):
                 break
         
@@ -532,10 +526,9 @@ class SpecSoTModel(nn.Module):
         # Stage 1: Skeleton Generation (骨架生成)
         # =====================================================================
         # 准备 skeleton 阶段的 input_ids 和 logits_processor
-        input_ids, task_input_ids = prepare_skeleton_input(
-            self.tokenizer, task_prompt, model_type, device
-        )
+        input_ids, task_input_ids = prepare_skeleton_input(self.tokenizer, task_prompt, model_type, device)
         input_len = input_ids.shape[1]
+        print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         skeleton_logits_processor = create_skeleton_logits_processor(
             para_token_ids, input_len, logits_processor
@@ -545,9 +538,6 @@ class SpecSoTModel(nn.Module):
         max_kv_len = input_len + max_new_tokens + 100
         self.past_key_values, self.past_key_values_data, self.current_length_data = \
             initialize_past_key_values(self.base_model, max_length=max_kv_len)
-        
-        self.reset_tree_mode()
-        print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         # ---------------------------------------------------------------------
         # Stage 1.1: Prefill 阶段
@@ -584,7 +574,7 @@ class SpecSoTModel(nn.Module):
             if check_stop_conditions(
                 input_ids, input_len, stop_token_id, eos_token_id,
                 self.current_length_data[0].item(), max_kv_len,
-                tokens_per_step=self.eagle_layer.total_tokens
+                tokens_per_step=self.eagle_layer.total_tokens + 1
             ):
                 break
         
@@ -642,7 +632,7 @@ class SpecSoTModel(nn.Module):
         total_draft_time_parallel = 0.0
         
         # 获取 Eagle Layer 每步每分支的最大 token 数（用于峰值 KV cache 计算）
-        tokens_per_branch = self.eagle_layer.total_tokens
+        tokens_per_branch = self.eagle_layer.total_tokens + 1
         
         evt_start_p = torch.cuda.Event(enable_timing=True)
         evt_after_verify_p = torch.cuda.Event(enable_timing=True)
@@ -659,7 +649,7 @@ class SpecSoTModel(nn.Module):
             ):
                 print(f"Incomplete branches due to KV cache limit: {self.active_branches}")
                 break
-            
+
             evt_start_p.record()
             
             # 执行单步并行 decode
@@ -780,8 +770,10 @@ class SpecSoTModel(nn.Module):
         candidates = draft_tokens[0, retrieve_indices]
         
         best_candidate, accept_length, sample_p = evaluate_single(logits, candidates, logits_processor)
-        print(f"accept_length: {accept_length.item()}")
-        print(f"best_candidate: {self.tokenizer.decode(best_candidate[0])}")
+        # print(f"accept_length: {accept_length.item()}")
+        # if accept_length.item() > 0:
+        #     best_candidate_token = candidates[0, best_candidate, :accept_length]
+        #     print(f"best_candidate: {self.tokenizer.decode(best_candidate_token[0].tolist())}")
         
         # 规范化维度
         if isinstance(accept_length, int):
@@ -854,6 +846,7 @@ class SpecSoTModel(nn.Module):
 
         # 更新 input_ids
         input_ids = torch.cat([input_ids, new_tokens.to(input_ids.device)], dim=-1)
+        # print(f"Updated input_ids: {self.tokenizer.decode(new_tokens[0])}")
 
         # 更新 KV Cache (搬运接受的 KV 到正确位置)
         for past_kv_data in self.past_key_values_data:

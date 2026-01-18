@@ -188,7 +188,7 @@ def main():
     parser.add_argument(
         "--max_new_tokens", 
         type=int, 
-        default=10000,
+        default=1000,
         help="最大生成 token 数"
     )
     parser.add_argument(
