@@ -106,38 +106,23 @@ class SpecSoTModel(nn.Module):
     def __init__(
         self,
         base_model: nn.Module,
+        eagle_layer: nn.Module,
         base_model_name_or_path: str,
-        ea_model_path: str,
         use_eagle3: bool = True,
-        total_token: int = 60,
-        depth: int = 7,
-        top_k: int = 10,
-        threshold: float = 1.0,
-        ea_layer_state_dict: dict = None,
     ):
         """
         初始化 SpecSoT 模型
         
-        初始化流程：
-        1. Base Model 初始化: 设置基础模型和配置
-        2. Eagle Layer 初始化: 创建并配置草稿层
-        3. 推理状态初始化: 重置所有运行时状态
-        
         Args:
             base_model: 预加载的基础模型
+            eagle_layer: 预加载的 Eagle Layer
             base_model_name_or_path: 基础模型路径，用于加载 tokenizer
-            ea_model_path: Eagle 模型配置路径
             use_eagle3: 是否使用 Eagle3 架构
-            total_token: 每次 draft 生成的总 token 数
-            depth: draft 树的深度
-            top_k: 每层选择的 top-k 数量
-            threshold: 接受阈值
-            ea_layer_state_dict: Eagle 层的预训练权重
         """
         super().__init__()
         
         # =====================================================================
-        # 1. Base Model 初始化
+        # 1. Base Model
         # =====================================================================
         self.base_model = base_model
         self.config = base_model.config
@@ -152,19 +137,9 @@ class SpecSoTModel(nn.Module):
         )
         
         # =====================================================================
-        # 2. Eagle Layer 初始化
+        # 2. Eagle Layer
         # =====================================================================
-        self.eagle_layer = EagleLayer.from_pretrained(
-            ea_model_path=ea_model_path,
-            base_model=base_model,
-            base_model_name_or_path=base_model_name_or_path,
-            use_eagle3=use_eagle3,
-            total_token=total_token,
-            depth=depth,
-            top_k=top_k,
-            threshold=threshold,
-            ea_layer_state_dict=ea_layer_state_dict,
-        )
+        self.eagle_layer = eagle_layer
         
         # =====================================================================
         # 3. 推理状态初始化
@@ -173,8 +148,102 @@ class SpecSoTModel(nn.Module):
         self.eagle_layer.reset_state()
 
     # =========================================================================
-    # 初始化方法 (Initialization Methods)
+    # 类方法：模型加载
     # =========================================================================
+    
+    @classmethod
+    def _load_base_model(
+        cls,
+        base_model_path: str,
+        **kwargs,
+    ) -> nn.Module:
+        """
+        加载 Base Model
+        
+        根据模型架构类型自动选择对应的 KV Cache 版本模型类。
+        
+        Args:
+            base_model_path: 基础模型路径
+            **kwargs: 传递给 from_pretrained 的其他参数
+                      (如 torch_dtype, device_map, low_cpu_mem_usage 等)
+            
+        Returns:
+            加载好的基础模型实例
+        """
+        model_type = AutoConfig.from_pretrained(base_model_path).architectures[0]
+        
+        model_class_map = {
+            'LlamaForCausalLM': KVLlamaForCausalLM,
+            'Qwen2ForCausalLM': KVQwen2ForCausalLM,
+            'Qwen3ForCausalLM': KVQwen3ForCausalLM,
+        }
+        
+        BaseModelClass = model_class_map.get(model_type, KVMixtralForCausalLM)
+        base_model = BaseModelClass.from_pretrained(base_model_path, **kwargs)
+        
+        return base_model
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        base_model_path: str,
+        ea_model_path: str,
+        use_eagle3: bool = True,
+        total_token: int = 60,
+        depth: int = 7,
+        top_k: int = 10,
+        threshold: float = 1.0,
+        **kwargs,
+    ) -> "SpecSoTModel":
+        """
+        从预训练模型加载 SpecSoT 模型
+        
+        加载流程：
+        1. 加载 Base Model: 调用 _load_base_model
+        2. 加载 Eagle Layer: 调用 EagleLayer.from_pretrained
+        3. 组装 SpecSoT 模型
+        
+        Args:
+            base_model_path: 基础模型路径
+            ea_model_path: Eagle 模型路径
+            use_eagle3: 是否使用 Eagle3
+            total_token: 每次 draft 的总 token 数
+            depth: draft 树深度
+            top_k: top-k 选择数量
+            threshold: 接受阈值
+            **kwargs: 传递给基础模型的其他参数
+            
+        Returns:
+            SpecSoTModel 实例
+        """
+        # =====================================================================
+        # 1. 加载 Base Model
+        # =====================================================================
+        base_model = cls._load_base_model(base_model_path, **kwargs)
+
+        # =====================================================================
+        # 2. 加载 Eagle Layer
+        # =====================================================================
+        eagle_layer = EagleLayer.from_pretrained(
+            ea_model_path=ea_model_path,
+            base_model=base_model,
+            base_model_name_or_path=base_model_path,
+            use_eagle3=use_eagle3,
+            total_token=total_token,
+            depth=depth,
+            top_k=top_k,
+            threshold=threshold,
+        )
+
+        # =====================================================================
+        # 3. 组装 SpecSoT 模型
+        # =====================================================================
+        return cls(
+            base_model=base_model,
+            eagle_layer=eagle_layer,
+            base_model_name_or_path=base_model_path,
+            use_eagle3=use_eagle3,
+        )
 
     def reset_state(self):
         """
@@ -1173,76 +1242,4 @@ class SpecSoTModel(nn.Module):
 
         return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
 
-    # =========================================================================
-    # 类方法：模型加载
-    # =========================================================================
-
-    @classmethod
-    def from_pretrained(
-        cls,
-        base_model_path: str,
-        ea_model_path: str,
-        use_eagle3: bool = True,
-        total_token: int = 60,
-        depth: int = 7,
-        top_k: int = 10,
-        threshold: float = 1.0,
-        **kwargs,
-    ) -> "SpecSoTModel":
-        """
-        从预训练模型加载 SpecSoT 模型
-        
-        Args:
-            base_model_path: 基础模型路径
-            ea_model_path: Eagle 模型路径
-            use_eagle3: 是否使用 Eagle3
-            total_token: 每次 draft 的总 token 数
-            depth: draft 树深度
-            top_k: top-k 选择数量
-            threshold: 接受阈值
-            **kwargs: 传递给基础模型的其他参数
-            
-        Returns:
-            SpecSoTModel 实例
-        """
-        # 根据架构类型加载基础模型
-        model_type = AutoConfig.from_pretrained(base_model_path).architectures[0]
-        
-        model_class_map = {
-            'LlamaForCausalLM': KVLlamaForCausalLM,
-            'Qwen2ForCausalLM': KVQwen2ForCausalLM,
-            'Qwen3ForCausalLM': KVQwen3ForCausalLM,
-        }
-        
-        BaseModelClass = model_class_map.get(model_type, KVMixtralForCausalLM)
-        base_model = BaseModelClass.from_pretrained(base_model_path, **kwargs)
-
-        # 加载 Eagle 配置
-        config_path = os.path.join(ea_model_path, "config.json")
-        if not os.path.exists(config_path):
-            config_path = hf_hub_download(ea_model_path, "config.json")
-
-        # 加载 Eagle 权重
-        try:
-            load_path = os.path.join(ea_model_path, "pytorch_model.bin")
-            if not os.path.exists(load_path):
-                load_path = hf_hub_download(ea_model_path, "pytorch_model.bin")
-            ea_state_dict = torch.load(load_path, map_location=base_model.device)
-        except:
-            from safetensors.torch import load_file
-            load_path = os.path.join(ea_model_path, "model.safetensors")
-            if not os.path.exists(load_path):
-                load_path = hf_hub_download(ea_model_path, "model.safetensors")
-            ea_state_dict = load_file(load_path)
-
-        return cls(
-            base_model=base_model,
-            base_model_name_or_path=base_model_path,
-            ea_model_path=config_path,
-            use_eagle3=use_eagle3,
-            total_token=total_token,
-            depth=depth,
-            top_k=top_k,
-            threshold=threshold,
-            ea_layer_state_dict=ea_state_dict,
-        )
+    

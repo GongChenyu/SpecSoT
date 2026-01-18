@@ -437,48 +437,72 @@ class EagleLayer(nn.Module):
     def from_pretrained(
         cls,
         ea_model_path: str,
-        base_model,
+        base_model: nn.Module,
         base_model_name_or_path: str,
-        use_eagle3: bool,
-        total_token: int,
-        depth: int,
-        top_k: int,
-        threshold: float,
-        ea_layer_state_dict: dict,
+        use_eagle3: bool = True,
+        total_token: int = 60,
+        depth: int = 7,
+        top_k: int = 10,
+        threshold: float = 1.0,
     ):
         """
         从预训练模型加载 Eagle Layer
         
-        步骤：
+        加载流程：
         1. 加载配置: 从 config.json 加载 Eagle 配置
-        2. 创建 Eagle Layer: 初始化草稿模型
-        3. 设备管理: 处理跨设备权重
-        4. 词表映射: 配置 draft vocab 到 target vocab 的映射 (Eagle3)
-        5. 加载权重: 加载预训练的 Eagle 权重
-        6. Tree 初始化: 初始化 draft tree 相关 buffer
+        2. 加载权重: 从 model.safetensors 或 pytorch_model.bin 加载权重
+        3. 创建实例: 初始化 Eagle Layer
+        4. 设备管理: 处理跨设备权重
+        5. 词表映射: 处理 draft vocab 到 target vocab 的映射 (Eagle3)
+        6. 加载权重: 应用预训练权重
         
         Args:
-            ea_model_path: Eagle 模型配置路径
-            base_model: 基础模型实例
-            base_model_name_or_path: 基础模型路径
+            ea_model_path: Eagle 模型目录路径
+            base_model: 基础模型实例 (用于获取设备和 dtype)
+            base_model_name_or_path: 基础模型路径 (用于加载 embedding)
             use_eagle3: 是否使用 Eagle3 架构
             total_token: 每次 draft 生成的总 token 数
             depth: draft 树的深度
             top_k: 每层选择的 top-k 数量
             threshold: 接受阈值
-            ea_layer_state_dict: Eagle 层的预训练权重
             
         Returns:
             初始化好的 EagleLayer 实例
         """
+        # =====================================================================
         # 1. 加载配置
+        # =====================================================================
         from .configs import EConfig
-        config = EConfig.from_pretrained(ea_model_path)
-        with open(ea_model_path, "r") as f:
+        
+        config_path = os.path.join(ea_model_path, "config.json")
+        if not os.path.exists(config_path):
+            config_path = hf_hub_download(ea_model_path, "config.json")
+        
+        config = EConfig.from_pretrained(config_path)
+        with open(config_path, "r") as f:
             con = json.loads(f.read())
         bias = con.get("bias", True)
 
-        # 2. 创建 Eagle Layer
+        # =====================================================================
+        # 2. 加载权重
+        # =====================================================================
+        device = base_model.model.layers[-1].self_attn.q_proj.weight.device
+        
+        try:
+            load_path = os.path.join(ea_model_path, "pytorch_model.bin")
+            if not os.path.exists(load_path):
+                load_path = hf_hub_download(ea_model_path, "pytorch_model.bin")
+            ea_state_dict = torch.load(load_path, map_location=device)
+        except:
+            from safetensors.torch import load_file
+            load_path = os.path.join(ea_model_path, "model.safetensors")
+            if not os.path.exists(load_path):
+                load_path = hf_hub_download(ea_model_path, "model.safetensors")
+            ea_state_dict = load_file(load_path)
+
+        # =====================================================================
+        # 3. 创建 Eagle Layer 实例
+        # =====================================================================
         eagle_layer = cls(
             config=config,
             bias=bias,
@@ -490,9 +514,28 @@ class EagleLayer(nn.Module):
             load_emb=True,
         )
 
-        # 3. 加载权重
-        device = base_model.model.layers[-1].self_attn.q_proj.weight.device
-        eagle_layer.load_state_dict(ea_layer_state_dict, strict=False)
+        # =====================================================================
+        # 4. 设备管理：处理跨设备权重
+        # =====================================================================
+        if device != base_model.lm_head.weight.device:
+            eagle_layer.diff_device = True
+            eagle_layer.headweight = base_model.lm_head.weight.clone().to(device)
+        else:
+            eagle_layer.diff_device = False
+
+        # =====================================================================
+        # 5. Eagle3 词表映射：如果 draft_vocab == target_vocab，删除映射 buffer
+        # =====================================================================
+        if use_eagle3 and config.vocab_size == config.draft_vocab_size:
+            if hasattr(eagle_layer, 'd2t'):
+                del eagle_layer.d2t
+            if hasattr(eagle_layer, 't2d'):
+                del eagle_layer.t2d
+
+        # =====================================================================
+        # 6. 加载权重并移动到正确设备
+        # =====================================================================
+        eagle_layer.load_state_dict(ea_state_dict, strict=False)
         eagle_layer.to(base_model.dtype).to(device)
         
         eagle_layer.reset_state()
