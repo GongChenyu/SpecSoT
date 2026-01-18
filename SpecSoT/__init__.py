@@ -28,11 +28,7 @@ from .logits_processor import SemanticLogitsProcessor
 # 工具函数
 from .utils import (
     prepare_logits_processor,
-    prefill_single,
-    prefill_parallel,
     build_parallel_prefill_mask,
-    verify_step_single,
-    verify_step_parallel,
     evaluate_single,
     evaluate_parallel,
     stack_with_left_padding,
@@ -66,11 +62,7 @@ __all__ = [
     
     # Utils
     "prepare_logits_processor",
-    "prefill_single",
-    "prefill_parallel",
     "build_parallel_prefill_mask",
-    "verify_step_single",
-    "verify_step_parallel",
     "evaluate_single",
     "evaluate_parallel",
     "reset_tree_mode",

@@ -6,37 +6,34 @@ SpecSoT 工具函数模块 (Utils)
 
 1. Logits Processing (Logits 处理)
    - prepare_logits_processor: 准备温度、top-p、top-k 等 logits 处理器
+   - create_skeleton_logits_processor: 创建骨架生成的 logits 处理器
 
-2. Single Mode Helpers (单序列模式辅助函数)
-   - prefill_single: 单序列 Prefill 阶段（处理输入 prompt，初始化 KV Cache 和首次 Draft）
-   - verify_step_single: 单序列 Verify 阶段（Base Model 验证 Draft Tree）
+2. Mask Building (掩码构建)
+   - build_parallel_prefill_mask: 构建并行 Prefill 阶段的注意力掩码
 
-3. Parallel Mode Helpers (并行模式辅助函数)
-   - prefill_parallel: 并行 Prefill 阶段（处理各分支 prompt，初始化并行状态和首次 Draft）
-   - verify_step_parallel: 并行 Verify 阶段（Base Model 验证多分支 Draft Tree）
-
-4. Evaluation (评估)
+3. Evaluation (评估)
    - evaluate_single: 单序列评估 (Eagle 投机解码、SpecSoT Skeleton 阶段)
    - evaluate_parallel: 并行评估 (SpecSoT 并行分支解码阶段)
-   - evaluate_posterior: 向后兼容别名，等价于 evaluate_single
-   - _evaluate_batch: 核心评估逻辑
-   - _greedy_evaluate: Greedy 采样
-   - _rejection_sampling_evaluate: Rejection Sampling 采样
+   - greedy_sampling: Greedy 采样算法
+   - rejection_sampling: Rejection Sampling 采样算法
+   - batched_sampling: 批次采样
 
-5. State Utilities (状态工具)
-   - reset_tree_mode: 重置 tree mode
-   - reset_past_key_values: 重置 KV Cache
-
-6. Tensor Utilities (张量工具)
+4. Tensor Utilities (张量工具)
    - stack_with_left_padding: 左填充堆叠不等长序列
    - generate_candidates: 生成候选序列
    - pad_path: 路径填充
 
-7. Output Merge (输出合并)
+5. Stop Conditions (停止条件)
+   - check_stop_conditions: 单序列停止条件检查
+   - check_stop_conditions_parallel: 并行停止条件检查
+
+6. Output Merge (输出合并)
    - merge_outputs: 合并骨架和并行分支的输出
 
-8. Skeleton Parsing (骨架解析)
+7. Skeleton Parsing (骨架解析)
    - parse_skeleton: 解析骨架，提取并行分支
+   - prepare_skeleton_input: 准备骨架输入
+   - prepare_parallel_branches: 准备并行分支输入
 """
 
 import copy
@@ -136,70 +133,8 @@ def create_skeleton_logits_processor(
 
 
 # =============================================================================
-# 2. Prefill
+# 2. Mask Building (掩码构建)
 # =============================================================================
-
-def prefill_single(
-    input_ids: torch.Tensor,
-    model,
-    logits_processor: Optional[LogitsProcessorList] = None,
-) -> Tuple[torch.Tensor, ...]:
-    """
-    单序列模式：Prefill 阶段（处理输入 prompt，初始化 KV Cache 和首次 Draft）
-    
-    流程：
-    1. Base Model Prefill: 处理输入，获取最后一个 token 的 logits
-    2. Sample Root Token: 采样第一个生成的 token
-    3. Generate Draft Tree: 使用 Eagle Layer 生成候选树
-    
-    Args:
-        input_ids: 输入 token IDs [1, seq_len]
-        model: SpecSoT 模型
-        past_key_values: KV Cache
-        logits_processor: logits 处理器
-        
-    Returns:
-        draft_tokens: 候选 tokens [1, tree_size]
-        retrieve_indices: 检索索引 [num_leaves, depth]
-        tree_mask: 树掩码 [1, 1, tree_size, tree_size]
-        tree_position_ids: 位置编码 [1, tree_size]
-        orig: 原始 logits
-        hidden_states: 隐藏状态
-        token: 采样的 root token
-    """
-    # Base Model Prefill
-    outputs, orig, hidden_states = model(
-        input_ids, past_key_values=model.past_key_values, output_orig=True
-    )
-
-    # Sample Root Token
-    if logits_processor is not None:
-        logits = orig[:, -1]
-        logits = logits_processor(input_ids, logits)
-        probabilities = torch.nn.functional.softmax(logits, dim=1)
-        token = torch.multinomial(probabilities, 1)
-    else:
-        token = torch.argmax(orig[:, -1])
-        token = token[None, None]
-    
-    input_ids = torch.cat((input_ids, token.to(input_ids.device)), dim=1)
-
-    # Prepare Hidden States for Eagle Layer
-    if model.use_eagle3:
-        ea_device = model.eagle_layer.lm_head.weight.device
-        if outputs["hidden_states"][0].device != ea_device:
-            outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-        hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
-
-    # Generate Draft Tree
-    draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-        model.eagle_layer.generate_draft_tree(hidden_states, input_ids)
-
-    return (
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
-        orig, hidden_states, token
-    )
-
 
 def build_parallel_prefill_mask(
     branch_index_map: torch.Tensor,
@@ -256,269 +191,8 @@ def build_parallel_prefill_mask(
     return mask
 
 
-def prefill_parallel(
-    prefix_len: int,
-    input_ids: torch.Tensor,
-    model,
-    tips_indices: torch.Tensor,
-    branch_begins: List[int],
-    branch_lengths: List[int],
-    draft_input_ids: torch.Tensor,
-    logits_processor: Optional[LogitsProcessorList] = None,
-) -> Tuple[torch.Tensor, ...]:
-    """
-    并行模式：Prefill 阶段（处理各分支 prompt，初始化并行状态和首次 Draft）
-    
-    处理多个分支的并行 Prefill，共享 prefix 的 KV Cache。
-    
-    Args:
-        prefix_len: 共享前缀长度
-        input_ids: 打包后的输入 [1, total_len]
-        model: SpecSoT 模型
-        tips_indices: 各分支 tip 位置
-        branch_begins: 各分支起始位置
-        branch_lengths: 各分支长度
-        draft_input_ids: Draft 模型输入 [num_para, max_len]
-        logits_processor: logits 处理器
-        
-    Returns:
-        input_ids: 更新后的输入
-        draft_tokens: 候选 tokens
-        retrieve_indices: 检索索引
-        tree_mask: 树掩码
-        tree_position_ids: 位置编码
-        hidden_states: 隐藏状态
-    """
-    device = input_ids.device
-    num_para = len(branch_lengths)
-
-    # 构建并行 Prefill 的 Attention Mask
-    attention_mask = build_parallel_prefill_mask(
-        model.branch_index_map,
-        prefix_len,
-        branch_len=input_ids.shape[1] - prefix_len,
-        device=device,
-        dtype=torch.float32,
-    )
-
-    # 从 KV Cache 中获取已处理的长度
-    kv_len = model.past_key_values[0][0].shape[2]
-    position_ids = model.full_position_ids
-
-    # Base Model Forward (Prefill)
-    outputs, hidden_states = model(
-        input_ids=input_ids[:, kv_len:],
-        attention_mask=attention_mask,
-        position_ids=position_ids[kv_len:],
-        past_key_values=model.past_key_values,
-        output_orig=False,
-    )
-
-    # 提取各分支 Tip 的 Logits
-    tips_hidden = hidden_states[:, tips_indices - kv_len, :]
-    tips_logits = model.base_model.lm_head(tips_hidden)
-    current_logits = tips_logits.squeeze(0)  # [num_para, vocab]
-
-    # Sample Root Tokens
-    if logits_processor is not None:
-        current_logits = logits_processor(None, current_logits)
-        probs = torch.nn.functional.softmax(current_logits, dim=-1)
-        root_tokens = torch.multinomial(probs, num_samples=1)
-    else:
-        root_tokens = torch.argmax(current_logits, dim=-1, keepdim=True)
-
-    # 准备 Draft 模型输入
-    draft_input_ids = torch.cat([draft_input_ids, root_tokens], dim=1)
-
-    # 处理 Hidden States for Eagle Layer
-    ea_device = model.eagle_layer.lm_head.weight.device
-    if outputs["hidden_states"][0].device != ea_device:
-        outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-    packed_hidden = torch.cat(outputs["hidden_states"], dim=-1)[0]
-
-    # 提取各分支的 Hidden States
-    branch_hidden_list = []
-    for i in range(num_para):
-        start = branch_begins[i]
-        end = start + branch_lengths[i]
-        branch_hidden_list.append(packed_hidden[start - prefix_len:end - prefix_len])
-    
-    batched_hidden = stack_with_left_padding(branch_hidden_list, pad_id=0, device=device)
-
-    # Generate Draft Tree
-    draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-        model.eagle_layer.generate_draft_tree(batched_hidden, draft_input_ids, prefix_len=prefix_len)
-
-    return (
-        input_ids, draft_tokens, retrieve_indices, tree_mask,
-        tree_position_ids, hidden_states
-    )
-
-
 # =============================================================================
-# 3. Verification (验证)
-# =============================================================================
-
-def verify_step_single(
-    model,
-    tree_candidates: torch.Tensor,
-    past_key_values,
-    tree_position_ids: torch.Tensor,
-    input_ids: torch.Tensor,
-    retrieve_indices: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, dict]:
-    """
-    单序列模式：Verify 步骤 (Base Model 验证)
-    
-    Args:
-        model: SpecSoT 模型
-        tree_candidates: 候选 tokens [1, tree_size]
-        past_key_values: KV Cache
-        tree_position_ids: 树位置编码 [1, tree_size]
-        input_ids: 当前输入 [1, seq_len]
-        retrieve_indices: 检索索引 [num_leaves, depth]
-        
-    Returns:
-        logits: 验证后的 logits [num_leaves, depth, vocab]
-        hidden_state: 隐藏状态
-        outputs: 模型原始输出
-    """
-    # 计算绝对位置
-    position_ids = tree_position_ids + input_ids.shape[1]
-    if position_ids is not None and position_ids.dim() == 1:
-        position_ids = position_ids.unsqueeze(0)
-
-    # Base Model Forward
-    outputs, tree_logits, hidden_state = model(
-        tree_candidates,
-        output_orig=True,
-        past_key_values=past_key_values,
-        position_ids=position_ids,
-    )
-
-    # 处理 Hidden States for Eagle Layer (if Eagle3)
-    if model.use_eagle3:
-        ea_device = model.eagle_layer.lm_head.weight.device
-        if outputs["hidden_states"][0].device != ea_device:
-            outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-        hidden_state = torch.cat(outputs["hidden_states"], dim=-1)
-
-    # 按检索索引重组 logits
-    logits = tree_logits[0, retrieve_indices]
-    
-    return logits, hidden_state, outputs
-
-
-def verify_step_parallel(
-    model,
-    draft_tokens: torch.Tensor,
-    tree_position_ids: torch.Tensor,
-    tree_mask: torch.Tensor,
-    num_nodes: int,
-    branch_index_map: torch.Tensor,
-    active_branches: List[int],
-    eagle_full_position_ids: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    并行模式：Verify 步骤 (Parallel Base Model 验证)
-    
-    该函数包含并行验证掩码构建和 Base Model 前向传播两个步骤。
-    
-    Args:
-        model: SpecSoT 模型
-        draft_tokens: Draft tokens [num_para, num_nodes]
-        tree_position_ids: Tree 位置编码 [num_para, num_nodes]
-        tree_mask: Draft Tree 的掩码 [num_para, 1, num_nodes, num_nodes]
-        num_nodes: 每个分支的 Draft 节点数
-        branch_index_map: 分支索引映射
-        active_branches: 当前活跃的分支列表
-        eagle_full_position_ids: Eagle Layer 的完整位置编码
-        
-    Returns:
-        logits: [num_para, num_nodes, vocab_size]
-        hidden_states: 隐藏状态
-    """
-    device = draft_tokens.device
-    num_para = draft_tokens.shape[0]
-    current_length = model.current_length_data[0].item()
-    
-    # =========================================================================
-    # Step 1: 构建并行验证的注意力掩码
-    # =========================================================================
-    history_bim = branch_index_map[:current_length]
-    packed_draft_len = num_para * num_nodes
-    
-    # 初始化 Cross Mask (全部遮蔽)
-    cross_mask = torch.full(
-        (1, 1, packed_draft_len, current_length),
-        torch.finfo(torch.float32).min, device=device
-    )
-    
-    # 计算 Draft tokens 的分支归属
-    active_ids_tensor = torch.tensor(active_branches, device=device)
-    draft_branch_ids = active_ids_tensor.repeat_interleave(num_nodes)
-    
-    # Prefix 全部可见 (BIM == -1)
-    is_prefix = (history_bim == -1).view(1, 1, 1, -1)
-    cross_mask.masked_fill_(is_prefix, 0)
-    
-    # 同分支可见
-    draft_ids_view = draft_branch_ids.view(1, 1, -1, 1)
-    hist_ids_view = history_bim.view(1, 1, 1, -1)
-    is_same_branch = (draft_ids_view == hist_ids_view)
-    cross_mask.masked_fill_(is_same_branch, 0)
-    
-    # 构建 Draft Block Mask (块对角)
-    converted_tree_mask = torch.where(
-        tree_mask == 1, 0.0, torch.finfo(torch.float32).min
-    )
-    draft_block_mask = torch.full(
-        (packed_draft_len, packed_draft_len),
-        torch.finfo(torch.float32).min, device=device
-    )
-    for i in range(num_para):
-        st, ed = i * num_nodes, (i + 1) * num_nodes
-        draft_block_mask[st:ed, st:ed] = converted_tree_mask[i, 0, :, :]
-
-    draft_block_mask = draft_block_mask.unsqueeze(0).unsqueeze(0)
-    
-    # 合并
-    combined_mask = torch.cat([cross_mask, draft_block_mask], dim=-1)
-    
-    # =========================================================================
-    # Step 2: Base Model Forward
-    # =========================================================================
-    flat_draft_tokens = draft_tokens.reshape(1, -1)
-    
-    # 计算绝对位置
-    current_tip_pos = eagle_full_position_ids[:, -1].unsqueeze(-1)
-    abs_draft_pos = tree_position_ids + current_tip_pos + 1
-    flat_draft_pos = abs_draft_pos.view(1, -1)
-    
-    # Base Model Forward
-    outputs, hidden_states = model(
-        flat_draft_tokens,
-        past_key_values=model.past_key_values,
-        attention_mask=combined_mask,
-        position_ids=flat_draft_pos,
-        output_orig=False,
-    )
-    
-    # 计算 Logits
-    logits = model.base_model.lm_head(hidden_states)
-    logits = logits.view(num_para, num_nodes, -1)
-    
-    # 处理 Hidden States for Eagle Layer
-    ea_device = model.eagle_layer.lm_head.weight.device
-    if outputs["hidden_states"][0].device != ea_device:
-        outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-    hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
-    
-    return logits, hidden_states
-
-
-# =============================================================================
-# 4. Parallel Evaluation (并行评估)
+# 3. Verification Utilities
 # =============================================================================
 
 # =============================================================================
