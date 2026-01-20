@@ -49,7 +49,7 @@ class DistributedConfig:
     base_port: int = 45000
     comm_mode: str = "ring"
     node_addresses: Optional[Dict[int, str]] = None
-    startup_delay: float = 2.0
+    startup_delay: float = 3.0
     chunk_size: int = 128
     
     def __post_init__(self):
@@ -243,7 +243,7 @@ class DistributedConfig:
             return "DistributedConfig(enabled=False)"
         return (
             f"DistributedConfig("
-            f"rank={self.rank}/{self.world_size}, "
+            f"rank={self.rank}/{self.world_size-1}, "
             f"layer_splits={self.layer_splits}, "
             f"comm_mode={self.comm_mode})"
         )

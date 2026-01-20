@@ -3,6 +3,11 @@
 P2P通信管理器
 
 采用直接发送策略：每个rank直接向目标rank发送消息
+
+日志记录说明：
+- DEBUG: 详细的发送数据信息（tensor形状、大小）
+- INFO: 重要发送事件
+- WARNING: 发送失败或异常
 """
 
 import zmq
@@ -10,7 +15,7 @@ import torch
 import time
 from typing import Dict, Tuple, Optional
 
-from .base_comm_manager import ZMQCommManagerBase
+from .base_comm_manager import ZMQCommManagerBase, get_tensor_info
 from .comm_utils import (
     Message,
     MessageType,
@@ -33,6 +38,8 @@ class P2PCommManager(ZMQCommManagerBase):
     
     def _setup_sockets(self):
         """设置P2P模式的socket连接"""
+        self.logger.info(f"[INIT] 初始化 P2P 模式 socket 连接...")
+        
         # 先设置接收socket（绑定端口）
         for other_rank in range(self.world_size):
             if other_rank != self.rank:
@@ -41,7 +48,7 @@ class P2PCommManager(ZMQCommManagerBase):
                 socket.setsockopt(zmq.RCVHWM, 1000)
                 socket.bind(f"tcp://*:{port}")
                 self.recv_sockets[other_rank] = socket
-                self.logger.debug(f"绑定接收端口 {port} (from rank {other_rank})")
+                self.logger.info(f"[BIND] 绑定接收端口 {port} (接收来自 rank {other_rank} 的消息)")
         
         # 等待所有节点设置好接收端口
         time.sleep(1)
@@ -56,13 +63,13 @@ class P2PCommManager(ZMQCommManagerBase):
                 socket.setsockopt(zmq.LINGER, 0)
                 socket.connect(f"tcp://{addr}:{port}")
                 self.send_sockets[other_rank] = socket
-                self.logger.debug(f"连接到 rank {other_rank} 端口 {port}")
+                self.logger.info(f"[CONNECT] 连接到 rank {other_rank} ({addr}:{port})")
         
-        self.logger.info(f"P2P模式初始化完成: {len(self.send_sockets)} send, {len(self.recv_sockets)} recv")
+        self.logger.info(f"[INIT_OK] P2P 模式初始化完成: {len(self.send_sockets)} 发送连接, {len(self.recv_sockets)} 接收连接")
     
     def _send_worker(self):
         """P2P模式发送线程：按优先级获取消息并直接发送"""
-        self.logger.info("发送线程启动 (P2P模式)")
+        self.logger.info("[THREAD] 发送线程启动 (P2P模式)")
         
         while self.is_running:
             try:
@@ -73,15 +80,86 @@ class P2PCommManager(ZMQCommManagerBase):
                 # 直接发送到目标
                 dst = msg.dst_rank
                 if dst in self.send_sockets:
+                    send_start = time.time()
                     data = MessageSerializer.serialize(msg)
                     self.send_sockets[dst].send(data)
+                    send_time = time.time() - send_start
                     self._update_send_stats(msg.msg_type)
                     
+                    # 记录发送日志
+                    self._log_send_event(msg, len(data), send_time)
+                else:
+                    self.logger.warning(f"[SEND_ERR] 目标 rank {dst} 不存在于发送 socket 列表中")
+                    
             except Exception as e:
-                self.logger.error(f"发送线程出错: {e}", exc_info=True)
+                self.logger.error(f"[THREAD_ERR] 发送线程出错: {e}", exc_info=True)
         
-        self.logger.info("发送线程退出")
+        self.logger.info("[THREAD] 发送线程退出")
     
+    def _log_send_event(self, msg: Message, data_size: int, send_time: float):
+        """记录发送事件的详细日志"""
+        size_kb = data_size / 1024
+        msg_type_name = MessageType(msg.msg_type).name
+        
+        if msg.msg_type == MessageType.DRAFT_TOKENS:
+            data = msg.data
+            if isinstance(data, dict):
+                draft_shape = tuple(data.get('draft_tokens', torch.empty(0)).shape)
+                self.logger.info(
+                    f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                    f"seq_id={msg.seq_id}, draft_shape={draft_shape}, "
+                    f"size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
+                )
+            else:
+                self.logger.info(f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | seq_id={msg.seq_id}")
+                
+        elif msg.msg_type == MessageType.HIDDEN:
+            hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+            self.logger.info(
+                f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                f"seq_id={msg.seq_id}, chunk_idx={msg.chunk_idx}, "
+                f"size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
+            )
+            self.logger.debug(f"  hidden: {hidden_info}")
+            
+        elif msg.msg_type == MessageType.EAGLE_INPUT_HIDDEN:
+            hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+            self.logger.info(
+                f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                f"seq_id={msg.seq_id}, layer_idx={msg.layer_idx}, "
+                f"size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
+            )
+            self.logger.debug(f"  hidden: {hidden_info}")
+            
+        elif msg.msg_type == MessageType.BASE_CACHE:
+            if isinstance(msg.data, tuple) and len(msg.data) == 2:
+                key_shape = tuple(msg.data[0].shape)
+                self.logger.info(
+                    f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                    f"seq_id={msg.seq_id}, layer_idx={msg.layer_idx}, chunk_idx={msg.chunk_idx}, "
+                    f"key_shape={key_shape}, size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
+                )
+            else:
+                self.logger.info(
+                    f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                    f"layer={msg.layer_idx}, chunk={msg.chunk_idx}"
+                )
+                
+        elif msg.msg_type == MessageType.EAGLE_CACHE:
+            is_incremental = (msg.layer_idx != -1)
+            if isinstance(msg.data, tuple) and len(msg.data) == 2:
+                key_shape = tuple(msg.data[0].shape)
+                self.logger.info(
+                    f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                    f"seq_id={msg.seq_id}, chunk_idx={msg.chunk_idx}, incremental={is_incremental}, "
+                    f"key_shape={key_shape}, size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
+                )
+            else:
+                self.logger.info(
+                    f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
+                    f"chunk={msg.chunk_idx}, incremental={is_incremental}"
+                )
+
     def _update_send_stats(self, msg_type: MessageType):
         """更新发送统计"""
         if msg_type == MessageType.DRAFT_TOKENS:
@@ -115,6 +193,13 @@ class P2PCommManager(ZMQCommManagerBase):
         
         targets = [r for r in range(self.world_size) if r != self.rank] if dst_rank == -1 else [dst_rank]
         
+        self.logger.info(
+            f"[QUEUE] DRAFT_TOKENS -> targets={targets} | "
+            f"draft_shape={tuple(draft_tokens.shape)}, "
+            f"retrieve_shape={tuple(retrieve_indices.shape)}, "
+            f"mask_shape={tuple(tree_mask.shape)}"
+        )
+        
         for target in targets:
             msg = Message(
                 msg_type=MessageType.DRAFT_TOKENS,
@@ -129,6 +214,13 @@ class P2PCommManager(ZMQCommManagerBase):
     
     def send_hidden(self, hidden: torch.Tensor, dst_rank: int, chunk_idx: int = -1) -> None:
         """P2P模式：直接发送到目标rank"""
+        hidden_info = get_tensor_info(hidden) if torch.is_tensor(hidden) else str(type(hidden))
+        self.logger.info(
+            f"[QUEUE] HIDDEN -> rank {dst_rank} | "
+            f"chunk_idx={chunk_idx}"
+        )
+        self.logger.debug(f"  hidden: {hidden_info}")
+        
         msg = Message(
             msg_type=MessageType.HIDDEN,
             src_rank=self.rank,
@@ -148,6 +240,13 @@ class P2PCommManager(ZMQCommManagerBase):
         dst_rank: int
     ) -> None:
         """P2P模式：直接发送到最后一个rank"""
+        hidden_info = get_tensor_info(hidden) if torch.is_tensor(hidden) else str(type(hidden))
+        self.logger.info(
+            f"[QUEUE] EAGLE_INPUT_HIDDEN -> rank {dst_rank} | "
+            f"layer_idx={layer_idx}"
+        )
+        self.logger.debug(f"  hidden: {hidden_info}")
+        
         msg = Message(
             msg_type=MessageType.EAGLE_INPUT_HIDDEN,
             src_rank=self.rank,
@@ -168,6 +267,12 @@ class P2PCommManager(ZMQCommManagerBase):
         chunk_idx: int = -1
     ) -> None:
         """P2P模式：直接发送cache到目标rank"""
+        key_shape = tuple(kv_cache[0].shape) if kv_cache and len(kv_cache) >= 1 else "N/A"
+        self.logger.debug(
+            f"[QUEUE] BASE_CACHE -> rank {dst_rank} | "
+            f"layer_idx={layer_idx}, chunk_idx={chunk_idx}, key_shape={key_shape}"
+        )
+        
         msg = Message(
             msg_type=MessageType.BASE_CACHE,
             src_rank=self.rank,
@@ -189,6 +294,12 @@ class P2PCommManager(ZMQCommManagerBase):
         chunk_idx: int = -1
     ) -> None:
         """P2P模式：直接发送eagle cache到目标rank"""
+        key_shape = tuple(kv_cache[0].shape) if kv_cache and len(kv_cache) >= 1 else "N/A"
+        self.logger.debug(
+            f"[QUEUE] EAGLE_CACHE -> rank {dst_rank} | "
+            f"chunk_idx={chunk_idx}, incremental={is_incremental}, key_shape={key_shape}"
+        )
+        
         msg = Message(
             msg_type=MessageType.EAGLE_CACHE,
             src_rank=self.rank,
@@ -216,14 +327,19 @@ class P2PCommManager(ZMQCommManagerBase):
             incremental_kv: 增量KV cache (new_key, new_value)
             chunk_idx: chunk索引
         """
-        self.logger.info(f"广播eagle stable_kv: chunk_idx={chunk_idx}, key shape={incremental_kv[0].shape}")
+        key_shape = tuple(incremental_kv[0].shape)
+        targets = [r for r in range(self.world_size) if r != self.rank]
+        
+        self.logger.info(
+            f"[BROADCAST] EAGLE_STABLE_KV -> targets={targets} | "
+            f"chunk_idx={chunk_idx}, key_shape={key_shape}"
+        )
         
         # 向所有其他rank发送
-        for dst_rank in range(self.world_size):
-            if dst_rank != self.rank:
-                self.send_eagle_cache_async(
-                    kv_cache=incremental_kv,
-                    dst_rank=dst_rank,
-                    is_incremental=True,
-                    chunk_idx=chunk_idx,
-                )
+        for dst_rank in targets:
+            self.send_eagle_cache_async(
+                kv_cache=incremental_kv,
+                dst_rank=dst_rank,
+                is_incremental=True,
+                chunk_idx=chunk_idx,
+            )

@@ -2,6 +2,7 @@
 """
 ZMQ通信管理器工具
 
+包含消息类型、优先级、序列化工具等通信基础设施
 """
 
 import zmq
@@ -12,10 +13,101 @@ import time
 import pickle
 import io
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from enum import IntEnum
+
+
+# ==================== 日志设置 ====================
+
+def setup_comm_utils_logger(rank: int = -1, log_dir: str = "logs") -> logging.Logger:
+    """
+    设置comm_utils模块的日志器
+    
+    Args:
+        rank: 当前进程rank，-1表示自动检测
+        log_dir: 日志目录
+        
+    Returns:
+        配置好的logger
+    """
+    if rank < 0:
+        rank = int(os.environ.get('RANK', os.environ.get('LOCAL_RANK', 0)))
+    
+    logger_name = f"CommUtils.Rank{rank}"
+    logger = logging.getLogger(logger_name)
+    
+    if not logger.handlers:
+        logger.setLevel(logging.DEBUG)
+        
+        # 格式化器
+        formatter = logging.Formatter(
+            f'%(asctime)s.%(msecs)03d - Rank{rank} - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        
+        # 控制台处理器
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # 文件处理器
+        os.makedirs(log_dir, exist_ok=True)
+        file_handler = logging.FileHandler(
+            os.path.join(log_dir, f"comm_utils_rank{rank}.log"),
+            mode='a'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        
+        logger.propagate = False
+    
+    return logger
+
+
+def get_data_info(data: Any) -> str:
+    """
+    获取数据的详细信息字符串
+    
+    Args:
+        data: 数据（可以是tensor、tuple等）
+        
+    Returns:
+        描述字符串
+    """
+    if isinstance(data, torch.Tensor):
+        size_bytes = data.numel() * data.element_size()
+        size_kb = size_bytes / 1024
+        if size_kb > 1024:
+            size_str = f"{size_kb/1024:.2f}MB"
+        else:
+            size_str = f"{size_kb:.2f}KB"
+        return f"Tensor(shape={list(data.shape)}, dtype={data.dtype}, device={data.device}, size={size_str})"
+    elif isinstance(data, tuple) and len(data) == 2:
+        if isinstance(data[0], torch.Tensor) and isinstance(data[1], torch.Tensor):
+            key, value = data
+            total_size = (key.numel() + value.numel()) * key.element_size()
+            size_str = f"{total_size/1024/1024:.2f}MB"
+            return f"KVCache(key={list(key.shape)}, value={list(value.shape)}, size={size_str})"
+    elif isinstance(data, tuple) and len(data) == 4:
+        # draft tokens: (draft_tokens, retrieve_indices, tree_mask, tree_position_ids)
+        return f"DraftTokens({len(data)} tensors)"
+    return f"{type(data).__name__}"
+
+
+# 模块级logger（延迟初始化）
+_module_logger = None
+
+def _get_logger() -> logging.Logger:
+    """获取或创建模块级logger"""
+    global _module_logger
+    if _module_logger is None:
+        _module_logger = setup_comm_utils_logger()
+    return _module_logger
 
 # ==================== 枚举和数据类 ====================
 
@@ -101,7 +193,7 @@ class ThreadSafeQueue:
     线程安全的队列，支持按消息类型存储和获取
     """
     
-    def __init__(self):
+    def __init__(self, rank: int = -1):
         self._queues: Dict[MessageType, queue.Queue] = {
             MessageType.DRAFT_TOKENS: queue.Queue(),
             MessageType.HIDDEN: queue.Queue(),
@@ -111,13 +203,24 @@ class ThreadSafeQueue:
         }
         self._lock = threading.Lock()
         self._not_empty = threading.Condition(self._lock)
+        self._rank = rank if rank >= 0 else int(os.environ.get('RANK', os.environ.get('LOCAL_RANK', 0)))
+        self._put_count = 0
+        self._get_count = 0
+        self.logger = logging.getLogger(f"ThreadSafeQueue.Rank{self._rank}")
         
     def put(self, msg: Message):
         """放入消息"""
         msg_type = msg.msg_type
         with self._not_empty:
             self._queues[msg_type].put(msg)
+            self._put_count += 1
             self._not_empty.notify_all()
+        self.logger.debug(
+            f"[QUEUE_PUT] type={MessageType(msg_type).name}, "
+            f"src={msg.src_rank}, dst={msg.dst_rank}, "
+            f"layer={msg.layer_idx}, chunk={msg.chunk_idx}, "
+            f"queue_size={self._queues[msg_type].qsize()}"
+        )
     
     def get_by_type(self, msg_type: MessageType, timeout: float = None) -> Optional[Message]:
         """获取特定类型的消息"""
@@ -126,7 +229,14 @@ class ThreadSafeQueue:
         while True:
             try:
                 # 尝试非阻塞获取
-                return self._queues[msg_type].get_nowait()
+                msg = self._queues[msg_type].get_nowait()
+                self._get_count += 1
+                self.logger.debug(
+                    f"[QUEUE_GET] type={MessageType(msg_type).name}, "
+                    f"src={msg.src_rank}, dst={msg.dst_rank}, "
+                    f"layer={msg.layer_idx}, chunk={msg.chunk_idx}"
+                )
+                return msg
             except queue.Empty:
                 pass
             
@@ -134,6 +244,7 @@ class ThreadSafeQueue:
             if timeout is not None:
                 remaining = deadline - time.time()
                 if remaining <= 0:
+                    self.logger.debug(f"[QUEUE_TIMEOUT] type={MessageType(msg_type).name}, timeout={timeout}s")
                     return None
                 # 等待一小段时间后重试
                 with self._not_empty:
@@ -239,7 +350,13 @@ class TensorSerializer:
             'dtype': tensor.dtype,
             'device': str(tensor.device)
         }, buffer)
-        return buffer.getvalue()
+        data = buffer.getvalue()
+        logger = _get_logger()
+        logger.debug(
+            f"[SERIALIZE] Tensor | shape={list(tensor.shape)}, "
+            f"dtype={tensor.dtype}, size={len(data)/1024:.2f}KB"
+        )
+        return data
     
     @staticmethod
     def deserialize(data: bytes, device: str = 'cuda') -> torch.Tensor:
@@ -247,6 +364,11 @@ class TensorSerializer:
         buffer = io.BytesIO(data)
         saved = torch.load(buffer, weights_only=False)
         tensor = saved['data'].to(device)
+        logger = _get_logger()
+        logger.debug(
+            f"[DESERIALIZE] Tensor | shape={list(tensor.shape)}, "
+            f"dtype={tensor.dtype}, device={device}, size={len(data)/1024:.2f}KB"
+        )
         return tensor
 
 
@@ -256,8 +378,13 @@ class MessageSerializer:
     @staticmethod
     def serialize(msg: Message) -> bytes:
         """序列化消息"""
+        logger = _get_logger()
+        serialize_start = time.time()
+        
         # 处理tensor数据
         data_to_serialize = msg.data
+        data_info = get_data_info(msg.data)
+        
         if isinstance(msg.data, torch.Tensor):
             data_to_serialize = ('tensor', TensorSerializer.serialize(msg.data))
         elif isinstance(msg.data, tuple) and len(msg.data) == 2:
@@ -266,6 +393,15 @@ class MessageSerializer:
                 data_to_serialize = ('kv_cache', 
                     TensorSerializer.serialize(msg.data[0]),
                     TensorSerializer.serialize(msg.data[1]))
+        elif isinstance(msg.data, tuple) and len(msg.data) == 4:
+            # Draft tokens: 包含多个tensor
+            serialized_items = []
+            for item in msg.data:
+                if isinstance(item, torch.Tensor):
+                    serialized_items.append(('tensor', TensorSerializer.serialize(item)))
+                else:
+                    serialized_items.append(item)
+            data_to_serialize = ('draft_tokens', serialized_items)
         
         msg_dict = {
             'msg_type': int(msg.msg_type),
@@ -278,11 +414,24 @@ class MessageSerializer:
             'timestamp': msg.timestamp,
             'original_src': msg.original_src,
         }
-        return pickle.dumps(msg_dict)
+        result = pickle.dumps(msg_dict)
+        
+        serialize_time = (time.time() - serialize_start) * 1000
+        logger.debug(
+            f"[MSG_SERIALIZE] type={MessageType(msg.msg_type).name}, "
+            f"src={msg.src_rank}->dst={msg.dst_rank}, "
+            f"layer={msg.layer_idx}, chunk={msg.chunk_idx}, "
+            f"data={data_info}, size={len(result)/1024:.2f}KB, "
+            f"time={serialize_time:.2f}ms"
+        )
+        return result
     
     @staticmethod
     def deserialize(data: bytes, device: str = 'cuda') -> Message:
         """反序列化消息"""
+        logger = _get_logger()
+        deserialize_start = time.time()
+        
         msg_dict = pickle.loads(data)
         
         # 处理tensor数据
@@ -294,8 +443,16 @@ class MessageSerializer:
                 key = TensorSerializer.deserialize(raw_data[1], device)
                 value = TensorSerializer.deserialize(raw_data[2], device)
                 msg_dict['data'] = (key, value)
+            elif raw_data[0] == 'draft_tokens':
+                deserialized_items = []
+                for item in raw_data[1]:
+                    if isinstance(item, tuple) and item[0] == 'tensor':
+                        deserialized_items.append(TensorSerializer.deserialize(item[1], device))
+                    else:
+                        deserialized_items.append(item)
+                msg_dict['data'] = tuple(deserialized_items)
         
-        return Message(
+        msg = Message(
             msg_type=MessageType(msg_dict['msg_type']),
             src_rank=msg_dict['src_rank'],
             dst_rank=msg_dict['dst_rank'],
@@ -306,16 +463,47 @@ class MessageSerializer:
             timestamp=msg_dict['timestamp'],
             original_src=msg_dict.get('original_src', -1),
         )
+        
+        deserialize_time = (time.time() - deserialize_start) * 1000
+        data_info = get_data_info(msg.data)
+        logger.debug(
+            f"[MSG_DESERIALIZE] type={MessageType(msg.msg_type).name}, "
+            f"src={msg.src_rank}->dst={msg.dst_rank}, "
+            f"layer={msg.layer_idx}, chunk={msg.chunk_idx}, "
+            f"data={data_info}, size={len(data)/1024:.2f}KB, "
+            f"time={deserialize_time:.2f}ms"
+        )
+        return msg
     
     @staticmethod
     def serialize_batch(messages: List[Message]) -> bytes:
         """批量序列化消息（用于ring模式聚合发送）"""
+        logger = _get_logger()
+        batch_start = time.time()
+        
         serialized_list = [MessageSerializer.serialize(msg) for msg in messages]
-        return pickle.dumps(serialized_list)
+        result = pickle.dumps(serialized_list)
+        
+        batch_time = (time.time() - batch_start) * 1000
+        logger.debug(
+            f"[BATCH_SERIALIZE] count={len(messages)}, "
+            f"total_size={len(result)/1024:.2f}KB, time={batch_time:.2f}ms"
+        )
+        return result
     
     @staticmethod
     def deserialize_batch(data: bytes, device: str = 'cuda') -> List[Message]:
         """批量反序列化消息"""
+        logger = _get_logger()
+        batch_start = time.time()
+        
         serialized_list = pickle.loads(data)
-        return [MessageSerializer.deserialize(s, device) for s in serialized_list]
+        messages = [MessageSerializer.deserialize(s, device) for s in serialized_list]
+        
+        batch_time = (time.time() - batch_start) * 1000
+        logger.debug(
+            f"[BATCH_DESERIALIZE] count={len(messages)}, "
+            f"size={len(data)/1024:.2f}KB, time={batch_time:.2f}ms"
+        )
+        return messages
 

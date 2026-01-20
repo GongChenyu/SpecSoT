@@ -56,7 +56,8 @@ from .distributed import (
 )
 
 # Prompts
-from .prompts import base_prompt, skeleton_trigger_zh, parallel_trigger_zh
+from .prompts import base_prompt_zh, skeleton_trigger_zh, parallel_trigger_zh
+from .prompts import base_prompt_en, skeleton_trigger_en, parallel_trigger_en
 
 __all__ = [
     # 主模型
@@ -90,7 +91,10 @@ __all__ = [
     "ZMQCommManagerBase",
     
     # Prompts
-    "base_prompt",
+    "base_prompt_zh",
     "skeleton_trigger_zh",
     "parallel_trigger_zh",
+    "base_prompt_en",
+    "skeleton_trigger_en",
+    "parallel_trigger_en",
 ]

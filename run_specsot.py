@@ -181,13 +181,14 @@ def main():
     )
     parser.add_argument(
         "--enable_parallel",
-        action="store_true",
+        type=bool,
+        default=True,
         help="是否启用骨架并行模式"
     )
     parser.add_argument(
         "--max_new_tokens", 
         type=int, 
-        default=100,
+        default=3000,
         help="最大生成 token 数"
     )
     parser.add_argument(
@@ -200,7 +201,8 @@ def main():
     # 分布式推理参数
     parser.add_argument(
         "--distributed",
-        action="store_true",
+        type=bool,
+        default=False,
         help="启用分布式推理"
     )
     parser.add_argument(
@@ -230,7 +232,7 @@ def main():
     parser.add_argument(
         "--comm_mode",
         type=str,
-        default="ring",
+        default="p2p",
         choices=["p2p", "ring"],
         help="通信模式"
     )
@@ -243,7 +245,7 @@ def main():
     parser.add_argument(
         "--seed",
         type=int,
-        default=36,
+        default=72,
         help="随机种子（用于保证结果可复现）"
     )
     
@@ -266,7 +268,7 @@ def main():
     print(f"Enable Parallel: {args.enable_parallel}")
     print(f"Random Seed: {args.seed}")
     if args.distributed:
-        print(f"Distributed Mode: rank={args.rank}/{args.world_size}")
+        print(f"Distributed Mode: rank={args.rank}/{args.world_size-1}")
         print(f"Layer Splits: {args.layer_splits}")
         print(f"Comm Mode: {args.comm_mode}")
         print(f"Chunk Size: {args.chunk_size}")
@@ -299,7 +301,7 @@ def main():
         ea_model_path=args.eagle_model_path,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
-        device_map="auto",
+        device_map="cuda:0",   # "auto", "cuda:0", etc.
         total_token=40,
         depth=4,
         top_k=6,
@@ -415,7 +417,7 @@ def main():
 
 if __name__ == "__main__":
     # 设置随机种子
-    seed = 42
+    seed = 72
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

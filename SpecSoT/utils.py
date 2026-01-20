@@ -50,7 +50,7 @@ from transformers.generation.logits_process import (
     TopPLogitsWarper,
 )
 from .prompts import (
-    base_prompt, skeleton_trigger_zh, parallel_trigger_zh,
+    base_prompt_zh, skeleton_trigger_zh, parallel_trigger_zh,
     base_prompt_en, skeleton_trigger_en, parallel_trigger_en,
 )
 from .logits_processor import SemanticLogitsProcessor
@@ -826,7 +826,7 @@ def prepare_skeleton_input(
     """
     if model_type == 'qwen':
         # Qwen 模型使用中文 prompt
-        base_prompt_template = base_prompt
+        base_prompt_template = base_prompt_zh
         skeleton_trigger = skeleton_trigger_zh
         print(f"Using Chinese prompts for {model_type} model")
     else:
@@ -835,9 +835,10 @@ def prepare_skeleton_input(
         skeleton_trigger = skeleton_trigger_en
         print(f"Using English prompts for {model_type} model")
     
-    task_input = base_prompt_template.format(user_question=task_prompt)
+    task_input = base_prompt_template.format(user_inputs=task_prompt)
+    skeleton_input = skeleton_trigger.format(user_inputs=task_prompt)
     task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
-    skeleton_input_ids = tokenizer([skeleton_trigger], return_tensors="pt").input_ids.to(device)
+    skeleton_input_ids = tokenizer([skeleton_input], return_tensors="pt").input_ids.to(device)
     input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
     
     return input_ids, task_input_ids
@@ -941,6 +942,7 @@ def prepare_parallel_branches(
     tokenizer,
     branch_headers: List[List[int]],
     model_type: str = 'qwen',
+    task_prompt: str = "",
 ) -> Tuple[List[List[int]], List[int]]:
     """
     准备并行分支的输入（添加指令前缀）
@@ -972,12 +974,14 @@ def prepare_parallel_branches(
     clean_branches = []
     instruction_lengths = []
     
-    for br in branch_headers:
+    for i, br in enumerate(branch_headers):
         branch_str = tokenizer.decode(br)
         instruction = parallel_trigger.format(
+            user_inputs=task_prompt, 
             skeleton_context=result_skeleton_str,
-            current_point=branch_str
+            current_point=branch_str,
         )
+        # print(f"Branch ID:{i}, Instruction: {instruction}")
         instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
         full_branch = instruction_ids + br
         clean_branches.append(full_branch)

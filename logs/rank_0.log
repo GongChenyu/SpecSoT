@@ -1,134 +1,776 @@
+2026-01-20 21:51:38,033 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:95] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_0_20260120_215138.log
+2026-01-20 21:51:38,033 - SpecSoT-Rank0 - INFO - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_0_20260120_215138.log
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:283] - ============================================================
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - ============================================================
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:284] - SpecSoT Worker 启动
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - SpecSoT Worker 启动
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:285] - ============================================================
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - ============================================================
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:286] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:287] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:288] - Task: planning
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Task: planning
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:289] - Enable Parallel: True
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Enable Parallel: True
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:290] - Max New Tokens: 3000
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Max New Tokens: 3000
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:291] - Random Seed: 72
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Random Seed: 72
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:294] - Distributed Mode: rank=0/2
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Distributed Mode: rank=0/2
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:295] - Layer Splits: 14,28
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Layer Splits: 14,28
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:296] - Comm Mode: p2p
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Comm Mode: p2p
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:297] - Chunk Size: 128
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Chunk Size: 128
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:298] - Base Port: 45000
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - Base Port: 45000
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:299] - ============================================================
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - ============================================================
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:317] - 分布式配置: DistributedConfig(rank=0/2, layer_splits=[14, 28], comm_mode=p2p)
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - 分布式配置: DistributedConfig(rank=0/2, layer_splits=[14, 28], comm_mode=p2p)
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:322] - >>> 正在加载 SpecSoT 模型...
+2026-01-20 21:51:38,131 - SpecSoT-Rank0 - INFO - >>> 正在加载 SpecSoT 模型...
 `torch_dtype` is deprecated! Use `dtype` instead!
-2026-01-20 11:56:12,704 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
-============================================================
-SpecSoT: Speculative Decoding + Skeleton-of-Thought
-============================================================
-Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
-Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
-Task: planning
-Enable Parallel: True
-Random Seed: 42
-Distributed Mode: rank=0/3
-Layer Splits: 12,24
-Comm Mode: p2p
-Chunk Size: 128
-============================================================
-[Distributed Config] DistributedConfig(rank=0/3, layer_splits=[12, 24], comm_mode=p2p)
-
->>> Loading SpecSoT Model...
 
 Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]
-Loading checkpoint shards:  33%|███▎      | 1/3 [00:00<00:00,  3.35it/s]
-Loading checkpoint shards:  67%|██████▋   | 2/3 [00:00<00:00,  3.37it/s]
-Loading checkpoint shards: 100%|██████████| 3/3 [00:00<00:00,  4.98it/s]
-2026-01-20 11:56:15,872 - DistPrefill-Rank0 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
-2026-01-20 11:56:16,874 - ZMQComm-Rank0 - INFO - P2P模式初始化完成: 2 send, 2 recv
-2026-01-20 11:56:16,874 - DistPrefill-Rank0 - INFO - 等待其他节点就绪 (2.0秒)...
-2026-01-20 11:56:18,877 - ZMQComm-Rank0 - INFO - 接收线程启动
-2026-01-20 11:56:18,877 - ZMQComm-Rank0 - INFO - 发送线程启动 (P2P模式)
-2026-01-20 11:56:18,877 - ZMQComm-Rank0 - INFO - 通信管理器已启动 (P2PCommManager)
-2026-01-20 11:56:18,878 - DistPrefill-Rank0 - INFO - 通信管理器已启动
-[SpecSoT] 分布式推理已启用: DistributedConfig(rank=0/3, layer_splits=[12, 24], comm_mode=p2p)
-Model loaded successfully!
+Loading checkpoint shards:  33%|███▎      | 1/3 [00:00<00:00,  3.16it/s]
+Loading checkpoint shards:  67%|██████▋   | 2/3 [00:00<00:00,  3.28it/s]
+Loading checkpoint shards: 100%|██████████| 3/3 [00:00<00:00,  4.82it/s]
+2026-01-20 21:51:41.351 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:181] - [INIT] 初始化ZMQ通信管理器 | mode=p2p, base_port=45000
+2026-01-20 21:51:41,351 - DistPrefill-Rank0 - INFO - [INIT] 初始化ZMQ通信管理器 | mode=p2p, base_port=45000
+2026-01-20 21:51:41,351 - ZMQComm-Rank0 - INFO - [INIT] 初始化 P2P 模式 socket 连接...
+2026-01-20 21:51:41,352 - ZMQComm-Rank0 - INFO - [BIND] 绑定接收端口 45003 (接收来自 rank 1 的消息)
+2026-01-20 21:51:41,352 - ZMQComm-Rank0 - INFO - [BIND] 绑定接收端口 45006 (接收来自 rank 2 的消息)
+2026-01-20 21:51:42,353 - ZMQComm-Rank0 - INFO - [CONNECT] 连接到 rank 1 (127.0.0.1:45001)
+2026-01-20 21:51:42,353 - ZMQComm-Rank0 - INFO - [CONNECT] 连接到 rank 2 (127.0.0.1:45002)
+2026-01-20 21:51:42,354 - ZMQComm-Rank0 - INFO - [INIT_OK] P2P 模式初始化完成: 2 发送连接, 2 接收连接
+2026-01-20 21:51:42.354 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:193] - [INIT] 等待其他节点就绪 (3.0秒)...
+2026-01-20 21:51:42,354 - DistPrefill-Rank0 - INFO - [INIT] 等待其他节点就绪 (3.0秒)...
+2026-01-20 21:51:45,357 - ZMQComm-Rank0 - INFO - 接收线程启动
+2026-01-20 21:51:45,357 - ZMQComm-Rank0 - INFO - [THREAD] 发送线程启动 (P2P模式)
+2026-01-20 21:51:45,358 - ZMQComm-Rank0 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-20 21:51:45.358 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:198] - [INIT] 通信管理器已启动
+2026-01-20 21:51:45,358 - DistPrefill-Rank0 - INFO - [INIT] 通信管理器已启动
+[SpecSoT] 分布式推理已启用: DistributedConfig(rank=0/2, layer_splits=[14, 28], comm_mode=p2p)
+2026-01-20 21:51:45,359 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:338] - 模型加载完成，耗时: 7.23s
+2026-01-20 21:51:45,359 - SpecSoT-Rank0 - INFO - 模型加载完成，耗时: 7.23s
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:344] - Special Token IDs:
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - INFO - Special Token IDs:
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   para_begin_token_id: 820 -> '####'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   para_end_token_id: 5321 -> '%%%%'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   ellipsis_token_id: 28149 -> '......'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   half_ellipsis_token_id: 1112 -> '...'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   line_break_token_id: 271 -> '
 
-Loaded 1 samples for evaluation.
-
-Generating:   0%|          | 0/1 [00:00<?, ?it/s]2026-01-20 11:56:18,900 - DistPrefill-Rank0 - INFO - 开始分布式Prefill, 负责层: [0, 12), seq_len=371
-2026-01-20 11:56:18,900 - DistPrefill-Rank0 - INFO - 切分为 3 个chunks (chunk_size=128)
-2026-01-20 11:56:21,755 - ZMQComm-Rank0 - INFO - 等待接收 72 个base cache, 3 个eagle cache...
-2026-01-20 11:56:21,760 - ZMQComm-Rank0 - INFO - 所有cache接收完成
-2026-01-20 11:56:21,760 - DistPrefill-Rank0 - INFO - 分布式Prefill完成, 耗时: 2.860s
-
-Generating: 100%|██████████| 1/1 [00:13<00:00, 13.58s/it]
-Generating: 100%|██████████| 1/1 [00:13<00:00, 13.59s/it]
-
+'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   colon_token_id: 25 -> ':'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   cn_colon_token_id: 5122 -> '：'
+2026-01-20 21:51:45,360 - SpecSoT-Rank0 - DEBUG -   colon_new_line_token_id: 510 -> ':
+'
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:223] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - 加载数据集: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:354] - 使用 1 条样本进行评估
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - 使用 1 条样本进行评估
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:369] - 
 ============================================================
-Sample 1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - 
 ============================================================
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:370] - 样本 1/1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - 样本 1/1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:371] - ============================================================
+2026-01-20 21:51:45,366 - SpecSoT-Rank0 - INFO - ============================================================
 Using Chinese prompts for qwen model
-Generated Skeleton: #### 羽毛球运动与器材(723):...
-     这是一段打球被分组
-     ...
-
-【步骤二指令：骨架内容填充】
- 1. 每个'分组标题包含分组描述，涵盖体型、力量、动作、技术、训练频率、营养、休息、睡眠(421):...
-     但请不要使用任何层级结构，不要使用任何格式，比如“拼音缩写，不要使用任何输入骨架。
-   1. 请避免使用，直接输出骨骼。
-】
-#### 技术训练(368):如何通过正确的姿势和投篮动作提高命中率
-#### 力量与体能(521):如何通过增强核心和上肢力量提升投篮稳定性
-#### 心理准备(412):如何通过专注力和心态调整提高投
-Detected 4 parallel branches with predicted lengths: [723, 200, 200, 200]
-Branch 0 finished with EOS.
-Branch 2 finished with EOS.
-Branch 1 finished with EOS.
-Branch 3 finished with EOS.
-All branches finished generation.
-Avg accepted lengths: 0.5066079295154186, Avg draft time: 0.0052s, Avg update time: 0.0011s, Avg verify time: 0.0248s
-Branch 0 Length: 127
-Branch 1 Length: 209
-Branch 2 Length: 151
-Branch 3 Length: 300
-
-[Statistics]
-  Total Time: 13.57s
-  Peak Memory: 5583.12 MB
-  Output Length: 977 tokens
-  Parallel Branches: 4
-  Avg Accept Length: 0.51
-  Avg Draft Time: 5.18 ms
-  Avg Verify Time: 24.82 ms
-  Avg Update Time: 1.13 ms
-
-[Response Preview]
-#### 羽毛球运动与器材(723):...
-     这是一段打球被分组
-     ...
-
-【步骤二指令：骨架内容填充】
- 1. 每个'分组标题包含分组描述，涵盖体型、力量、动作、技术、训练频率、营养、休息、睡眠(421):...
-     但请不要使用任何层级结构，不要使用任何格式，比如“拼音缩写，不要使用任何输入骨架。
-   1. 请避免使用，直接输出骨骼。
-】
-#### 技术训练(368):如何通过正确的姿势和投篮动作提高命中率
-#### 力量与体能(521):如何通过增强核心和上肢力量提升投篮稳定性
-#### 心理准备(412):如何通过专注力和心态调整提高投
-
-#### 羽毛球运动与器材(723):...
-     这是一段打球被分组
-     ...
-
-【步骤二指令： 】
-
-严格约束：
-1. 直接开始撰写该分支的正文内容。
-2. 参考骨架中的预估token长度进行撰写，不要过短或过长。
-3. 禁止输出标题或“####”，禁止输出开场白。
-4. 内容需独立完整，表达简洁，逻辑上能衔接整体骨架。
-5. 禁止重复输出内容，适时结束子分支的回答,结束符号是
-
-#### 技术训练(368):如何通过正确的姿势和投篮动作提高命中率
-正确的投篮姿势和动作是提高命中率的关键。首先，保持正确的站位，双脚与肩同宽，膝盖微屈，身体略微前倾，这样可以保持平衡并增强投篮的稳定性。其次，持球时，手指要自然分开，掌心空出，球应位于指腹部分，这样可以更好地控制球的旋转和发力。投篮时，手臂要自然伸展，从下往上发力，通过手腕的抖动将球投出，避免使用手臂的过度用力，这样可以减少失误。同时，投篮时要保持头部稳定，眼睛注视篮筐，确保投篮方向准确。最后，投篮后要迅速收回手臂，保持身体平衡，为下一次投篮做好准备。此外，练习时要注意保持节奏，避免急躁，通过反复练习来形成肌肉记忆，提高投篮的稳定性和准确性。
-
-#### 力量与体能(521):如何通过增强核心和上肢力量提升投篮稳定性
-核心力量是投篮稳定性的基础，通过强化腹部、背部和臀部肌肉，可以提高身体的平衡性和稳定性，使投篮动作更加流畅。上肢力量则直接影响投篮的力度和准确性，通过增强肩部、手臂和手腕的力量，可以提高投篮时的控制力和爆发力。建议进行深蹲、俯卧撑、引体向上等基础力量训练，同时结合哑铃、弹力带等工具进行针对性练习。此外，保持良好的体能状态，如通过有氧运动提高耐力，有助于在比赛中保持稳定的投篮表现。
-
-#### 心理准备(412):如何通过专注力和心态调整提高
-在篮球比赛中，心理状态对投篮命中率有着重要影响。保持专注和良好的心态是提高命中率的关键。首先，球员需要在投篮前进行深呼吸，帮助自己放松，减少紧张感。其次，专注于投篮动作的细节，如手腕的抖动、手指的发力和球的旋转，而不是过多关注比赛结果或对手的反应。此外，建立积极的自我暗示，如“我能够命中这个球”，可以增强自信心。最后，通过模拟训练和比赛中的心理演练，提高在高压环境下的冷静应对能力。这些方法有助于球员在比赛中保持稳定的心理状态，从而提高投篮命中率。
-</think>
-
-
-
-在篮球比赛中，心理状态对投篮命中率有着重要影响。保持专注和良好的心态是提高命中率的关键。首先，球员需要在投篮前进行深呼吸，帮助自己放松，减少紧张感。其次，专注于投篮动作的细节，如手腕的抖动、手指的发力和球的旋转，而不是过多关注比赛结果或对手的反应。此外，建立积极的自我暗示，如“我能够命中这个球”，可以增强自信心。最后，通过模拟训练和比赛中的心理演练，提高在高压环境下的冷静应对能力。这些方法有助于球员在比赛中保持稳定的心理状态，从而提高投篮命中率。
-
-%%%%
-
-Results saved to: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/results/results_specsot_parallel_planning.json
-
+2026-01-20 21:51:45.392 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:255] - ============================================================
+2026-01-20 21:51:45,392 - DistPrefill-Rank0 - INFO - ============================================================
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:256] - [PREFILL] 开始分布式 Prefill 阶段
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO - [PREFILL] 开始分布式 Prefill 阶段
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:257] - ============================================================
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO - ============================================================
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:258] -   Rank: 0/2
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO -   Rank: 0/2
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:259] -   负责层范围: [0, 14)
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO -   负责层范围: [0, 14)
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:260] -   输入序列长度: 568
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO -   输入序列长度: 568
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:261] -   模型总层数: 36
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO -   模型总层数: 36
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:809] - [INIT] Cache 追踪初始化: chunks=5, layers=36, seq_len=568
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO - [INIT] Cache 追踪初始化: chunks=5, layers=36, seq_len=568
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG - [SPLIT] 输入序列切分为 5 个 chunks | seq_len=568, chunk_size=128
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG -     Chunk 0: shape=torch.Size([1, 128])
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG -     Chunk 1: shape=torch.Size([1, 128])
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG -     Chunk 2: shape=torch.Size([1, 128])
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG -     Chunk 3: shape=torch.Size([1, 128])
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG -     Chunk 4: shape=torch.Size([1, 56])
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:268] -   Chunk数量: 5 (chunk_size=128)
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO -   Chunk数量: 5 (chunk_size=128)
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - DEBUG - [EAGLE] Input Layers 配置: [2, 18, 33] (总层数=36)
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:272] -   Eagle Input Layers: [2, 18, 33]
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO -   Eagle Input Layers: [2, 18, 33]
+2026-01-20 21:51:45.393 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:286] - 
+[CHUNK 1/5] 开始处理 | seq_len=128, first=True, last=False
+2026-01-20 21:51:45,393 - DistPrefill-Rank0 - INFO - 
+[CHUNK 1/5] 开始处理 | seq_len=128, first=True, last=False
+2026-01-20 21:51:45.394 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:295] -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45,394 - DistPrefill-Rank0 - INFO -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45.446 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:297] -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,446 - DistPrefill-Rank0 - INFO -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,446 - DistPrefill-Rank0 - DEBUG -   [PHASE 1] 完成 | 耗时: 52.34ms
+2026-01-20 21:51:45.446 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:319] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,446 - DistPrefill-Rank0 - INFO -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,446 - DistPrefill-Rank0 - DEBUG -     past_key_values_length=0, seq_with_past=128
+2026-01-20 21:51:45,570 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,571 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,575 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=1, layer_idx=0, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=4.30ms
+2026-01-20 21:51:45,575 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,575 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,577 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=2, layer_idx=0, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.61ms
+2026-01-20 21:51:45,579 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=3, layer_idx=1, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.61ms
+2026-01-20 21:51:45,579 - ZMQComm-Rank0 - INFO - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=2
+2026-01-20 21:51:45,579 - DistPrefill-Rank0 - DEBUG -     [SEND][EAGLE] hidden state layer=2 -> Rank 2
+2026-01-20 21:51:45,579 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,579 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,580 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=4, layer_idx=1, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.52ms
+2026-01-20 21:51:45,582 - ZMQComm-Rank0 - INFO - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=5, layer_idx=2, size=641.38KB, time=1.54ms
+2026-01-20 21:51:45,583 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,583 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,584 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=6, layer_idx=2, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.44ms
+2026-01-20 21:51:45,585 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=7, layer_idx=2, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.22ms
+2026-01-20 21:51:45,587 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=8, layer_idx=3, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.67ms
+2026-01-20 21:51:45,587 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,587 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,589 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=9, layer_idx=3, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.48ms
+2026-01-20 21:51:45,590 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=10, layer_idx=4, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.34ms
+2026-01-20 21:51:45,591 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,591 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,592 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=11, layer_idx=4, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.56ms
+2026-01-20 21:51:45,593 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=12, layer_idx=5, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.37ms
+2026-01-20 21:51:45,594 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,595 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=13, layer_idx=5, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.52ms
+2026-01-20 21:51:45,595 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,596 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=14, layer_idx=6, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.36ms
+2026-01-20 21:51:45,598 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=15, layer_idx=6, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.34ms
+2026-01-20 21:51:45,598 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,598 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,600 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=16, layer_idx=7, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.32ms
+2026-01-20 21:51:45,601 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=17, layer_idx=7, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,601 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,601 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,603 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=18, layer_idx=8, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.29ms
+2026-01-20 21:51:45,604 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=19, layer_idx=8, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,604 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,605 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,606 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=20, layer_idx=9, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.26ms
+2026-01-20 21:51:45,607 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=21, layer_idx=9, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.10ms
+2026-01-20 21:51:45,607 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,608 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,609 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=22, layer_idx=10, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,610 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=23, layer_idx=10, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,610 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,611 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,612 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=24, layer_idx=11, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,613 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=25, layer_idx=11, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.11ms
+2026-01-20 21:51:45,613 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,613 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,615 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=26, layer_idx=12, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.21ms
+2026-01-20 21:51:45,616 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=27, layer_idx=12, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.23ms
+2026-01-20 21:51:45,616 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,616 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45.617 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:432] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 170.72ms
+2026-01-20 21:51:45,617 - DistPrefill-Rank0 - INFO -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 170.72ms
+2026-01-20 21:51:45.617 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:442] -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,617 - DistPrefill-Rank0 - INFO -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,617 - ZMQComm-Rank0 - INFO - [QUEUE] HIDDEN -> rank 1 | chunk_idx=0
+2026-01-20 21:51:45,617 - DistPrefill-Rank0 - DEBUG -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,617 - DistPrefill-Rank0 - DEBUG -   [PHASE 3] 完成 | 耗时: 0.15ms
+2026-01-20 21:51:45,618 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=28, layer_idx=13, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.27ms
+2026-01-20 21:51:45.618 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:553] - [CHUNK 1/5] 完成 | 总耗时: 224.49ms
+2026-01-20 21:51:45,618 - DistPrefill-Rank0 - INFO - [CHUNK 1/5] 完成 | 总耗时: 224.49ms
+2026-01-20 21:51:45.618 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:286] - 
+[CHUNK 2/5] 开始处理 | seq_len=128, first=False, last=False
+2026-01-20 21:51:45,618 - DistPrefill-Rank0 - INFO - 
+[CHUNK 2/5] 开始处理 | seq_len=128, first=False, last=False
+2026-01-20 21:51:45.618 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:295] -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45,618 - DistPrefill-Rank0 - INFO -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45.618 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:297] -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,618 - DistPrefill-Rank0 - INFO -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,618 - DistPrefill-Rank0 - DEBUG -   [PHASE 1] 完成 | 耗时: 0.18ms
+2026-01-20 21:51:45.618 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:319] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,618 - DistPrefill-Rank0 - INFO -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,619 - DistPrefill-Rank0 - DEBUG -     past_key_values_length=128, seq_with_past=256
+2026-01-20 21:51:45,620 - ZMQComm-Rank0 - INFO - [SEND] HIDDEN -> rank 1 | seq_id=30, chunk_idx=0, size=641.38KB, time=1.83ms
+2026-01-20 21:51:45,621 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=29, layer_idx=13, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,622 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,623 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,623 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=31, layer_idx=0, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,625 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=32, layer_idx=0, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.37ms
+2026-01-20 21:51:45,625 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,626 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,627 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=33, layer_idx=1, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.40ms
+2026-01-20 21:51:45,628 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=34, layer_idx=1, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.42ms
+2026-01-20 21:51:45,629 - ZMQComm-Rank0 - INFO - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=2
+2026-01-20 21:51:45,629 - DistPrefill-Rank0 - DEBUG -     [SEND][EAGLE] hidden state layer=2 -> Rank 2
+2026-01-20 21:51:45,629 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,629 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,631 - ZMQComm-Rank0 - INFO - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=35, layer_idx=2, size=641.38KB, time=1.62ms
+2026-01-20 21:51:45,632 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=36, layer_idx=2, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.24ms
+2026-01-20 21:51:45,633 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=37, layer_idx=2, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.24ms
+2026-01-20 21:51:45,634 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,634 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,635 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=38, layer_idx=3, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.70ms
+2026-01-20 21:51:45,637 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=39, layer_idx=3, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.42ms
+2026-01-20 21:51:45,637 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,638 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,639 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=40, layer_idx=4, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.50ms
+2026-01-20 21:51:45,640 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=41, layer_idx=4, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,641 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,642 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,642 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=42, layer_idx=5, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,644 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=43, layer_idx=5, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,644 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,645 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,646 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=44, layer_idx=6, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,647 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=45, layer_idx=6, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,648 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,648 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,649 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=46, layer_idx=7, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,650 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=47, layer_idx=7, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,651 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,651 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,652 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=48, layer_idx=8, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,654 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=49, layer_idx=8, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,654 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,655 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,656 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=50, layer_idx=9, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.27ms
+2026-01-20 21:51:45,657 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=51, layer_idx=9, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.20ms
+2026-01-20 21:51:45,658 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,658 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,659 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=52, layer_idx=10, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,660 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=53, layer_idx=10, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.20ms
+2026-01-20 21:51:45,661 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,662 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,662 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=54, layer_idx=11, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,664 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=55, layer_idx=11, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,664 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,665 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,666 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=56, layer_idx=12, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,667 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=57, layer_idx=12, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,668 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,668 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45.668 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:432] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 49.64ms
+2026-01-20 21:51:45,668 - DistPrefill-Rank0 - INFO -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 49.64ms
+2026-01-20 21:51:45.668 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:442] -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,668 - DistPrefill-Rank0 - INFO -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,668 - ZMQComm-Rank0 - INFO - [QUEUE] HIDDEN -> rank 1 | chunk_idx=1
+2026-01-20 21:51:45,668 - DistPrefill-Rank0 - DEBUG -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,669 - DistPrefill-Rank0 - DEBUG -   [PHASE 3] 完成 | 耗时: 0.38ms
+2026-01-20 21:51:45,669 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=58, layer_idx=13, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.51ms
+2026-01-20 21:51:45.670 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:553] - [CHUNK 2/5] 完成 | 总耗时: 51.51ms
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - INFO - [CHUNK 2/5] 完成 | 总耗时: 51.51ms
+2026-01-20 21:51:45.670 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:286] - 
+[CHUNK 3/5] 开始处理 | seq_len=128, first=False, last=False
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - INFO - 
+[CHUNK 3/5] 开始处理 | seq_len=128, first=False, last=False
+2026-01-20 21:51:45.670 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:295] -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - INFO -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45.670 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:297] -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - INFO -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - DEBUG -   [PHASE 1] 完成 | 耗时: 0.20ms
+2026-01-20 21:51:45.670 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:319] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - INFO -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,671 - ZMQComm-Rank0 - INFO - [SEND] HIDDEN -> rank 1 | seq_id=60, chunk_idx=1, size=641.38KB, time=1.17ms
+2026-01-20 21:51:45,670 - DistPrefill-Rank0 - DEBUG -     past_key_values_length=256, seq_with_past=384
+2026-01-20 21:51:45,672 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=59, layer_idx=13, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,675 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,675 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,676 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=61, layer_idx=0, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.19ms
+2026-01-20 21:51:45,678 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=62, layer_idx=0, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.52ms
+2026-01-20 21:51:45,678 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,679 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,680 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=63, layer_idx=1, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.38ms
+2026-01-20 21:51:45,681 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=64, layer_idx=1, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.47ms
+2026-01-20 21:51:45,682 - ZMQComm-Rank0 - INFO - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=2
+2026-01-20 21:51:45,682 - DistPrefill-Rank0 - DEBUG -     [SEND][EAGLE] hidden state layer=2 -> Rank 2
+2026-01-20 21:51:45,682 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,683 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,684 - ZMQComm-Rank0 - INFO - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=65, layer_idx=2, size=641.38KB, time=1.31ms
+2026-01-20 21:51:45,685 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=66, layer_idx=2, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,686 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=67, layer_idx=2, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,687 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,687 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,688 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=68, layer_idx=3, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.19ms
+2026-01-20 21:51:45,689 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=69, layer_idx=3, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.12ms
+2026-01-20 21:51:45,690 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,690 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,691 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=70, layer_idx=4, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.19ms
+2026-01-20 21:51:45,693 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=71, layer_idx=4, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.21ms
+2026-01-20 21:51:45,693 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,694 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,694 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=72, layer_idx=5, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,696 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=73, layer_idx=5, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,696 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,697 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,698 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=74, layer_idx=6, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,699 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=75, layer_idx=6, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,700 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,700 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,701 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=76, layer_idx=7, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,702 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=77, layer_idx=7, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,703 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,703 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,704 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=78, layer_idx=8, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,705 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=79, layer_idx=8, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,706 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,706 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,707 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=80, layer_idx=9, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.23ms
+2026-01-20 21:51:45,709 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=81, layer_idx=9, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,710 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,710 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,711 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=82, layer_idx=10, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,712 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=83, layer_idx=10, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.20ms
+2026-01-20 21:51:45,713 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,713 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,714 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=84, layer_idx=11, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,716 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=85, layer_idx=11, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,716 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,717 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,718 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=86, layer_idx=12, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,719 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=87, layer_idx=12, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,719 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,720 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45.720 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:432] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 49.80ms
+2026-01-20 21:51:45,720 - DistPrefill-Rank0 - INFO -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 49.80ms
+2026-01-20 21:51:45.720 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:442] -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,720 - DistPrefill-Rank0 - INFO -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,720 - ZMQComm-Rank0 - INFO - [QUEUE] HIDDEN -> rank 1 | chunk_idx=2
+2026-01-20 21:51:45,720 - DistPrefill-Rank0 - DEBUG -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,720 - DistPrefill-Rank0 - DEBUG -   [PHASE 3] 完成 | 耗时: 0.20ms
+2026-01-20 21:51:45,721 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=88, layer_idx=13, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.46ms
+2026-01-20 21:51:45.721 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:553] - [CHUNK 3/5] 完成 | 总耗时: 51.57ms
+2026-01-20 21:51:45,721 - DistPrefill-Rank0 - INFO - [CHUNK 3/5] 完成 | 总耗时: 51.57ms
+2026-01-20 21:51:45.722 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:286] - 
+[CHUNK 4/5] 开始处理 | seq_len=128, first=False, last=False
+2026-01-20 21:51:45,722 - DistPrefill-Rank0 - INFO - 
+[CHUNK 4/5] 开始处理 | seq_len=128, first=False, last=False
+2026-01-20 21:51:45.722 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:295] -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45,722 - DistPrefill-Rank0 - INFO -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45.722 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:297] -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,722 - DistPrefill-Rank0 - INFO -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,722 - DistPrefill-Rank0 - DEBUG -   [PHASE 1] 完成 | 耗时: 0.19ms
+2026-01-20 21:51:45.722 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:319] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,722 - DistPrefill-Rank0 - INFO -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,723 - ZMQComm-Rank0 - INFO - [SEND] HIDDEN -> rank 1 | seq_id=90, chunk_idx=2, size=641.38KB, time=1.67ms
+2026-01-20 21:51:45,723 - DistPrefill-Rank0 - DEBUG -     past_key_values_length=384, seq_with_past=512
+2026-01-20 21:51:45,724 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=89, layer_idx=13, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.19ms
+2026-01-20 21:51:45,726 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,727 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,728 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=91, layer_idx=0, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.47ms
+2026-01-20 21:51:45,729 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=92, layer_idx=0, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.21ms
+2026-01-20 21:51:45,730 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,730 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,731 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=93, layer_idx=1, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,732 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=94, layer_idx=1, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,733 - ZMQComm-Rank0 - INFO - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=2
+2026-01-20 21:51:45,733 - DistPrefill-Rank0 - DEBUG -     [SEND][EAGLE] hidden state layer=2 -> Rank 2
+2026-01-20 21:51:45,734 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,734 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,734 - ZMQComm-Rank0 - INFO - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=95, layer_idx=2, size=641.38KB, time=0.97ms
+2026-01-20 21:51:45,736 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=96, layer_idx=2, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,737 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=97, layer_idx=2, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.10ms
+2026-01-20 21:51:45,737 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,737 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,738 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=98, layer_idx=3, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,740 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=99, layer_idx=3, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.16ms
+2026-01-20 21:51:45,740 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,741 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,742 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=100, layer_idx=4, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.14ms
+2026-01-20 21:51:45,743 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=101, layer_idx=4, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.21ms
+2026-01-20 21:51:45,744 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,744 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,745 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=102, layer_idx=5, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.10ms
+2026-01-20 21:51:45,746 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=103, layer_idx=5, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,747 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,747 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,748 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=104, layer_idx=6, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.17ms
+2026-01-20 21:51:45,749 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=105, layer_idx=6, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.21ms
+2026-01-20 21:51:45,750 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,750 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,751 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=106, layer_idx=7, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.22ms
+2026-01-20 21:51:45,753 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=107, layer_idx=7, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.20ms
+2026-01-20 21:51:45,753 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,754 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,755 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=108, layer_idx=8, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,756 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=109, layer_idx=8, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.15ms
+2026-01-20 21:51:45,757 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,757 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,758 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=110, layer_idx=9, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.24ms
+2026-01-20 21:51:45,759 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=111, layer_idx=9, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.19ms
+2026-01-20 21:51:45,760 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,761 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,761 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=112, layer_idx=10, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.12ms
+2026-01-20 21:51:45,763 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=113, layer_idx=10, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.21ms
+2026-01-20 21:51:45,764 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,764 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,765 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=114, layer_idx=11, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.13ms
+2026-01-20 21:51:45,766 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=115, layer_idx=11, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.19ms
+2026-01-20 21:51:45,767 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,767 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45,768 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=116, layer_idx=12, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.40ms
+2026-01-20 21:51:45,770 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=117, layer_idx=12, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.45ms
+2026-01-20 21:51:45,771 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 1 | size=0.50MB
+2026-01-20 21:51:45,771 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 2 | size=0.50MB
+2026-01-20 21:51:45.771 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:432] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 49.29ms
+2026-01-20 21:51:45,771 - DistPrefill-Rank0 - INFO -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 49.29ms
+2026-01-20 21:51:45.771 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:442] -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,771 - DistPrefill-Rank0 - INFO -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,771 - ZMQComm-Rank0 - INFO - [QUEUE] HIDDEN -> rank 1 | chunk_idx=3
+2026-01-20 21:51:45,771 - DistPrefill-Rank0 - DEBUG -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-20 21:51:45,771 - DistPrefill-Rank0 - DEBUG -   [PHASE 3] 完成 | 耗时: 0.22ms
+2026-01-20 21:51:45,772 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=118, layer_idx=13, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.46ms
+2026-01-20 21:51:45.773 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:553] - [CHUNK 4/5] 完成 | 总耗时: 51.03ms
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - INFO - [CHUNK 4/5] 完成 | 总耗时: 51.03ms
+2026-01-20 21:51:45.773 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:286] - 
+[CHUNK 5/5] 开始处理 | seq_len=56, first=False, last=True
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - INFO - 
+[CHUNK 5/5] 开始处理 | seq_len=56, first=False, last=True
+2026-01-20 21:51:45.773 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:295] -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - INFO -   [PHASE 1] 执行 Embedding...
+2026-01-20 21:51:45.773 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:297] -   [PHASE 1] Embedding 完成 | shape=(1, 56, 2560), dtype=float16, device=cuda:0, size=0.273MB
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - INFO -   [PHASE 1] Embedding 完成 | shape=(1, 56, 2560), dtype=float16, device=cuda:0, size=0.273MB
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - DEBUG -   [PHASE 1] 完成 | 耗时: 0.20ms
+2026-01-20 21:51:45.773 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:319] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - INFO -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
+2026-01-20 21:51:45,773 - ZMQComm-Rank0 - INFO - [SEND] HIDDEN -> rank 1 | seq_id=120, chunk_idx=3, size=641.38KB, time=1.11ms
+2026-01-20 21:51:45,773 - DistPrefill-Rank0 - DEBUG -     past_key_values_length=512, seq_with_past=568
+2026-01-20 21:51:45,775 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=119, layer_idx=13, chunk_idx=3, key_shape=(1, 8, 128, 128), size=514.60KB, time=1.18ms
+2026-01-20 21:51:45,777 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,777 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=0 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,778 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=121, layer_idx=0, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.05ms
+2026-01-20 21:51:45,779 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=122, layer_idx=0, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.84ms
+2026-01-20 21:51:45,780 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,781 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=1 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,781 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=123, layer_idx=1, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.99ms
+2026-01-20 21:51:45,782 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=124, layer_idx=1, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.84ms
+2026-01-20 21:51:45,783 - ZMQComm-Rank0 - INFO - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=2
+2026-01-20 21:51:45,784 - DistPrefill-Rank0 - DEBUG -     [SEND][EAGLE] hidden state layer=2 -> Rank 2
+2026-01-20 21:51:45,784 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,784 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=2 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,785 - ZMQComm-Rank0 - INFO - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=125, layer_idx=2, size=281.38KB, time=0.80ms
+2026-01-20 21:51:45,786 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=126, layer_idx=2, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.87ms
+2026-01-20 21:51:45,786 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=127, layer_idx=2, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.87ms
+2026-01-20 21:51:45,787 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,788 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=3 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,789 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=128, layer_idx=3, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.06ms
+2026-01-20 21:51:45,790 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=129, layer_idx=3, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.82ms
+2026-01-20 21:51:45,791 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,791 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=4 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,792 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=130, layer_idx=4, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.01ms
+2026-01-20 21:51:45,793 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=131, layer_idx=4, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.82ms
+2026-01-20 21:51:45,794 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,794 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=5 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,795 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=132, layer_idx=5, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.07ms
+2026-01-20 21:51:45,796 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=133, layer_idx=5, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.81ms
+2026-01-20 21:51:45,797 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,797 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=6 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,798 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=134, layer_idx=6, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.00ms
+2026-01-20 21:51:45,799 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=135, layer_idx=6, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.85ms
+2026-01-20 21:51:45,800 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,801 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=7 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,801 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=136, layer_idx=7, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.98ms
+2026-01-20 21:51:45,802 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=137, layer_idx=7, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.85ms
+2026-01-20 21:51:45,803 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,804 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=8 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,804 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=138, layer_idx=8, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.03ms
+2026-01-20 21:51:45,805 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=139, layer_idx=8, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.83ms
+2026-01-20 21:51:45,806 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,807 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=9 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,808 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=140, layer_idx=9, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.02ms
+2026-01-20 21:51:45,809 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=141, layer_idx=9, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.82ms
+2026-01-20 21:51:45,810 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,810 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=10 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,811 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=142, layer_idx=10, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.97ms
+2026-01-20 21:51:45,816 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=143, layer_idx=10, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=5.15ms
+2026-01-20 21:51:45,817 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,818 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=11 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,819 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=144, layer_idx=11, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.07ms
+2026-01-20 21:51:45,820 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=145, layer_idx=11, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.88ms
+2026-01-20 21:51:45,821 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,821 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=12 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45,822 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=146, layer_idx=12, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.05ms
+2026-01-20 21:51:45,823 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=147, layer_idx=12, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=0.93ms
+2026-01-20 21:51:45,824 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 1 | size=0.22MB
+2026-01-20 21:51:45,824 - DistPrefill-Rank0 - DEBUG -     [SEND][CACHE] layer=13 -> Rank 2 | size=0.22MB
+2026-01-20 21:51:45.825 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:432] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 51.54ms
+2026-01-20 21:51:45,825 - DistPrefill-Rank0 - INFO -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 51.54ms
+2026-01-20 21:51:45.825 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:442] -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,825 - DistPrefill-Rank0 - INFO -   [PHASE 3][SEND] Hidden States -> Rank 1
+2026-01-20 21:51:45,825 - ZMQComm-Rank0 - INFO - [QUEUE] HIDDEN -> rank 1 | chunk_idx=4
+2026-01-20 21:51:45,825 - DistPrefill-Rank0 - DEBUG -     Hidden States 发送完成 | shape=(1, 56, 2560), dtype=float16, device=cuda:0, size=0.273MB
+2026-01-20 21:51:45,825 - DistPrefill-Rank0 - DEBUG -   [PHASE 3] 完成 | 耗时: 0.21ms
+2026-01-20 21:51:45,825 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 1 | seq_id=148, layer_idx=13, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.29ms
+2026-01-20 21:51:45,826 - ZMQComm-Rank0 - INFO - [SEND] HIDDEN -> rank 1 | seq_id=150, chunk_idx=4, size=281.38KB, time=0.57ms
+2026-01-20 21:51:45.826 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:553] - [CHUNK 5/5] 完成 | 总耗时: 53.57ms
+2026-01-20 21:51:45,826 - DistPrefill-Rank0 - INFO - [CHUNK 5/5] 完成 | 总耗时: 53.57ms
+2026-01-20 21:51:45.826 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:558] - 
 ============================================================
-Summary Statistics
+2026-01-20 21:51:45,826 - DistPrefill-Rank0 - INFO - 
 ============================================================
-  Average Time: 13.57s
-  Average Length: 977.0 tokens
-  Average Memory: 5583.12 MB
-  Throughput: 72.0 tokens/s
+2026-01-20 21:51:45.827 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:559] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
+2026-01-20 21:51:45,827 - DistPrefill-Rank0 - INFO - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
+2026-01-20 21:51:45.827 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:560] - ============================================================
+2026-01-20 21:51:45,827 - DistPrefill-Rank0 - INFO - ============================================================
+2026-01-20 21:51:45.827 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:566] - [RECV] 等待 Draft Tokens (from Rank 2)...
+2026-01-20 21:51:45,827 - DistPrefill-Rank0 - INFO - [RECV] 等待 Draft Tokens (from Rank 2)...
+2026-01-20 21:51:45,827 - ZMQComm-Rank0 - INFO - [WAIT] 等待接收 DRAFT_TOKENS (src_rank=2, timeout=6000.0s)
+2026-01-20 21:51:45,827 - ZMQComm-Rank0 - INFO - [SEND] BASE_CACHE -> rank 2 | seq_id=149, layer_idx=13, chunk_idx=4, key_shape=(1, 8, 56, 128), size=226.60KB, time=1.18ms
+2026-01-20 21:51:46,662 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=14, chunk_idx=0, seq_id=1, latency=6.50ms
+2026-01-20 21:51:46,664 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=15, chunk_idx=0, seq_id=3, latency=4.08ms
+2026-01-20 21:51:46,667 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=16, chunk_idx=0, seq_id=5, latency=4.40ms
+2026-01-20 21:51:46,671 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=17, chunk_idx=0, seq_id=7, latency=5.31ms
+2026-01-20 21:51:46,675 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=18, chunk_idx=0, seq_id=10, latency=6.95ms
+2026-01-20 21:51:46,678 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=19, chunk_idx=0, seq_id=12, latency=6.40ms
+2026-01-20 21:51:46,681 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=20, chunk_idx=0, seq_id=14, latency=7.25ms
+2026-01-20 21:51:46,684 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=21, chunk_idx=0, seq_id=16, latency=7.11ms
+2026-01-20 21:51:46,687 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=22, chunk_idx=0, seq_id=18, latency=7.75ms
+2026-01-20 21:51:46,690 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=23, chunk_idx=0, seq_id=20, latency=8.66ms
+2026-01-20 21:51:46,693 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=24, chunk_idx=0, seq_id=22, latency=9.91ms
+2026-01-20 21:51:46,698 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=25, chunk_idx=0, seq_id=24, latency=13.16ms
+2026-01-20 21:51:46,702 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=26, chunk_idx=0, seq_id=26, latency=14.25ms
+2026-01-20 21:51:46,706 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=27, chunk_idx=0, seq_id=28, latency=15.28ms
+2026-01-20 21:51:46,711 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=14, chunk_idx=1, seq_id=31, latency=2.54ms
+2026-01-20 21:51:46,715 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=15, chunk_idx=1, seq_id=33, latency=2.70ms
+2026-01-20 21:51:46,718 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=16, chunk_idx=1, seq_id=35, latency=2.57ms
+2026-01-20 21:51:46,722 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=17, chunk_idx=1, seq_id=37, latency=2.90ms
+2026-01-20 21:51:46,727 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=18, chunk_idx=1, seq_id=40, latency=4.13ms
+2026-01-20 21:51:46,730 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=19, chunk_idx=1, seq_id=42, latency=3.58ms
+2026-01-20 21:51:46,733 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=20, chunk_idx=1, seq_id=44, latency=3.30ms
+2026-01-20 21:51:46,736 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=21, chunk_idx=1, seq_id=46, latency=2.72ms
+2026-01-20 21:51:46,739 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=22, chunk_idx=1, seq_id=48, latency=2.60ms
+2026-01-20 21:51:46,742 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=23, chunk_idx=1, seq_id=50, latency=2.81ms
+2026-01-20 21:51:46,745 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=24, chunk_idx=1, seq_id=52, latency=2.61ms
+2026-01-20 21:51:46,748 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=25, chunk_idx=1, seq_id=54, latency=2.41ms
+2026-01-20 21:51:46,751 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=26, chunk_idx=1, seq_id=56, latency=2.51ms
+2026-01-20 21:51:46,754 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=27, chunk_idx=1, seq_id=58, latency=2.62ms
+2026-01-20 21:51:46,759 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=14, chunk_idx=2, seq_id=61, latency=2.76ms
+2026-01-20 21:51:46,762 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=15, chunk_idx=2, seq_id=63, latency=2.58ms
+2026-01-20 21:51:46,765 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=16, chunk_idx=2, seq_id=65, latency=2.58ms
+2026-01-20 21:51:46,768 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=17, chunk_idx=2, seq_id=67, latency=2.47ms
+2026-01-20 21:51:46,773 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=18, chunk_idx=2, seq_id=70, latency=3.74ms
+2026-01-20 21:51:46,776 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=19, chunk_idx=2, seq_id=72, latency=3.62ms
+2026-01-20 21:51:46,779 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=20, chunk_idx=2, seq_id=74, latency=3.05ms
+2026-01-20 21:51:46,782 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=21, chunk_idx=2, seq_id=76, latency=2.52ms
+2026-01-20 21:51:46,785 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=22, chunk_idx=2, seq_id=78, latency=2.78ms
+2026-01-20 21:51:46,789 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=23, chunk_idx=2, seq_id=80, latency=3.09ms
+2026-01-20 21:51:46,792 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=24, chunk_idx=2, seq_id=82, latency=2.62ms
+2026-01-20 21:51:46,795 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=25, chunk_idx=2, seq_id=84, latency=2.37ms
+2026-01-20 21:51:46,800 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=26, chunk_idx=2, seq_id=86, latency=2.87ms
+2026-01-20 21:51:46,803 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=27, chunk_idx=2, seq_id=88, latency=2.75ms
+2026-01-20 21:51:46,809 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=14, chunk_idx=3, seq_id=91, latency=2.62ms
+2026-01-20 21:51:46,817 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=15, chunk_idx=3, seq_id=93, latency=6.42ms
+2026-01-20 21:51:46,821 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=16, chunk_idx=3, seq_id=95, latency=2.89ms
+2026-01-20 21:51:46,824 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=17, chunk_idx=3, seq_id=97, latency=2.69ms
+2026-01-20 21:51:46,829 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=18, chunk_idx=3, seq_id=100, latency=2.98ms
+2026-01-20 21:51:46,832 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=19, chunk_idx=3, seq_id=102, latency=2.34ms
+2026-01-20 21:51:46,836 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=20, chunk_idx=3, seq_id=104, latency=2.84ms
+2026-01-20 21:51:46,839 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=21, chunk_idx=3, seq_id=106, latency=2.43ms
+2026-01-20 21:51:46,843 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=22, chunk_idx=3, seq_id=108, latency=2.58ms
+2026-01-20 21:51:46,846 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=23, chunk_idx=3, seq_id=110, latency=2.27ms
+2026-01-20 21:51:46,850 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=24, chunk_idx=3, seq_id=112, latency=2.81ms
+2026-01-20 21:51:46,853 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=25, chunk_idx=3, seq_id=114, latency=2.36ms
+2026-01-20 21:51:46,857 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=26, chunk_idx=3, seq_id=116, latency=2.59ms
+2026-01-20 21:51:46,860 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=27, chunk_idx=3, seq_id=118, latency=2.60ms
+2026-01-20 21:51:46,867 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=14, chunk_idx=4, seq_id=121, latency=2.24ms
+2026-01-20 21:51:46,871 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=15, chunk_idx=4, seq_id=123, latency=2.49ms
+2026-01-20 21:51:46,875 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=16, chunk_idx=4, seq_id=125, latency=2.34ms
+2026-01-20 21:51:46,878 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=17, chunk_idx=4, seq_id=127, latency=2.22ms
+2026-01-20 21:51:46,882 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=18, chunk_idx=4, seq_id=130, latency=2.47ms
+2026-01-20 21:51:46,885 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=19, chunk_idx=4, seq_id=132, latency=2.01ms
+2026-01-20 21:51:46,889 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=20, chunk_idx=4, seq_id=134, latency=2.20ms
+2026-01-20 21:51:46,893 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=21, chunk_idx=4, seq_id=136, latency=2.18ms
+2026-01-20 21:51:46,896 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=22, chunk_idx=4, seq_id=138, latency=2.05ms
+2026-01-20 21:51:46,900 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=23, chunk_idx=4, seq_id=140, latency=2.01ms
+2026-01-20 21:51:46,903 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=24, chunk_idx=4, seq_id=142, latency=1.95ms
+2026-01-20 21:51:46,907 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=25, chunk_idx=4, seq_id=144, latency=2.35ms
+2026-01-20 21:51:46,910 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=26, chunk_idx=4, seq_id=146, latency=2.07ms
+2026-01-20 21:51:46,914 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 1 | layer_idx=27, chunk_idx=4, seq_id=148, latency=2.41ms
+2026-01-20 21:51:47,863 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=0, seq_id=1, latency=5.43ms
+2026-01-20 21:51:47,866 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=0, seq_id=3, latency=4.79ms
+2026-01-20 21:51:47,870 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=0, seq_id=5, latency=5.67ms
+2026-01-20 21:51:47,873 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=0, seq_id=7, latency=5.68ms
+2026-01-20 21:51:47,876 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=32, chunk_idx=0, seq_id=9, latency=5.58ms
+2026-01-20 21:51:47,880 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=33, chunk_idx=0, seq_id=11, latency=6.70ms
+2026-01-20 21:51:47,884 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=34, chunk_idx=0, seq_id=13, latency=8.84ms
+2026-01-20 21:51:47,894 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=35, chunk_idx=0, seq_id=15, latency=16.73ms
+2026-01-20 21:51:47,914 - ZMQComm-Rank0 - INFO - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=0, incremental=True, seq_id=17, latency=2.94ms
+2026-01-20 21:51:47,926 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=1, seq_id=19, latency=2.87ms
+2026-01-20 21:51:47,930 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=1, seq_id=21, latency=3.80ms
+2026-01-20 21:51:47,932 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=1, seq_id=23, latency=3.75ms
+2026-01-20 21:51:47,936 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=1, seq_id=25, latency=4.88ms
+2026-01-20 21:51:47,939 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=32, chunk_idx=1, seq_id=27, latency=5.25ms
+2026-01-20 21:51:47,943 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=33, chunk_idx=1, seq_id=29, latency=6.53ms
+2026-01-20 21:51:47,946 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=34, chunk_idx=1, seq_id=31, latency=7.38ms
+2026-01-20 21:51:47,949 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=35, chunk_idx=1, seq_id=33, latency=8.46ms
+2026-01-20 21:51:47,952 - ZMQComm-Rank0 - INFO - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=1, incremental=True, seq_id=35, latency=5.05ms
+2026-01-20 21:51:47,960 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=2, seq_id=37, latency=8.08ms
+2026-01-20 21:51:47,962 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=2, seq_id=39, latency=3.83ms
+2026-01-20 21:51:47,965 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=2, seq_id=41, latency=3.93ms
+2026-01-20 21:51:47,968 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=2, seq_id=43, latency=3.82ms
+2026-01-20 21:51:47,971 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=32, chunk_idx=2, seq_id=45, latency=3.72ms
+2026-01-20 21:51:47,974 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=33, chunk_idx=2, seq_id=47, latency=2.49ms
+2026-01-20 21:51:47,977 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=34, chunk_idx=2, seq_id=49, latency=2.58ms
+2026-01-20 21:51:47,979 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=35, chunk_idx=2, seq_id=51, latency=2.24ms
+2026-01-20 21:51:47,985 - ZMQComm-Rank0 - INFO - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=2, incremental=True, seq_id=53, latency=2.83ms
+2026-01-20 21:51:47,988 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=3, seq_id=55, latency=2.28ms
+2026-01-20 21:51:47,992 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=3, seq_id=57, latency=2.52ms
+2026-01-20 21:51:47,995 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=3, seq_id=59, latency=2.46ms
+2026-01-20 21:51:47,998 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=3, seq_id=61, latency=2.85ms
+2026-01-20 21:51:48,001 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=32, chunk_idx=3, seq_id=63, latency=2.66ms
+2026-01-20 21:51:48,004 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=33, chunk_idx=3, seq_id=65, latency=2.53ms
+2026-01-20 21:51:48,007 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=34, chunk_idx=3, seq_id=67, latency=2.46ms
+2026-01-20 21:51:48,011 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=35, chunk_idx=3, seq_id=69, latency=3.46ms
+2026-01-20 21:51:48,016 - ZMQComm-Rank0 - INFO - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=3, incremental=True, seq_id=71, latency=2.45ms
+2026-01-20 21:51:48,020 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=4, seq_id=73, latency=1.86ms
+2026-01-20 21:51:48,023 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=4, seq_id=75, latency=1.86ms
+2026-01-20 21:51:48,025 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=4, seq_id=77, latency=1.81ms
+2026-01-20 21:51:48,028 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=4, seq_id=79, latency=1.85ms
+2026-01-20 21:51:48,031 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=32, chunk_idx=4, seq_id=81, latency=1.90ms
+2026-01-20 21:51:48,034 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=33, chunk_idx=4, seq_id=83, latency=2.22ms
+2026-01-20 21:51:48,037 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=34, chunk_idx=4, seq_id=85, latency=2.05ms
+2026-01-20 21:51:48,041 - ZMQComm-Rank0 - INFO - [RECV] BASE_CACHE from rank 2 | layer_idx=35, chunk_idx=4, seq_id=87, latency=2.66ms
+2026-01-20 21:51:48,083 - ZMQComm-Rank0 - INFO - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=4, incremental=True, seq_id=89, latency=2.12ms
+2026-01-20 21:51:48,084 - ZMQComm-Rank0 - INFO - [RECV] DRAFT_TOKENS from rank 2 | seq_id=91, latency=2.61ms
+2026-01-20 21:51:48,085 - ZMQComm-Rank0 - INFO - [RECV_OK] DRAFT_TOKENS 接收成功 | from rank 2, wait_time=2257.79ms, draft_tokens shape=(1, 40)
+2026-01-20 21:51:48.085 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:577] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 2258.07ms
+2026-01-20 21:51:48,085 - DistPrefill-Rank0 - INFO - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 2258.07ms
+2026-01-20 21:51:48.085 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:580] - [SYNC] 等待所有 Cache 同步...
+2026-01-20 21:51:48,085 - DistPrefill-Rank0 - INFO - [SYNC] 等待所有 Cache 同步...
+2026-01-20 21:51:48,087 - ZMQComm-Rank0 - INFO - [WAIT] 等待接收所有 Cache | expected_base_caches=110, expected_eagle_caches=5, my_layer_range=[0, 14), timeout=60.0s
+2026-01-20 21:51:48,097 - ZMQComm-Rank0 - INFO - [SYNC_OK] 所有 Cache 接收完成 | base_cache=110, eagle_cache=5, wait_time=11.99ms
+2026-01-20 21:51:48.097 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:597] - [SYNC_OK] Rank 0 Cache 同步完成 | 耗时: 12.14ms
+2026-01-20 21:51:48,097 - DistPrefill-Rank0 - INFO - [SYNC_OK] Rank 0 Cache 同步完成 | 耗时: 12.14ms
+2026-01-20 21:51:48.097 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:606] - ============================================================
+2026-01-20 21:51:48,097 - DistPrefill-Rank0 - INFO - ============================================================
+2026-01-20 21:51:48.097 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:607] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 2.705s
+2026-01-20 21:51:48,097 - DistPrefill-Rank0 - INFO - [PREFILL] 分布式 Prefill 完成 | 总耗时: 2.705s
+2026-01-20 21:51:48.097 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:608] - ============================================================
+2026-01-20 21:51:48,097 - DistPrefill-Rank0 - INFO - ============================================================
+Generated Skeleton: #### 里程碑1(123):...
+#### 1. 1234:...
+#### 里程碑(456)：
+#### 1(245):...
+#### 未来三生技特性(630):...
+#### 价值观(1221121212223222212222222222121212222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
+Detected 6 parallel branches with predicted lengths: [200, 200, 200, 200, 200, 200]
+Parallel Decoding Step 1
+Stopping due to KV cache limit: peak 3674 >= max 3668
+Incomplete branches due to KV cache limit: [0, 1, 2, 3, 4, 5]
+Avg accepted lengths: 2.5555555555555554, Avg draft time: 0.0075s, Avg update time: 0.0026s, Avg verify time: 0.0613s
+Branch 0 Length: 33
+Branch 1 Length: 38
+Branch 2 Length: 30
+Branch 3 Length: 32
+Branch 4 Length: 36
+Branch 5 Length: 253
+2026-01-20 21:51:53,641 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:394] - 
+[统计信息]
+2026-01-20 21:51:53,641 - SpecSoT-Rank0 - INFO - 
+[统计信息]
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:395] -   总耗时: 8.26s
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   总耗时: 8.26s
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:396] -   峰值显存: 5600.25 MB
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   峰值显存: 5600.25 MB
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:397] -   输出长度: 700 tokens
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   输出长度: 700 tokens
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:398] -   吞吐量: 84.7 tokens/s
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   吞吐量: 84.7 tokens/s
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:399] -   并行分支数: 6
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   并行分支数: 6
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:400] -   平均接受长度: 2.56
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   平均接受长度: 2.56
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:401] -   平均Draft时间: 7.52 ms
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   平均Draft时间: 7.52 ms
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:402] -   平均Verify时间: 61.33 ms
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   平均Verify时间: 61.33 ms
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:403] -   平均Update时间: 2.55 ms
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO -   平均Update时间: 2.55 ms
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:406] - 
+[响应预览]
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - 
+[响应预览]
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:407] - #### 里程碑1(123):...
+#### 1. 1234:...
+#### 里程碑(456)：
+#### 1(245):...
+#### 未来三生技特性(630):...
+#### 价值观(1221121212223222212222222222121212222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
+
+#### 里程碑1(123):...
+在打篮球时，提高投篮命中率需要从技术、训练和心理三个方面入手。首先，掌握
+
+#### 1. 1234: 保持口语化，避免使用专业术语，避免使用Markdown格式，避免使用复杂句式，避免使用复杂词汇，避免使用
+
+#### 里程碑(456)：
+提高投篮命中率需要从技术、训练和心理三个方面入手。首先，掌握正确的投篮
+
+#### 1(24...
+2026-01-20 21:51:53,642 - SpecSoT-Rank0 - INFO - #### 里程碑1(123):...
+#### 1. 1234:...
+#### 里程碑(456)：
+#### 1(245):...
+#### 未来三生技特性(630):...
+#### 价值观(1221121212223222212222222222121212222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
+
+#### 里程碑1(123):...
+在打篮球时，提高投篮命中率需要从技术、训练和心理三个方面入手。首先，掌握
+
+#### 1. 1234: 保持口语化，避免使用专业术语，避免使用Markdown格式，避免使用复杂句式，避免使用复杂词汇，避免使用
+
+#### 里程碑(456)：
+提高投篮命中率需要从技术、训练和心理三个方面入手。首先，掌握正确的投篮
+
+#### 1(24...
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:436] - 
+结果已保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/results/results_specsot_parallel_planning_20260120_215153.json
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - 
+结果已保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/results/results_specsot_parallel_planning_20260120_215153.json
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:439] - 
+============================================================
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - 
+============================================================
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:440] - 汇总统计
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - 汇总统计
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:441] - ============================================================
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - ============================================================
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:449] -   总样本数: 1
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   总样本数: 1
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:450] -   总推理时间: 8.28s
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   总推理时间: 8.28s
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:451] -   平均单样本时间: 8.26s
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   平均单样本时间: 8.26s
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:452] -   平均输出长度: 700.0 tokens
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   平均输出长度: 700.0 tokens
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:453] -   平均峰值显存: 5600.25 MB
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   平均峰值显存: 5600.25 MB
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:454] -   平均吞吐量: 84.7 tokens/s
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   平均吞吐量: 84.7 tokens/s
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:455] -   平均接受长度: 2.56
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO -   平均接受长度: 2.56
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:456] - ============================================================
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - ============================================================
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:460] - 正在清理分布式资源...
+2026-01-20 21:51:53,643 - SpecSoT-Rank0 - INFO - 正在清理分布式资源...
+2026-01-20 21:51:53.643 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:205] - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 5, 'hidden_recv': 0, 'eagle_input_hidden_sent': 5, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 140, 'base_cache_recv': 110, 'eagle_cache_sent': 0, 'eagle_cache_recv': 5, 'aggregated_sends': 0, 'forwarded_messages': 0}
+2026-01-20 21:51:53,643 - DistPrefill-Rank0 - INFO - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 5, 'hidden_recv': 0, 'eagle_input_hidden_sent': 5, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 140, 'base_cache_recv': 110, 'eagle_cache_sent': 0, 'eagle_cache_recv': 5, 'aggregated_sends': 0, 'forwarded_messages': 0}
+2026-01-20 21:51:53,691 - ZMQComm-Rank0 - INFO - 接收线程退出
+2026-01-20 21:51:53,734 - ZMQComm-Rank0 - INFO - [THREAD] 发送线程退出
+2026-01-20 21:51:53,735 - ZMQComm-Rank0 - INFO - 通信管理器已停止
+2026-01-20 21:51:53.735 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:208] - [CLEANUP] 分布式Prefill管理器已清理
+2026-01-20 21:51:53,735 - DistPrefill-Rank0 - INFO - [CLEANUP] 分布式Prefill管理器已清理
+2026-01-20 21:51:53,735 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:462] - 分布式资源已清理
+2026-01-20 21:51:53,735 - SpecSoT-Rank0 - INFO - 分布式资源已清理
+2026-01-20 21:51:53,735 - SpecSoT-Rank0 - INFO - [run_specsot_final.py:464] - Worker 执行完成
+2026-01-20 21:51:53,735 - SpecSoT-Rank0 - INFO - Worker 执行完成

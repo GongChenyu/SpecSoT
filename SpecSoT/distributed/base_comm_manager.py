@@ -3,6 +3,12 @@
 ZMQ通信管理器基类
 
 定义通用接口和公共功能，具体的发送策略由子类实现
+
+日志记录说明：
+- DEBUG: 详细的发送/接收数据信息（tensor形状、大小、类型）
+- INFO: 重要事件（启动、停止、超时）
+- WARNING: 异常情况（超时、队列满）
+- ERROR: 错误信息
 """
 
 import zmq
@@ -13,13 +19,84 @@ import time
 import pickle
 import io
 import logging
+import sys
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from enum import IntEnum
 
 from .comm_utils import Message, MessageType, MessagePriority, MessageSerializer, TensorSerializer  
-from .comm_utils import ThreadSafeQueue, AggregatedMessage   
+from .comm_utils import ThreadSafeQueue, AggregatedMessage
+
+
+def setup_comm_logger(rank: int, log_dir: str = None) -> logging.Logger:
+    """
+    设置通信模块的日志记录器
+    
+    Args:
+        rank: 当前进程rank
+        log_dir: 日志目录
+        
+    Returns:
+        配置好的logger
+    """
+    import os
+    from datetime import datetime
+    
+    logger_name = f"ZMQComm-Rank{rank}"
+    logger = logging.getLogger(logger_name)
+    
+    # 如果已经配置过，直接返回
+    if logger.handlers:
+        return logger
+    
+    logger.setLevel(logging.DEBUG)
+    
+    # 日志格式：包含时间、进程、级别、文件行号
+    log_format = '%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter(log_format, datefmt=date_format)
+    
+    # 控制台处理器
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)  # 控制台只显示INFO以上
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    # 文件处理器
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = os.path.join(log_dir, f"comm_rank{rank}_{timestamp}.log")
+        file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
+        file_handler.setLevel(logging.DEBUG)  # 文件记录所有级别
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    
+    return logger
+
+
+def get_tensor_info(tensor: torch.Tensor) -> str:
+    """
+    获取tensor的详细信息字符串
+    
+    Args:
+        tensor: PyTorch tensor
+        
+    Returns:
+        包含形状、类型、设备、大小的信息字符串
+    """
+    if tensor is None:
+        return "None"
+    
+    shape = tuple(tensor.shape)
+    dtype = str(tensor.dtype).replace('torch.', '')
+    device = str(tensor.device)
+    numel = tensor.numel()
+    size_bytes = tensor.element_size() * numel
+    size_mb = size_bytes / (1024 * 1024)
+    
+    return f"shape={shape}, dtype={dtype}, device={device}, size={size_mb:.3f}MB"   
 
 
 # ==================== 抽象基类 ====================
@@ -167,26 +244,85 @@ class ZMQCommManagerBase(ABC):
         self._handle_received_message(msg)
     
     def _handle_received_message(self, msg: Message):
-        """处理单条接收到的消息"""
+        """处理单条接收到的消息，并记录详细日志"""
         # 放入接收队列
         self.recv_queue.put(msg)
         
-        # 更新统计
+        # 获取有效来源rank
+        src = msg.get_effective_src()
+        recv_time = time.time()
+        latency = recv_time - msg.timestamp if msg.timestamp > 0 else 0
+        
+        # 根据消息类型记录详细信息
         if msg.msg_type == MessageType.DRAFT_TOKENS:
             self.stats['draft_tokens_recv'] += 1
-            self.logger.debug(f"接收draft_tokens from rank {msg.get_effective_src()}")
+            data = msg.data
+            if isinstance(data, dict):
+                draft_info = get_tensor_info(data.get('draft_tokens'))
+                retrieve_info = get_tensor_info(data.get('retrieve_indices'))
+                mask_info = get_tensor_info(data.get('tree_mask'))
+                pos_info = get_tensor_info(data.get('tree_position_ids'))
+                self.logger.info(
+                    f"[RECV] DRAFT_TOKENS from rank {src} | "
+                    f"seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+                )
+                self.logger.debug(
+                    f"  draft_tokens: {draft_info}\n"
+                    f"  retrieve_indices: {retrieve_info}\n"
+                    f"  tree_mask: {mask_info}\n"
+                    f"  tree_position_ids: {pos_info}"
+                )
+            else:
+                self.logger.info(f"[RECV] DRAFT_TOKENS from rank {src} | seq_id={msg.seq_id}")
+                
         elif msg.msg_type == MessageType.HIDDEN:
             self.stats['hidden_recv'] += 1
-            self.logger.debug(f"接收hidden from rank {msg.get_effective_src()}, chunk={msg.chunk_idx}")
+            hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+            self.logger.info(
+                f"[RECV] HIDDEN from rank {src} | "
+                f"chunk_idx={msg.chunk_idx}, seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+            )
+            self.logger.debug(f"  hidden_state: {hidden_info}")
+            
         elif msg.msg_type == MessageType.EAGLE_INPUT_HIDDEN:
             self.stats['eagle_input_hidden_recv'] += 1
-            self.logger.debug(f"接收eagle_input_hidden from rank {msg.get_effective_src()}, layer={msg.layer_idx}")
+            hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+            self.logger.info(
+                f"[RECV] EAGLE_INPUT_HIDDEN from rank {src} | "
+                f"layer_idx={msg.layer_idx}, seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+            )
+            self.logger.debug(f"  eagle_input_hidden: {hidden_info}")
+            
         elif msg.msg_type == MessageType.BASE_CACHE:
             self.stats['base_cache_recv'] += 1
-            self.logger.debug(f"接收base_cache from rank {msg.get_effective_src()}, layer={msg.layer_idx}, chunk={msg.chunk_idx}")
+            if isinstance(msg.data, tuple) and len(msg.data) == 2:
+                key_info = get_tensor_info(msg.data[0])
+                value_info = get_tensor_info(msg.data[1])
+                self.logger.info(
+                    f"[RECV] BASE_CACHE from rank {src} | "
+                    f"layer_idx={msg.layer_idx}, chunk_idx={msg.chunk_idx}, seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+                )
+                self.logger.debug(f"  key: {key_info}\n  value: {value_info}")
+            else:
+                self.logger.info(
+                    f"[RECV] BASE_CACHE from rank {src} | layer={msg.layer_idx}, chunk={msg.chunk_idx}"
+                )
+                
         elif msg.msg_type == MessageType.EAGLE_CACHE:
             self.stats['eagle_cache_recv'] += 1
-            self.logger.debug(f"接收eagle_cache from rank {msg.get_effective_src()}, chunk={msg.chunk_idx}")
+            is_incremental = (msg.layer_idx != -1)
+            if isinstance(msg.data, tuple) and len(msg.data) == 2:
+                key_info = get_tensor_info(msg.data[0])
+                value_info = get_tensor_info(msg.data[1])
+                self.logger.info(
+                    f"[RECV] EAGLE_CACHE from rank {src} | "
+                    f"chunk_idx={msg.chunk_idx}, incremental={is_incremental}, seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+                )
+                self.logger.debug(f"  key: {key_info}\n  value: {value_info}")
+            else:
+                self.logger.info(
+                    f"[RECV] EAGLE_CACHE from rank {src} | chunk={msg.chunk_idx}, incremental={is_incremental}"
+                )
     
     def start(self):
         """启动通信管理器"""
@@ -272,6 +408,9 @@ class ZMQCommManagerBase(ABC):
         Returns:
             (draft_tokens, retrieve_indices, tree_mask, tree_position_ids) 或 None
         """
+        start_time = time.time()
+        self.logger.info(f"[WAIT] 等待接收 DRAFT_TOKENS (src_rank={src_rank}, timeout={timeout}s)")
+        
         deadline = time.time() + timeout
         pending = []
         
@@ -288,19 +427,27 @@ class ZMQCommManagerBase(ABC):
                     self.recv_queue.put(pending_msg)
                 # msg.data是打包的dict
                 data = msg.data
-                return (
+                result = (
                     data['draft_tokens'].to(self.device),
                     data['retrieve_indices'].to(self.device),
                     data['tree_mask'].to(self.device),
                     data['tree_position_ids'].to(self.device)
                 )
+                wait_time = time.time() - start_time
+                self.logger.info(
+                    f"[RECV_OK] DRAFT_TOKENS 接收成功 | "
+                    f"from rank {effective_src}, wait_time={wait_time*1000:.2f}ms, "
+                    f"draft_tokens shape={tuple(result[0].shape)}"
+                )
+                return result
             else:
                 pending.append(msg)
         
         for pending_msg in pending:
             self.recv_queue.put(pending_msg)
         
-        self.logger.warning(f"接收draft_tokens超时")
+        wait_time = time.time() - start_time
+        self.logger.warning(f"[TIMEOUT] 接收 DRAFT_TOKENS 超时 | wait_time={wait_time:.2f}s")
         return None
     
     # ==================== Hidden State 通信 (第二优先级) ====================
@@ -321,6 +468,9 @@ class ZMQCommManagerBase(ABC):
         Returns:
             (hidden_tensor, chunk_idx) 或 None
         """
+        start_time = time.time()
+        self.logger.info(f"[WAIT] 等待接收 HIDDEN (src_rank={src_rank}, timeout={timeout}s)")
+        
         deadline = time.time() + timeout
         pending = []
         
@@ -335,6 +485,14 @@ class ZMQCommManagerBase(ABC):
             if effective_src == src_rank:
                 for pending_msg in pending:
                     self.recv_queue.put(pending_msg)
+                wait_time = time.time() - start_time
+                hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+                self.logger.info(
+                    f"[RECV_OK] HIDDEN 接收成功 | "
+                    f"from rank {effective_src}, chunk_idx={msg.chunk_idx}, "
+                    f"wait_time={wait_time*1000:.2f}ms"
+                )
+                self.logger.debug(f"  hidden: {hidden_info}")
                 return (msg.data, msg.chunk_idx)
             else:
                 pending.append(msg)
@@ -342,7 +500,8 @@ class ZMQCommManagerBase(ABC):
         for pending_msg in pending:
             self.recv_queue.put(pending_msg)
         
-        self.logger.warning(f"从rank {src_rank}接收hidden超时")
+        wait_time = time.time() - start_time
+        self.logger.warning(f"[TIMEOUT] 从 rank {src_rank} 接收 HIDDEN 超时 | wait_time={wait_time:.2f}s")
         return None
     
     # ==================== Eagle Input Hidden 通信 (第三优先级) ====================
@@ -384,6 +543,9 @@ class ZMQCommManagerBase(ABC):
         Returns:
             hidden state tensor 或 None
         """
+        start_time = time.time()
+        self.logger.info(f"[WAIT] 等待接收 EAGLE_INPUT_HIDDEN (layer_idx={layer_idx}, timeout={timeout}s)")
+        
         deadline = time.time() + timeout
         pending = []
         
@@ -397,6 +559,14 @@ class ZMQCommManagerBase(ABC):
             if msg.layer_idx == layer_idx:
                 for pending_msg in pending:
                     self.recv_queue.put(pending_msg)
+                wait_time = time.time() - start_time
+                hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+                self.logger.info(
+                    f"[RECV_OK] EAGLE_INPUT_HIDDEN 接收成功 | "
+                    f"layer_idx={layer_idx}, from rank {msg.get_effective_src()}, "
+                    f"wait_time={wait_time*1000:.2f}ms"
+                )
+                self.logger.debug(f"  hidden: {hidden_info}")
                 return msg.data
             else:
                 pending.append(msg)
@@ -404,7 +574,8 @@ class ZMQCommManagerBase(ABC):
         for pending_msg in pending:
             self.recv_queue.put(pending_msg)
         
-        self.logger.warning(f"接收eagle_input_hidden超时 (layer={layer_idx})")
+        wait_time = time.time() - start_time
+        self.logger.warning(f"[TIMEOUT] 接收 EAGLE_INPUT_HIDDEN 超时 (layer={layer_idx}) | wait_time={wait_time:.2f}s")
         return None
     
     def recv_all_eagle_input_hidden(
@@ -428,6 +599,8 @@ class ZMQCommManagerBase(ABC):
         Returns:
             {layer_idx: hidden_state} 字典
         """
+        start_time = time.time()
+        
         # 确定需要从其他rank接收的层（不在本rank负责范围内的层）
         expected_layers = []
         for layer_idx in eagle_input_layers:
@@ -435,9 +608,13 @@ class ZMQCommManagerBase(ABC):
                 expected_layers.append(layer_idx)
         
         if not expected_layers:
+            self.logger.info(f"[SKIP] 所有 eagle_input_layers 都在本 rank 范围内，无需接收")
             return {}
         
-        self.logger.info(f"等待接收eagle input hidden states: layers={expected_layers}")
+        self.logger.info(
+            f"[WAIT] 等待接收 ALL_EAGLE_INPUT_HIDDEN | "
+            f"expected_layers={expected_layers}, my_range=[{my_start_layer}, {my_end_layer}), timeout={timeout}s"
+        )
         
         result = {}
         deadline = time.time() + timeout
@@ -453,12 +630,27 @@ class ZMQCommManagerBase(ABC):
             if msg.layer_idx in remaining_layers:
                 result[msg.layer_idx] = msg.data
                 remaining_layers.discard(msg.layer_idx)
+                hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
+                self.logger.info(
+                    f"[RECV_OK] EAGLE_INPUT_HIDDEN | layer_idx={msg.layer_idx}, "
+                    f"from rank {msg.get_effective_src()}, remaining={remaining_layers}"
+                )
+                self.logger.debug(f"  hidden: {hidden_info}")
             else:
                 # 放回队列
                 self.recv_queue.put(msg)
         
+        wait_time = time.time() - start_time
         if remaining_layers:
-            self.logger.warning(f"接收eagle_input_hidden超时，缺少层: {remaining_layers}")
+            self.logger.warning(
+                f"[TIMEOUT] 接收 EAGLE_INPUT_HIDDEN 不完整 | "
+                f"missing_layers={remaining_layers}, wait_time={wait_time:.2f}s"
+            )
+        else:
+            self.logger.info(
+                f"[RECV_OK] ALL_EAGLE_INPUT_HIDDEN 全部接收完成 | "
+                f"layers={list(result.keys())}, wait_time={wait_time*1000:.2f}ms"
+            )
         
         return result
     
@@ -589,11 +781,13 @@ class ZMQCommManagerBase(ABC):
         
         # 计算需要接收的base cache数量
         expected_base_caches = 0
+        layers_to_receive = []
         for chunk_idx in range(num_chunks):
             for layer_idx in range(num_layers):
                 if not (start_layer <= layer_idx < end_layer):
                     if cache_received_indicator[chunk_idx, layer_idx] == 0:
                         expected_base_caches += 1
+                        layers_to_receive.append((chunk_idx, layer_idx))
         
         # 计算需要接收的eagle cache数量（非最后rank需要接收）
         expected_eagle_caches = 0
@@ -602,7 +796,15 @@ class ZMQCommManagerBase(ABC):
                 if eagle_cache_received_indicator[chunk_idx] == 0:
                     expected_eagle_caches += 1
         
-        self.logger.info(f"等待接收 {expected_base_caches} 个base cache, {expected_eagle_caches} 个eagle cache...")
+        self.logger.info(
+            f"[WAIT] 等待接收所有 Cache | "
+            f"expected_base_caches={expected_base_caches}, expected_eagle_caches={expected_eagle_caches}, "
+            f"my_layer_range=[{start_layer}, {end_layer}), timeout={timeout}s"
+        )
+        self.logger.debug(f"  待接收的 base cache: {layers_to_receive[:20]}{'...' if len(layers_to_receive) > 20 else ''}")
+        
+        base_cache_received = 0
+        eagle_cache_received = 0
         
         # 接收base cache
         while expected_base_caches > 0 and (time.time() - start_time) < timeout:
@@ -618,7 +820,14 @@ class ZMQCommManagerBase(ABC):
                 past_key_values[layer_idx][1].cat(value)
                 cache_received_indicator[chunk_idx, layer_idx] = 1
                 expected_base_caches -= 1
-                self.logger.debug(f"接收base cache: layer={layer_idx}, chunk={chunk_idx}, from rank={src_rank}")
+                base_cache_received += 1
+                
+                key_info = get_tensor_info(key)
+                self.logger.debug(
+                    f"[CACHE_RECV] BASE_CACHE | layer={layer_idx}, chunk={chunk_idx}, "
+                    f"from rank={src_rank}, remaining={expected_base_caches}"
+                )
+                self.logger.debug(f"  key: {key_info}")
         
         # 接收eagle cache（非最后rank）
         if not is_last_rank:
@@ -645,16 +854,35 @@ class ZMQCommManagerBase(ABC):
                     current_kv_length = eagle_layer.stable_kv[0][0].shape[2]
                     eagle_cache_received_indicator[chunk_idx] = 1
                     expected_eagle_caches -= 1
-                    self.logger.debug(f"接收eagle cache: chunk={chunk_idx}, length={current_kv_length}, from rank={src_rank}")
+                    eagle_cache_received += 1
+                    
+                    key_info = get_tensor_info(key)
+                    self.logger.debug(
+                        f"[CACHE_RECV] EAGLE_CACHE | chunk={chunk_idx}, incremental={is_incremental}, "
+                        f"from rank={src_rank}, kv_length={current_kv_length}, remaining={expected_eagle_caches}"
+                    )
+                    self.logger.debug(f"  key: {key_info}")
+        
+        wait_time = time.time() - start_time
         
         # 检查是否有超时
         if expected_base_caches > 0:
-            self.logger.warning(f"Base Cache接收超时，仍有 {expected_base_caches} 个未接收")
+            self.logger.warning(
+                f"[TIMEOUT] BASE_CACHE 接收不完整 | "
+                f"received={base_cache_received}, missing={expected_base_caches}, wait_time={wait_time:.2f}s"
+            )
         if expected_eagle_caches > 0:
-            self.logger.warning(f"Eagle Cache接收超时，仍有 {expected_eagle_caches} 个未接收")
+            self.logger.warning(
+                f"[TIMEOUT] EAGLE_CACHE 接收不完整 | "
+                f"received={eagle_cache_received}, missing={expected_eagle_caches}, wait_time={wait_time:.2f}s"
+            )
         
         if expected_base_caches == 0 and expected_eagle_caches == 0:
-            self.logger.info("所有cache接收完成")
+            self.logger.info(
+                f"[SYNC_OK] 所有 Cache 接收完成 | "
+                f"base_cache={base_cache_received}, eagle_cache={eagle_cache_received}, "
+                f"wait_time={wait_time*1000:.2f}ms"
+            )
         
         return (expected_base_caches, expected_eagle_caches)
     

@@ -127,6 +127,7 @@ def run_rank_subprocess(
     base_model_path: str,
     eagle_model_path: str,
     task: str,
+    enable_parallel: bool,
     max_new_tokens: int,
     num_samples: int,
     base_port: int,
@@ -134,7 +135,6 @@ def run_rank_subprocess(
     chunk_size: int,
     log_dir: str,
     seed: int = 42,
-    disable_parallel: bool = False,
 ):
     """使用子进程方式运行单个rank"""
     script_path = os.path.join(project_dir, "run_specsot.py")
@@ -144,7 +144,7 @@ def run_rank_subprocess(
     
     cmd = [
         sys.executable, script_path,
-        "--distributed",
+        "--distributed", str(True),
         "--rank", str(rank),
         "--world_size", str(world_size),
         "--layer_splits", layer_splits,
@@ -154,21 +154,22 @@ def run_rank_subprocess(
         "--base_model_path", base_model_path,
         "--eagle_model_path", eagle_model_path,
         "--task", task,
+        "--enable_parallel", str(enable_parallel),
         "--max_new_tokens", str(max_new_tokens),
         "--num_samples", str(num_samples),
-        "--seed", str(seed + rank),  # 每个rank使用不同的种子
+        "--seed", str(seed), 
     ]
     
-    # 默认启用并行，只有明确禁用才不传递
-    if not disable_parallel:
-        cmd.append("--enable_parallel")
+    # # 默认启用并行，只有明确禁用才不传递
+    # if not disable_parallel:
+    #     cmd.append("--enable_parallel")
     
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     
     log_file = os.path.join(log_dir, f"rank_{rank}.log")
     
-    print(f"[Launcher] 启动 Rank {rank} (GPU {gpu_id}, Seed {seed + rank})...")
+    print(f"[Launcher] 启动 Rank {rank} (GPU {gpu_id}, Seed {seed})...")
     print(f"           日志: {log_file}")
     
     # 同时输出到控制台和文件
@@ -201,7 +202,7 @@ def launch_distributed(args):
     """启动分布式推理（支持多台设备）"""
     gpu_ids = [int(x.strip()) for x in args.gpu_ids.split(",")]
     
-    if len(gpu_ids) != args.world_size:
+    if len(gpu_ids) != args.world_size:   # 这里要兼容多台设备
         raise ValueError(f"GPU数量 ({len(gpu_ids)}) 必须等于 world_size ({args.world_size})")
     
     splits = [int(x.strip()) for x in args.layer_splits.split(",") if x.strip()]
@@ -228,7 +229,7 @@ def launch_distributed(args):
     
     # 清理端口
     cleanup_ports(args.base_port, args.world_size)
-    time.sleep(2)
+    time.sleep(1)
     
     # 启动各rank的进程
     for rank in range(args.world_size):
@@ -240,7 +241,7 @@ def launch_distributed(args):
             base_model_path=args.base_model_path,
             eagle_model_path=args.eagle_model_path,
             task=args.task,
-            disable_parallel=args.disable_parallel,
+            enable_parallel=args.enable_parallel,
             max_new_tokens=args.max_new_tokens,
             num_samples=args.num_samples,
             base_port=args.base_port,
@@ -347,8 +348,9 @@ def main():
         help="评估任务类型"
     )
     parser.add_argument(
-        "--disable_parallel",
-        action="store_true",
+        "--enable_parallel",
+        type=bool,
+        default=True,
         help="禁用骨架并行模式（默认启用）"
     )
     parser.add_argument(
@@ -368,8 +370,8 @@ def main():
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
-        help="随机种子基础值（每个rank会使用seed+rank作为实际种子）"
+        default=32,
+        help="随机种子"
     )
     
     args = parser.parse_args()

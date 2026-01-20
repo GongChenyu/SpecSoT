@@ -1,119 +1,166 @@
 # coding=utf-8
 
 # =============================================================================
-# Chinese Prompts (中文提示词) - for Qwen models
+# Chinese Prompts (中文提示词) - Optimized for Qwen
 # =============================================================================
 
-base_prompt = (
-    "【系统角色】\n"
-    "你是一个擅长处理各种简单和复杂问题的 AI 助手。"
-    "针对简单问题或者是不可拆分的具有逻辑性的问题，请直接给出简洁明了的答案；"
-    "针对可以拆分的问题，我们需要采用“思维骨架”（Skeleton-of-Thought）的方法：先规划结构，再并行填充内容。\n\n"
-    "【用户输入】\n"
-    "{user_question}\n\n"
+# 基础Prompt：确立专家人设，强调逻辑判断
+base_prompt_zh = (
+    "【系统指令：思维骨架生成引擎】\n"
+    "你是一个擅长处理复杂任务的逻辑分析专家。你的核心能力是能够瞬间判断一个问题是应该“直接回答”还是需要“拆解规划”。\n"
+    # "其中“拆解规划”的工作流程严格分为两个独立步骤： 1. **步骤一（规划）**：判断任务类型并生成骨架。 2. **步骤二（执行）**：根据骨架并行填充内容。\n"
+    # "你只会收到执行**其中一个步骤**的指令。 **严禁越界**：如果你处于“步骤一”，绝对不要生成正文内容。如果你处于“步骤二”，绝对不要重复生成骨架。\n"
+    "【用户输入】内容：\n"
+    "<user_input>\n"
+    "{user_inputs}\n"
+    "</user_input>\n\n"
 )
 
+# 阶段一：骨架生成触发器
+# 优化点：
+# 1. 增加了“判断标准”部分，教模型如何分类。
+# 2. 强化了格式的正则约束，确保小模型不乱加空格或换行。
 skeleton_trigger_zh = (
-    "【步骤一指令：输入分析与骨架拆分】\n"
-    " 1. 具体要求：当回复复杂且适合**并行处理**（如多工具和智能体调用、多角度分析、多方面列举、长文写作规划）时，请按以下格式输出骨架：\n"
-    "   - 每个分支独立一行，以 '####' 开头。\n"
-    "   - 紧接着是简短的【分支标题】。\n"
-    "   - 在标题后的括号 '()' 内，标注你预测该分支生成内容的【Token数量】（纯数字）。\n"
-    "   - 以英文冒号 ':' 结尾。\n"
-    "   - 冒号后必须紧跟省略号 '...'，禁止在此生成内容。\n"
-    "   - 结尾输出 '####%%%%'。\n"
-    "   - 示例：\n"
-    "     #### 标题1(169):...\n"
-    "     #### 标题2(431):...\n"
-    "     #### 标题3(692):...\n"
-    "     ####%%%%\n\n"
-    "   - 具体示例：\n"
-    "     #### 身体健康(235):...\n"
-    "     #### 心理健康(653):...\n"
-    "     ####%%%%\n\n"
-    " 2. 如果用户输入的回答很简单或者具备强烈的逻辑顺序依赖，请直接回答问题，无需生成骨架。\n"
-    "【回答】：禁止输出分析和开场白，回答：\n"
+    "【当前任务：输入分析与路径选择】\n"
+    "请对 <user_input> 进行逻辑评估，并从以下两条路径中选择一条执行：\n\n"
+
+    "### 路径 A：直接回答（线性/简单任务）\n"
+    "判定标准：\n"
+    "1. 问题简单，一两句话能说清（如：常识问答、简单翻译）。\n"
+    "2. 具有强烈的**逻辑先后顺序**，步骤B必须等步骤A完成后才能进行，**无法并行处理**。\n"
+    "执行操作：直接输出答案，**禁止**生成骨架或“####”。\n\n"
+
+    "### 路径 B：思维骨架拆分（并行/复杂任务）\n"
+    "判定标准：回答需要多角度分析、多模块列举、长文写作，且各部分内容**相对独立**，可以同时撰写。\n"
+    "执行操作：请按严格格式输出骨架。\n\n"
+
+    "**骨架格式严格约束（机器读取专用）：**\n"
+    "1. 每一行代表一个独立的分支，格式必须为：`#### 标题(预估Token数):...`\n"
+    "2. `####` 开头，紧跟标题。\n"
+    "3. `(数字)` 代表预估该段落需要的Token数量。\n"
+    "4. 必须以英文冒号 `:` 和省略号 `...` 结尾。**严禁**在此冒号后写任何正文内容！\n"
+    "5. 所有分支列举完后，必须换行输出结束符 `####%%%%`。\n\n"
+
+    "**标准示例：**\n"
+    "prompt: xxx...\n"
+    "Skeleton:\n"
+    "#### 分支标题(342):...\n"
+    "#### 分支标题(521):...\n"
+    "####%%%%\n\n"
+
+    "**具体示例：**\n"
+    "prompt: 分析新能源汽车的发展前景\n"
+    "Skeleton:\n"
+    "#### 技术维度(329):...\n"
+    "#### 市场维度(127):...\n"
+    "#### 政策维度(663):...\n"
+    "####%%%%\n\n"
+
+    "**警告**：\n"
+    "- 无论用户输入多短（例如仅有“写个大纲”），只要任务适合拆分，就必须执行路径B。\n"
+    "- 绝对不要输出任何分析过程、开场白或“好的”、“明白”等废话。\n"
+    "- 直接开始输出答案或骨架。\n\n"
+    "再次重复【用户输入】内容：\n"
+    "<user_input>\n"
+    "{user_inputs}\n"
+    "</user_input>\n\n"
+    "禁止输出开场白，【回答】：\n"
 )
 
+# 阶段二：并行填充触发器
+# 优化点：
+# 1. 强调上下文的联系，防止子回答显得没头没尾。
+# 2. 明确结束符，防止小模型喋喋不休。
 parallel_trigger_zh = (
-    "【步骤二指令：内容填充】\n"
-    "我们已经制定了该问题的整体回答骨架（含预计生成token长度）如下：\n"
-    "{skeleton_context}\n\n" 
-    "你现在的具体任务是撰写其中一个分支的内容。\n"
-    "当前任务分支：【 {current_point} 】\n\n"
-    "严格约束：\n"
-    "1. 直接开始撰写该分支的正文内容。\n"
-    "2. 参考骨架中的预估token长度进行撰写，不要过短或过长。\n" 
-    "3. 禁止输出标题或“####”，禁止输出开场白。\n"
-    "4. 内容需独立完整，表达简洁，逻辑上能衔接整体骨架。\n"
-    "5. 禁止重复输出内容，适时结束子分支的回答,结束符号是<|im_end|>。\n\n"
-    "【直接开始回答】：\n"
+    "【系统指令：并行内容生成】\n"
+    "整体回答结构已规划如下：\n"
+    "<skeleton>\n"
+    "{skeleton_context}"
+    "</skeleton>\n"
+    "【当前具体任务】请撰写【当前分支】的详细正文内容。\n"
+    "【撰写要求】：\n"
+    "1. **格式**：直接输出正文。**禁止**包含 `####`、标题、序号或开场白（如“关于这一点...”）。\n"
+    "2. **长度**：参考规划中的Token预估值，不要在这一个分支上输出偏离预测值。\n"
+    "3. **逻辑**：内容必须完整，且能与上下文自然衔接。\n"
+    "4. **结束**：本部分内容写完后，请立即停止，禁止重复输出。结束符号为<|im_end|> \n\n"
+    "你只被允许针对【当前分支】回答，【当前分支】：\n"
+    "{current_point} "
+    "禁止回答其他分支，禁止输出开场白，【回答】：\n"
 )
 
+
 # =============================================================================
-# English Prompts (英文提示词) - for Llama and other models
+# English Prompts (英文提示词) - Optimized for Llama
 # =============================================================================
 
+# Base Prompt: Establish expert persona, emphasize logical judgment and step isolation
 base_prompt_en = (
-    "[System Role]\n"
-    "You are an AI assistant skilled at handling both simple and complex questions. "
-    "For simple questions or indivisible logical problems, provide a concise and clear answer directly. "
-    "For divisible problems, we use the 'Skeleton-of-Thought' approach: plan the structure first, then fill in the content in parallel.\n\n"
-    "[User Input]\n"
-    "{user_question}\n\n"
+    "[System Directive: Skeleton-of-Thought Generation Engine]\n"
+    "You are an expert logical analyst skilled in handling complex tasks. Your core capability is to instantly determine whether a problem requires a 'Direct Answer' or 'Decomposition Planning'.\n"
+    "The 'Decomposition Planning' workflow is strictly divided into two independent steps: 1. **Step 1 (Planning)**: Determine task type and generate the skeleton. 2. **Step 2 (Execution)**: Fill in content in parallel based on the skeleton.\n"
+    "You will receive instructions to execute **ONLY ONE** of these steps at a time. **STRICT ISOLATION**: If you are in 'Step 1', DO NOT generate body content. If you are in 'Step 2', DO NOT regenerate the skeleton.\n"
+    "[User Input] Content:\n"
+    "<user_input>\n"
+    "{user_inputs}\n"
+    "</user_input>\n\n"
 )
 
 skeleton_trigger_en = (
-    "[Step 1 Instruction: Input Analysis and Skeleton Decomposition]\n"
-    " 1. Specific Requirements: When the response is complex and suitable for **parallel processing** (such as multi-tool and agent calls, multi-perspective analysis, multi-aspect enumeration, long-form writing planning), please output the skeleton in the following format:\n"
-    "   - Each branch on a separate line, starting with '####'.\n"
-    "   - Followed by a concise [Branch Title].\n"
-    "   - In parentheses '()' after the title, indicate your predicted [Token Count] for this branch's content (pure number).\n"
-    "   - End with an English colon ':'.\n"
-    "   - The colon must be immediately followed by an ellipsis '...', and you are forbidden to generate content here.\n"
-    "   - End with '####%%%%'.\n"
-    "   - Example:\n"
-    "     #### Title 1(169):...\n"
-    "     #### Title 2(431):...\n"
-    "     ####%%%%\n\n"
-    "   - Example:\n"
-    "     #### physical aspect(169):...\n"
-    "     #### mental aspect(431):...\n"
-    "     ####%%%%\n\n"
-    " 2. If the user input is very simple or has strong logical sequence dependencies, please answer the question directly without generating a skeleton.\n"
-    "[Answer]: No analysis or preamble allowed, answer:\n"
+    "[Task: Input Analysis & Path Selection]\n"
+    "Evaluate the <user_input> and execute ONE of the following two paths:\n\n"
+
+    "### Path A: Direct Answer (Linear/Simple Task)\n"
+    "Criteria:\n"
+    "1. The query is simple (e.g., factual, short translation).\n"
+    "2. The task has strict **sequential dependency** (Step B requires Step A to be finished first). It CANNOT be processed in parallel.\n"
+    "Action: Output the answer directly. **DO NOT** generate a skeleton or use '####'.\n\n"
+
+    "### Path B: Skeleton Decomposition (Parallel/Complex Task)\n"
+    "Criteria: The answer requires multi-angle analysis, independent modules, or long-form writing where parts are **independent** and can be written simultaneously.\n"
+    "Action: Output a structural skeleton using the strict format below.\n\n"
+
+    "**Strict Skeleton Format (For Machine Parsing):**\n"
+    "1. Each branch is a separate line: `#### Title(TokenCount):...`\n"
+    "2. Must start with `####` followed by a brief title.\n"
+    "3. `(Number)` indicates estimated tokens for that section.\n"
+    "4. Must end with a colon `:` and ellipsis `...`. **DO NOT** generate content after the colon.\n"
+    "5. After all branches, output the specific end token: `####%%%%`\n\n"
+    
+    "**Standard Example:**\n"
+    "prompt: xxx...\n"
+    "Skeleton:\n"
+    "#### branch(342):...\n"
+    "#### branch(521):...\n"
+    "####%%%%\n\n"
+
+    "**Example:**\n"
+    "prompt: Analyze the impact of remote work.\n"
+    "Skeleton:\n"
+    "#### Economic Impact(329):...\n"
+    "#### Social Impact(127):...\n"
+    "#### Mental Health(663):...\n"
+    "####%%%%\n\n"
+
+    "**WARNING**:\n"
+    "- Even for short inputs (e.g., 'Plan a trip'), if the task is divisible, execute Path B.\n"
+    "- Do NOT output preambles, analysis thoughts, or conversational fillers like 'Sure' or 'Okay'.\n"
+    "- Start the output directly.\n\n"
+    "[Answer Directly]:\n"
 )
 
 parallel_trigger_en = (
-    "[Step 2 Instruction: Content Filling]\n"
-    "We have established the overall answer skeleton for this question (with estimated token length) as follows:\n"
+    "[System Directive: Parallel Content Generation]\n"
+    "Context: We are answering the query \"{user_inputs}\".\n"
+    "The overall structure has been planned as follows:\n"
     "{skeleton_context}\n\n"
-    "Your specific task now is to write the content for one of the branches.\n"
-    "Current Task Branch: [ {current_point} ]\n\n"
-    "Strict Constraints:\n"
-    "1. Start writing the main content for this branch directly.\n"
-    "2. Refer to the estimated token length in the skeleton for writing, avoiding being too short or too long.\n"
-    "3. Do not output titles or '####', and do not output preambles.\n"
-    "4. The content should be independently complete, concisely expressed, and logically connected to the overall skeleton.\n"
-    "5. Do not repeat content, end the sub-branch's answer appropriately, the end symbol is <|im_end|>.\n\n"
-    "[Start Answering Directly]:\n"
+    "--------------------------------------------------\n"
+    "[Current Micro-Task]\n"
+    "Write the detailed content for the branch: **[ {current_point} ]**\n\n"
+
+    "[Writing Constraints]:\n"
+    "1. **Format**: Output the body content directly. **FORBIDDEN** to use `####`, titles, or preambles.\n"
+    "2. **Length**: Adhere to the estimated token count in the plan.\n"
+    "3. **Logic**: Ensure the content is self-contained but flows well with the context.\n"
+    "4. **Stop**: Stop writing immediately after covering this specific point.\n\n"
+    "[Answer Directly]:\n"
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

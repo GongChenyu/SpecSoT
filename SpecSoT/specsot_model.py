@@ -476,9 +476,6 @@ class SpecSoTModel(nn.Module):
                 self.distributed_prefill_manager.prefill_single_distributed(
                     input_ids, self.past_key_values, logits_processor
                 )
-            # # 更新input_ids
-            # if first_token is not None:
-            #     input_ids = torch.cat((input_ids, first_token.to(input_ids.device)), dim=1)
         else:
             # 普通Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
@@ -594,9 +591,6 @@ class SpecSoTModel(nn.Module):
                 self.distributed_prefill_manager.prefill_single_distributed(
                     input_ids, self.past_key_values, logits_processor
                 )
-            # # 更新input_ids
-            # if first_token is not None:
-            #     input_ids = torch.cat((input_ids, first_token.to(input_ids.device)), dim=1)
         else:
             # 普通Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
@@ -653,7 +647,7 @@ class SpecSoTModel(nn.Module):
         
         # 2.2: 准备并行分支输入（添加上下文指令前缀）
         clean_branches, instruction_len = prepare_parallel_branches(
-            self.tokenizer, branch_headers, model_type
+            self.tokenizer, branch_headers, model_type, task_prompt
         )
 
         num_para = len(clean_branches)
@@ -706,6 +700,9 @@ class SpecSoTModel(nn.Module):
             ):
                 print(f"Incomplete branches due to KV cache limit: {self.active_branches}")
                 break
+            
+            if step_parallel % 50 == 0:
+                print(f"Parallel Decoding Step {step_parallel + 1}")
 
             evt_start_p.record()
             
