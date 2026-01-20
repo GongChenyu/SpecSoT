@@ -47,6 +47,14 @@ from .kv_cache import initialize_past_key_values
 # Configurations
 from .configs import EConfig
 
+# Distributed Support
+from .distributed import (
+    DistributedConfig,
+    DistributedPrefillManager,
+    create_zmq_comm_manager,
+    ZMQCommManagerBase,
+)
+
 # Prompts
 from .prompts import base_prompt, skeleton_trigger_zh, parallel_trigger_zh
 
@@ -74,6 +82,12 @@ __all__ = [
     
     # Config
     "EConfig",
+    
+    # Distributed
+    "DistributedConfig",
+    "DistributedPrefillManager",
+    "create_zmq_comm_manager",
+    "ZMQCommManagerBase",
     
     # Prompts
     "base_prompt",

@@ -1,0 +1,134 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+2026-01-20 11:56:12,704 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+============================================================
+SpecSoT: Speculative Decoding + Skeleton-of-Thought
+============================================================
+Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
+Task: planning
+Enable Parallel: True
+Random Seed: 42
+Distributed Mode: rank=0/3
+Layer Splits: 12,24
+Comm Mode: p2p
+Chunk Size: 128
+============================================================
+[Distributed Config] DistributedConfig(rank=0/3, layer_splits=[12, 24], comm_mode=p2p)
+
+>>> Loading SpecSoT Model...
+
+Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]
+Loading checkpoint shards:  33%|███▎      | 1/3 [00:00<00:00,  3.35it/s]
+Loading checkpoint shards:  67%|██████▋   | 2/3 [00:00<00:00,  3.37it/s]
+Loading checkpoint shards: 100%|██████████| 3/3 [00:00<00:00,  4.98it/s]
+2026-01-20 11:56:15,872 - DistPrefill-Rank0 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
+2026-01-20 11:56:16,874 - ZMQComm-Rank0 - INFO - P2P模式初始化完成: 2 send, 2 recv
+2026-01-20 11:56:16,874 - DistPrefill-Rank0 - INFO - 等待其他节点就绪 (2.0秒)...
+2026-01-20 11:56:18,877 - ZMQComm-Rank0 - INFO - 接收线程启动
+2026-01-20 11:56:18,877 - ZMQComm-Rank0 - INFO - 发送线程启动 (P2P模式)
+2026-01-20 11:56:18,877 - ZMQComm-Rank0 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-20 11:56:18,878 - DistPrefill-Rank0 - INFO - 通信管理器已启动
+[SpecSoT] 分布式推理已启用: DistributedConfig(rank=0/3, layer_splits=[12, 24], comm_mode=p2p)
+Model loaded successfully!
+
+Loaded 1 samples for evaluation.
+
+Generating:   0%|          | 0/1 [00:00<?, ?it/s]2026-01-20 11:56:18,900 - DistPrefill-Rank0 - INFO - 开始分布式Prefill, 负责层: [0, 12), seq_len=371
+2026-01-20 11:56:18,900 - DistPrefill-Rank0 - INFO - 切分为 3 个chunks (chunk_size=128)
+2026-01-20 11:56:21,755 - ZMQComm-Rank0 - INFO - 等待接收 72 个base cache, 3 个eagle cache...
+2026-01-20 11:56:21,760 - ZMQComm-Rank0 - INFO - 所有cache接收完成
+2026-01-20 11:56:21,760 - DistPrefill-Rank0 - INFO - 分布式Prefill完成, 耗时: 2.860s
+
+Generating: 100%|██████████| 1/1 [00:13<00:00, 13.58s/it]
+Generating: 100%|██████████| 1/1 [00:13<00:00, 13.59s/it]
+
+============================================================
+Sample 1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+============================================================
+Using Chinese prompts for qwen model
+Generated Skeleton: #### 羽毛球运动与器材(723):...
+     这是一段打球被分组
+     ...
+
+【步骤二指令：骨架内容填充】
+ 1. 每个'分组标题包含分组描述，涵盖体型、力量、动作、技术、训练频率、营养、休息、睡眠(421):...
+     但请不要使用任何层级结构，不要使用任何格式，比如“拼音缩写，不要使用任何输入骨架。
+   1. 请避免使用，直接输出骨骼。
+】
+#### 技术训练(368):如何通过正确的姿势和投篮动作提高命中率
+#### 力量与体能(521):如何通过增强核心和上肢力量提升投篮稳定性
+#### 心理准备(412):如何通过专注力和心态调整提高投
+Detected 4 parallel branches with predicted lengths: [723, 200, 200, 200]
+Branch 0 finished with EOS.
+Branch 2 finished with EOS.
+Branch 1 finished with EOS.
+Branch 3 finished with EOS.
+All branches finished generation.
+Avg accepted lengths: 0.5066079295154186, Avg draft time: 0.0052s, Avg update time: 0.0011s, Avg verify time: 0.0248s
+Branch 0 Length: 127
+Branch 1 Length: 209
+Branch 2 Length: 151
+Branch 3 Length: 300
+
+[Statistics]
+  Total Time: 13.57s
+  Peak Memory: 5583.12 MB
+  Output Length: 977 tokens
+  Parallel Branches: 4
+  Avg Accept Length: 0.51
+  Avg Draft Time: 5.18 ms
+  Avg Verify Time: 24.82 ms
+  Avg Update Time: 1.13 ms
+
+[Response Preview]
+#### 羽毛球运动与器材(723):...
+     这是一段打球被分组
+     ...
+
+【步骤二指令：骨架内容填充】
+ 1. 每个'分组标题包含分组描述，涵盖体型、力量、动作、技术、训练频率、营养、休息、睡眠(421):...
+     但请不要使用任何层级结构，不要使用任何格式，比如“拼音缩写，不要使用任何输入骨架。
+   1. 请避免使用，直接输出骨骼。
+】
+#### 技术训练(368):如何通过正确的姿势和投篮动作提高命中率
+#### 力量与体能(521):如何通过增强核心和上肢力量提升投篮稳定性
+#### 心理准备(412):如何通过专注力和心态调整提高投
+
+#### 羽毛球运动与器材(723):...
+     这是一段打球被分组
+     ...
+
+【步骤二指令： 】
+
+严格约束：
+1. 直接开始撰写该分支的正文内容。
+2. 参考骨架中的预估token长度进行撰写，不要过短或过长。
+3. 禁止输出标题或“####”，禁止输出开场白。
+4. 内容需独立完整，表达简洁，逻辑上能衔接整体骨架。
+5. 禁止重复输出内容，适时结束子分支的回答,结束符号是
+
+#### 技术训练(368):如何通过正确的姿势和投篮动作提高命中率
+正确的投篮姿势和动作是提高命中率的关键。首先，保持正确的站位，双脚与肩同宽，膝盖微屈，身体略微前倾，这样可以保持平衡并增强投篮的稳定性。其次，持球时，手指要自然分开，掌心空出，球应位于指腹部分，这样可以更好地控制球的旋转和发力。投篮时，手臂要自然伸展，从下往上发力，通过手腕的抖动将球投出，避免使用手臂的过度用力，这样可以减少失误。同时，投篮时要保持头部稳定，眼睛注视篮筐，确保投篮方向准确。最后，投篮后要迅速收回手臂，保持身体平衡，为下一次投篮做好准备。此外，练习时要注意保持节奏，避免急躁，通过反复练习来形成肌肉记忆，提高投篮的稳定性和准确性。
+
+#### 力量与体能(521):如何通过增强核心和上肢力量提升投篮稳定性
+核心力量是投篮稳定性的基础，通过强化腹部、背部和臀部肌肉，可以提高身体的平衡性和稳定性，使投篮动作更加流畅。上肢力量则直接影响投篮的力度和准确性，通过增强肩部、手臂和手腕的力量，可以提高投篮时的控制力和爆发力。建议进行深蹲、俯卧撑、引体向上等基础力量训练，同时结合哑铃、弹力带等工具进行针对性练习。此外，保持良好的体能状态，如通过有氧运动提高耐力，有助于在比赛中保持稳定的投篮表现。
+
+#### 心理准备(412):如何通过专注力和心态调整提高
+在篮球比赛中，心理状态对投篮命中率有着重要影响。保持专注和良好的心态是提高命中率的关键。首先，球员需要在投篮前进行深呼吸，帮助自己放松，减少紧张感。其次，专注于投篮动作的细节，如手腕的抖动、手指的发力和球的旋转，而不是过多关注比赛结果或对手的反应。此外，建立积极的自我暗示，如“我能够命中这个球”，可以增强自信心。最后，通过模拟训练和比赛中的心理演练，提高在高压环境下的冷静应对能力。这些方法有助于球员在比赛中保持稳定的心理状态，从而提高投篮命中率。
+</think>
+
+
+
+在篮球比赛中，心理状态对投篮命中率有着重要影响。保持专注和良好的心态是提高命中率的关键。首先，球员需要在投篮前进行深呼吸，帮助自己放松，减少紧张感。其次，专注于投篮动作的细节，如手腕的抖动、手指的发力和球的旋转，而不是过多关注比赛结果或对手的反应。此外，建立积极的自我暗示，如“我能够命中这个球”，可以增强自信心。最后，通过模拟训练和比赛中的心理演练，提高在高压环境下的冷静应对能力。这些方法有助于球员在比赛中保持稳定的心理状态，从而提高投篮命中率。
+
+%%%%
+
+Results saved to: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/results/results_specsot_parallel_planning.json
+
+============================================================
+Summary Statistics
+============================================================
+  Average Time: 13.57s
+  Average Length: 977.0 tokens
+  Average Memory: 5583.12 MB
+  Throughput: 72.0 tokens/s

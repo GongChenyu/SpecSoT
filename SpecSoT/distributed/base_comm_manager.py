@@ -1,0 +1,685 @@
+# coding=utf-8
+"""
+ZMQ通信管理器基类
+
+定义通用接口和公共功能，具体的发送策略由子类实现
+"""
+
+import zmq
+import torch
+import threading
+import queue
+import time
+import pickle
+import io
+import logging
+from abc import ABC, abstractmethod
+from typing import Dict, List, Tuple, Optional, Any
+from dataclasses import dataclass, field
+from enum import IntEnum
+
+from .comm_utils import Message, MessageType, MessagePriority, MessageSerializer, TensorSerializer  
+from .comm_utils import ThreadSafeQueue, AggregatedMessage   
+
+
+# ==================== 抽象基类 ====================
+
+class ZMQCommManagerBase(ABC):
+    """
+    ZMQ通信管理器基类
+    
+    定义通用接口和公共功能，具体的发送策略由子类实现
+    """
+    
+    def __init__(
+        self,
+        rank: int,
+        world_size: int,
+        base_port: int = 29500,
+        device: str = "cuda",
+        node_addresses: Optional[Dict[int, str]] = None,
+    ):
+        """
+        初始化ZMQ通信管理器
+        
+        Args:
+            rank: 当前设备rank
+            world_size: 总设备数
+            base_port: 基础端口号
+            device: 设备类型
+            node_addresses: 节点地址映射 {rank: ip}，默认全部使用localhost
+        """
+        self.rank = rank
+        self.world_size = world_size
+        self.base_port = base_port
+        self.device = device
+        
+        # 节点地址配置
+        if node_addresses is None:
+            self.node_addresses = {r: "127.0.0.1" for r in range(world_size)}
+        else:
+            self.node_addresses = node_addresses
+        
+        # 设置logger
+        self.logger = logging.getLogger(f"ZMQComm-Rank{rank}")
+        
+        # ZMQ上下文
+        self.context = zmq.Context()
+        
+        # 发送队列（统一，按消息类型分）
+        self.send_queue = ThreadSafeQueue()
+        
+        # 接收队列（统一，按消息类型分）
+        self.recv_queue = ThreadSafeQueue()
+        
+        # 发送socket（到其他rank）
+        self.send_sockets: Dict[int, zmq.Socket] = {}
+        
+        # 接收socket（从其他rank）
+        self.recv_sockets: Dict[int, zmq.Socket] = {}
+        
+        # 工作线程
+        self.send_thread: Optional[threading.Thread] = None
+        self.recv_thread: Optional[threading.Thread] = None
+        self.is_running = False
+        
+        # 序列ID计数器
+        self.seq_counter = 0
+        self._seq_lock = threading.Lock()
+        
+        # 统计信息
+        self.stats = {
+            'draft_tokens_sent': 0,
+            'draft_tokens_recv': 0,
+            'hidden_sent': 0,
+            'hidden_recv': 0,
+            'eagle_input_hidden_sent': 0,
+            'eagle_input_hidden_recv': 0,
+            'base_cache_sent': 0,
+            'base_cache_recv': 0,
+            'eagle_cache_sent': 0,
+            'eagle_cache_recv': 0,
+            'aggregated_sends': 0,  # ring模式下聚合发送次数
+            'forwarded_messages': 0,  # ring模式下转发消息数
+        }
+        
+        # 初始化socket连接（由子类决定具体连接方式）
+        self._setup_sockets()
+    
+    def _get_next_seq_id(self) -> int:
+        """获取下一个序列ID"""
+        with self._seq_lock:
+            self.seq_counter += 1
+            return self.seq_counter
+    
+    def _get_port(self, sender_rank: int, receiver_rank: int) -> int:
+        """计算两个rank之间通信使用的端口"""
+        return self.base_port + sender_rank * self.world_size + receiver_rank
+    
+    @abstractmethod
+    def _setup_sockets(self):
+        """设置ZMQ socket连接（由子类实现）"""
+        pass
+    
+    @abstractmethod
+    def _send_worker(self):
+        """发送工作线程（由子类实现）"""
+        pass
+    
+    def _recv_worker(self):
+        """
+        统一接收工作线程
+        持续监听所有recv_socket，收到消息后根据类型放入对应的recv_queue
+        """
+        self.logger.info("接收线程启动")
+        
+        # 创建poller监听所有接收socket
+        poller = zmq.Poller()
+        for rank, socket in self.recv_sockets.items():
+            poller.register(socket, zmq.POLLIN)
+        
+        while self.is_running:
+            try:
+                socks = dict(poller.poll(100))
+                
+                for rank, socket in self.recv_sockets.items():
+                    if socket in socks:
+                        try:
+                            data = socket.recv(zmq.NOBLOCK)
+                            self._process_received_data(data)
+                        except zmq.Again:
+                            continue
+                        except Exception as e:
+                            self.logger.error(f"接收消息出错: {e}", exc_info=True)
+                            
+            except Exception as e:
+                if self.is_running:
+                    self.logger.error(f"接收线程出错: {e}", exc_info=True)
+        
+        self.logger.info("接收线程退出")
+    
+    def _process_received_data(self, data: bytes):
+        """
+        处理接收到的原始数据
+        子类可以重写此方法来处理批量消息
+        """
+        msg = MessageSerializer.deserialize(data, self.device)
+        self._handle_received_message(msg)
+    
+    def _handle_received_message(self, msg: Message):
+        """处理单条接收到的消息"""
+        # 放入接收队列
+        self.recv_queue.put(msg)
+        
+        # 更新统计
+        if msg.msg_type == MessageType.DRAFT_TOKENS:
+            self.stats['draft_tokens_recv'] += 1
+            self.logger.debug(f"接收draft_tokens from rank {msg.get_effective_src()}")
+        elif msg.msg_type == MessageType.HIDDEN:
+            self.stats['hidden_recv'] += 1
+            self.logger.debug(f"接收hidden from rank {msg.get_effective_src()}, chunk={msg.chunk_idx}")
+        elif msg.msg_type == MessageType.EAGLE_INPUT_HIDDEN:
+            self.stats['eagle_input_hidden_recv'] += 1
+            self.logger.debug(f"接收eagle_input_hidden from rank {msg.get_effective_src()}, layer={msg.layer_idx}")
+        elif msg.msg_type == MessageType.BASE_CACHE:
+            self.stats['base_cache_recv'] += 1
+            self.logger.debug(f"接收base_cache from rank {msg.get_effective_src()}, layer={msg.layer_idx}, chunk={msg.chunk_idx}")
+        elif msg.msg_type == MessageType.EAGLE_CACHE:
+            self.stats['eagle_cache_recv'] += 1
+            self.logger.debug(f"接收eagle_cache from rank {msg.get_effective_src()}, chunk={msg.chunk_idx}")
+    
+    def start(self):
+        """启动通信管理器"""
+        if self.is_running:
+            self.logger.warning("通信管理器已经在运行")
+            return
+        
+        self.is_running = True
+        
+        # 启动接收线程
+        self.recv_thread = threading.Thread(
+            target=self._recv_worker,
+            daemon=True,
+            name=f"Recv-Rank{self.rank}"
+        )
+        
+        # 启动发送线程
+        self.send_thread = threading.Thread(
+            target=self._send_worker, 
+            daemon=True,
+            name=f"Send-Rank{self.rank}"
+        )
+        
+        self.recv_thread.start()
+        self.send_thread.start()
+        
+        self.logger.info(f"通信管理器已启动 ({self.__class__.__name__})")
+    
+    def stop(self):
+        """停止通信管理器"""
+        self.is_running = False
+        
+        # 等待线程结束
+        if self.send_thread and self.send_thread.is_alive():
+            self.send_thread.join(timeout=5.0)
+        if self.recv_thread and self.recv_thread.is_alive():
+            self.recv_thread.join(timeout=5.0)
+        
+        # 关闭所有socket
+        for socket in self.send_sockets.values():
+            socket.close()
+        for socket in self.recv_sockets.values():
+            socket.close()
+        
+        self.context.term()
+        self.logger.info("通信管理器已停止")
+    
+    # ==================== Draft Tokens 通信 (最高优先级) ====================
+    
+    @abstractmethod
+    def send_draft_tokens(
+        self,
+        draft_tokens: torch.Tensor,
+        retrieve_indices: torch.Tensor,
+        tree_mask: torch.Tensor,
+        tree_position_ids: torch.Tensor,
+        dst_rank: int = -1
+    ) -> None:
+        """
+        发送打包的draft tokens数据
+        
+        Args:
+            draft_tokens: 候选tokens [batch, tree_size]
+            retrieve_indices: 检索索引
+            tree_mask: 树掩码
+            tree_position_ids: 位置编码
+            dst_rank: 目标rank，-1表示广播
+        """
+        pass
+    
+    def recv_draft_tokens(
+        self,
+        src_rank: int = -1,
+        timeout: float = 60.0
+    ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """
+        接收draft tokens数据
+        
+        Args:
+            src_rank: 源rank，-1表示从任意rank接收
+            timeout: 超时时间（秒）
+            
+        Returns:
+            (draft_tokens, retrieve_indices, tree_mask, tree_position_ids) 或 None
+        """
+        deadline = time.time() + timeout
+        pending = []
+        
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            msg = self.recv_queue.get_by_type(MessageType.DRAFT_TOKENS, timeout=min(0.1, remaining))
+            
+            if msg is None:
+                continue
+            
+            effective_src = msg.get_effective_src()
+            if src_rank == -1 or effective_src == src_rank:
+                for pending_msg in pending:
+                    self.recv_queue.put(pending_msg)
+                # msg.data是打包的dict
+                data = msg.data
+                return (
+                    data['draft_tokens'].to(self.device),
+                    data['retrieve_indices'].to(self.device),
+                    data['tree_mask'].to(self.device),
+                    data['tree_position_ids'].to(self.device)
+                )
+            else:
+                pending.append(msg)
+        
+        for pending_msg in pending:
+            self.recv_queue.put(pending_msg)
+        
+        self.logger.warning(f"接收draft_tokens超时")
+        return None
+    
+    # ==================== Hidden State 通信 (第二优先级) ====================
+    
+    @abstractmethod
+    def send_hidden(self, hidden: torch.Tensor, dst_rank: int, chunk_idx: int = -1) -> None:
+        """发送hidden state（层间传输）"""
+        pass
+    
+    def recv_hidden(self, src_rank: int, timeout: float = 30.0) -> Optional[Tuple[torch.Tensor, int]]:
+        """
+        接收hidden state（从接收队列获取，阻塞等待）
+        
+        Args:
+            src_rank: 源rank
+            timeout: 超时时间（秒）
+            
+        Returns:
+            (hidden_tensor, chunk_idx) 或 None
+        """
+        deadline = time.time() + timeout
+        pending = []
+        
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            msg = self.recv_queue.get_by_type(MessageType.HIDDEN, timeout=min(0.1, remaining))
+            
+            if msg is None:
+                continue
+            
+            effective_src = msg.get_effective_src()
+            if effective_src == src_rank:
+                for pending_msg in pending:
+                    self.recv_queue.put(pending_msg)
+                return (msg.data, msg.chunk_idx)
+            else:
+                pending.append(msg)
+        
+        for pending_msg in pending:
+            self.recv_queue.put(pending_msg)
+        
+        self.logger.warning(f"从rank {src_rank}接收hidden超时")
+        return None
+    
+    # ==================== Eagle Input Hidden 通信 (第三优先级) ====================
+    
+    @abstractmethod
+    def send_eagle_input_hidden(
+        self,
+        hidden: torch.Tensor,
+        layer_idx: int,
+        dst_rank: int
+    ) -> None:
+        """
+        发送eagle layer输入的hidden state
+        
+        根据层数判断是否需要传输：
+        - layer_idx == 2
+        - layer_idx == num_layers // 2
+        - layer_idx == num_layers - 3
+        
+        Args:
+            hidden: hidden state tensor
+            layer_idx: 层索引
+            dst_rank: 目标rank（最后一个rank）
+        """
+        pass
+    
+    def recv_eagle_input_hidden(
+        self,
+        layer_idx: int,
+        timeout: float = 30.0
+    ) -> Optional[torch.Tensor]:
+        """
+        接收eagle layer输入的hidden state
+        
+        Args:
+            layer_idx: 期望的层索引
+            timeout: 超时时间（秒）
+            
+        Returns:
+            hidden state tensor 或 None
+        """
+        deadline = time.time() + timeout
+        pending = []
+        
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            msg = self.recv_queue.get_by_type(MessageType.EAGLE_INPUT_HIDDEN, timeout=min(0.1, remaining))
+            
+            if msg is None:
+                continue
+            
+            if msg.layer_idx == layer_idx:
+                for pending_msg in pending:
+                    self.recv_queue.put(pending_msg)
+                return msg.data
+            else:
+                pending.append(msg)
+        
+        for pending_msg in pending:
+            self.recv_queue.put(pending_msg)
+        
+        self.logger.warning(f"接收eagle_input_hidden超时 (layer={layer_idx})")
+        return None
+    
+    def recv_all_eagle_input_hidden(
+        self,
+        eagle_input_layers: List[int],
+        my_start_layer: int,
+        my_end_layer: int,
+        timeout: float = 60.0
+    ) -> Dict[int, torch.Tensor]:
+        """
+        接收其他rank发送的eagle input hidden states
+        
+        只有最后一个rank需要调用此方法
+        
+        Args:
+            eagle_input_layers: 需要收集的层索引列表 [2, num_layers//2, num_layers-3]
+            my_start_layer: 本rank负责的起始层
+            my_end_layer: 本rank负责的结束层
+            timeout: 超时时间（秒）
+            
+        Returns:
+            {layer_idx: hidden_state} 字典
+        """
+        # 确定需要从其他rank接收的层（不在本rank负责范围内的层）
+        expected_layers = []
+        for layer_idx in eagle_input_layers:
+            if not (my_start_layer <= layer_idx < my_end_layer):
+                expected_layers.append(layer_idx)
+        
+        if not expected_layers:
+            return {}
+        
+        self.logger.info(f"等待接收eagle input hidden states: layers={expected_layers}")
+        
+        result = {}
+        deadline = time.time() + timeout
+        remaining_layers = set(expected_layers)
+        
+        while remaining_layers and time.time() < deadline:
+            remaining = deadline - time.time()
+            msg = self.recv_queue.get_by_type(MessageType.EAGLE_INPUT_HIDDEN, timeout=min(0.1, remaining))
+            
+            if msg is None:
+                continue
+            
+            if msg.layer_idx in remaining_layers:
+                result[msg.layer_idx] = msg.data
+                remaining_layers.discard(msg.layer_idx)
+            else:
+                # 放回队列
+                self.recv_queue.put(msg)
+        
+        if remaining_layers:
+            self.logger.warning(f"接收eagle_input_hidden超时，缺少层: {remaining_layers}")
+        
+        return result
+    
+    # ==================== Base Model Cache 通信 (第四优先级) ====================
+    
+    @abstractmethod
+    def send_base_cache_async(
+        self,
+        kv_cache: Tuple[torch.Tensor, torch.Tensor],
+        dst_rank: int,
+        layer_idx: int,
+        chunk_idx: int = -1
+    ) -> None:
+        """异步发送base model的cache"""
+        pass
+    
+    def get_received_base_cache(
+        self, 
+        timeout: float = 0.1
+    ) -> Optional[Tuple[Tuple[torch.Tensor, torch.Tensor], int, int, int]]:
+        """
+        从接收队列获取base cache（非阻塞）
+        
+        Returns:
+            (kv_cache, src_rank, layer_idx, chunk_idx) 或 None
+        """
+        msg = self.recv_queue.get_by_type(MessageType.BASE_CACHE, timeout=timeout)
+        if msg:
+            return (msg.data, msg.get_effective_src(), msg.layer_idx, msg.chunk_idx)
+        return None
+    
+    # ==================== Eagle Layer Cache 通信 (第五优先级) ====================
+    
+    @abstractmethod
+    def send_eagle_cache_async(
+        self,
+        kv_cache: Tuple[torch.Tensor, torch.Tensor],
+        dst_rank: int,
+        is_incremental: bool = False,
+        chunk_idx: int = -1
+    ) -> None:
+        """
+        异步发送eagle layer的cache
+        
+        在expand_root中立即调用，不等待draft完成
+        
+        Args:
+            kv_cache: (key, value) 元组
+            dst_rank: 目标rank
+            is_incremental: 是否为增量更新
+            chunk_idx: chunk索引
+        """
+        pass
+    
+    def get_received_eagle_cache(
+        self, 
+        timeout: float = 0.1
+    ) -> Optional[Tuple[Tuple[torch.Tensor, torch.Tensor], int, bool, int]]:
+        """
+        从接收队列获取eagle cache（非阻塞）
+        
+        Returns:
+            (kv_cache, src_rank, is_incremental, chunk_idx) 或 None
+        """
+        msg = self.recv_queue.get_by_type(MessageType.EAGLE_CACHE, timeout=timeout)
+        if msg:
+            # layer_idx用于标识是否为增量: -1表示完整, 其他值表示增量
+            is_incremental = (msg.layer_idx != -1)
+            return (msg.data, msg.get_effective_src(), is_incremental, msg.chunk_idx)
+        return None
+    
+    # ==================== Eagle Stable KV 广播方法 ====================
+    
+    @abstractmethod
+    def broadcast_eagle_stable_kv(
+        self,
+        incremental_kv: Tuple[torch.Tensor, torch.Tensor],
+        chunk_idx: int,
+    ) -> None:
+        """
+        广播Eagle Layer的增量stable_kv给所有其他rank
+        
+        这是分布式Prefill中用于同步eagle stable_kv的核心方法。
+        只有最后一个rank需要调用此方法，将增量KV发送给其他rank。
+        
+        Args:
+            incremental_kv: 增量KV cache (new_key, new_value)
+            chunk_idx: chunk索引，用于接收端排序和去重
+        """
+        pass
+    
+    # ==================== Cache 同步等待方法 ====================
+    
+    def wait_for_all_caches(
+        self,
+        past_key_values: List,
+        eagle_layer: Any,
+        num_layers: int,
+        num_chunks: int,
+        cache_received_indicator: torch.Tensor,
+        eagle_cache_received_indicator: torch.Tensor,
+        start_layer: int,
+        end_layer: int,
+        is_last_rank: bool,
+        timeout: float = 60.0
+    ) -> Tuple[int, int]:
+        """
+        等待接收所有cache（base cache和eagle cache）
+        
+        在prefill结束之前调用，确保所有cache都接收完毕
+        
+        Args:
+            past_key_values: Base Model的KV Cache列表
+            eagle_layer: Eagle Layer模型（用于设置stable_kv）
+            num_layers: 模型层数
+            num_chunks: chunk数量
+            cache_received_indicator: base cache接收状态 [num_chunks, num_layers]
+            eagle_cache_received_indicator: eagle cache接收状态 [num_chunks]
+            start_layer: 本rank负责的起始层
+            end_layer: 本rank负责的结束层
+            is_last_rank: 是否是最后一个rank
+            timeout: 超时时间（秒）
+            
+        Returns:
+            (remaining_base_caches, remaining_eagle_caches): 未接收完的cache数量
+        """
+        start_time = time.time()
+        
+        # 计算需要接收的base cache数量
+        expected_base_caches = 0
+        for chunk_idx in range(num_chunks):
+            for layer_idx in range(num_layers):
+                if not (start_layer <= layer_idx < end_layer):
+                    if cache_received_indicator[chunk_idx, layer_idx] == 0:
+                        expected_base_caches += 1
+        
+        # 计算需要接收的eagle cache数量（非最后rank需要接收）
+        expected_eagle_caches = 0
+        if not is_last_rank:
+            for chunk_idx in range(num_chunks):
+                if eagle_cache_received_indicator[chunk_idx] == 0:
+                    expected_eagle_caches += 1
+        
+        self.logger.info(f"等待接收 {expected_base_caches} 个base cache, {expected_eagle_caches} 个eagle cache...")
+        
+        # 接收base cache
+        while expected_base_caches > 0 and (time.time() - start_time) < timeout:
+            result = self.get_received_base_cache(timeout=0.1)
+            if result is None:
+                continue
+            
+            kv_cache, src_rank, layer_idx, chunk_idx = result
+            key, value = kv_cache
+            
+            if cache_received_indicator[chunk_idx, layer_idx] == 0:
+                past_key_values[layer_idx][0].cat(key)
+                past_key_values[layer_idx][1].cat(value)
+                cache_received_indicator[chunk_idx, layer_idx] = 1
+                expected_base_caches -= 1
+                self.logger.debug(f"接收base cache: layer={layer_idx}, chunk={chunk_idx}, from rank={src_rank}")
+        
+        # 接收eagle cache（非最后rank）
+        if not is_last_rank:
+            while expected_eagle_caches > 0 and (time.time() - start_time) < timeout:
+                result = self.get_received_eagle_cache(timeout=0.1)
+                if result is None:
+                    continue
+                
+                kv_cache, src_rank, is_incremental, chunk_idx = result
+                key, value = kv_cache
+                
+                # 处理eagle cache
+                if chunk_idx >= 0 and eagle_cache_received_indicator[chunk_idx] == 0:
+                    # 设置Eagle Layer的stable_kv
+                    if eagle_layer.stable_kv is None:
+                        eagle_layer.stable_kv = ((key, value),)
+                    else:
+                        # 增量追加（需要concat）
+                        old_key, old_value = eagle_layer.stable_kv[0]
+                        new_key = torch.cat([old_key, key], dim=2)
+                        new_value = torch.cat([old_value, value], dim=2)
+                        eagle_layer.stable_kv = ((new_key, new_value),)
+                    
+                    current_kv_length = eagle_layer.stable_kv[0][0].shape[2]
+                    eagle_cache_received_indicator[chunk_idx] = 1
+                    expected_eagle_caches -= 1
+                    self.logger.debug(f"接收eagle cache: chunk={chunk_idx}, length={current_kv_length}, from rank={src_rank}")
+        
+        # 检查是否有超时
+        if expected_base_caches > 0:
+            self.logger.warning(f"Base Cache接收超时，仍有 {expected_base_caches} 个未接收")
+        if expected_eagle_caches > 0:
+            self.logger.warning(f"Eagle Cache接收超时，仍有 {expected_eagle_caches} 个未接收")
+        
+        if expected_base_caches == 0 and expected_eagle_caches == 0:
+            self.logger.info("所有cache接收完成")
+        
+        return (expected_base_caches, expected_eagle_caches)
+    
+    # ==================== 辅助方法 ====================
+    
+    def get_stats(self) -> Dict[str, int]:
+        """获取统计信息"""
+        return self.stats.copy()
+    
+    def reset_stats(self):
+        """重置统计信息"""
+        for key in self.stats:
+            self.stats[key] = 0
+    
+    def has_pending_send(self) -> bool:
+        """检查是否有待发送的消息"""
+        return not self.send_queue.empty()
+    
+    def get_pending_send_count(self) -> int:
+        """获取待发送消息数量"""
+        return self.send_queue.size()
+    
+    def get_recv_queue_count(self, msg_type: MessageType = None) -> int:
+        """获取接收队列中的消息数量"""
+        if msg_type:
+            return self.recv_queue.size_by_type(msg_type)
+        return self.recv_queue.size()
+

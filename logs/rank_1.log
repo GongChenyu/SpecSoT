@@ -1,0 +1,89 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+2026-01-20 11:56:13,813 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+============================================================
+SpecSoT: Speculative Decoding + Skeleton-of-Thought
+============================================================
+Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
+Task: planning
+Enable Parallel: True
+Random Seed: 43
+Distributed Mode: rank=1/3
+Layer Splits: 12,24
+Comm Mode: p2p
+Chunk Size: 128
+============================================================
+[Distributed Config] DistributedConfig(rank=1/3, layer_splits=[12, 24], comm_mode=p2p)
+
+>>> Loading SpecSoT Model...
+
+Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]
+Loading checkpoint shards:  33%|███▎      | 1/3 [00:00<00:00,  2.61it/s]
+Loading checkpoint shards:  67%|██████▋   | 2/3 [00:00<00:00,  2.59it/s]
+Loading checkpoint shards: 100%|██████████| 3/3 [00:00<00:00,  3.83it/s]
+2026-01-20 11:56:17,231 - DistPrefill-Rank1 - INFO - 初始化ZMQ通信管理器 (mode=p2p)
+2026-01-20 11:56:18,233 - ZMQComm-Rank1 - INFO - P2P模式初始化完成: 2 send, 2 recv
+2026-01-20 11:56:18,234 - DistPrefill-Rank1 - INFO - 等待其他节点就绪 (2.0秒)...
+2026-01-20 11:56:20,236 - ZMQComm-Rank1 - INFO - 接收线程启动
+2026-01-20 11:56:20,238 - ZMQComm-Rank1 - INFO - 发送线程启动 (P2P模式)
+2026-01-20 11:56:20,238 - ZMQComm-Rank1 - INFO - 通信管理器已启动 (P2PCommManager)
+2026-01-20 11:56:20,239 - DistPrefill-Rank1 - INFO - 通信管理器已启动
+[SpecSoT] 分布式推理已启用: DistributedConfig(rank=1/3, layer_splits=[12, 24], comm_mode=p2p)
+Model loaded successfully!
+
+Loaded 1 samples for evaluation.
+
+Generating:   0%|          | 0/1 [00:00<?, ?it/s]2026-01-20 11:56:20,266 - DistPrefill-Rank1 - INFO - 开始分布式Prefill, 负责层: [12, 24), seq_len=371
+2026-01-20 11:56:20,266 - DistPrefill-Rank1 - INFO - 切分为 3 个chunks (chunk_size=128)
+2026-01-20 11:56:21,755 - ZMQComm-Rank1 - INFO - 等待接收 36 个base cache, 3 个eagle cache...
+2026-01-20 11:56:21,758 - ZMQComm-Rank1 - INFO - 所有cache接收完成
+2026-01-20 11:56:21,758 - DistPrefill-Rank1 - INFO - 分布式Prefill完成, 耗时: 1.493s
+
+Generating:   0%|          | 0/1 [00:05<?, ?it/s]
+
+============================================================
+Sample 1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+============================================================
+Using Chinese prompts for qwen model
+Generated Skeleton: #### 一类内容(1000):...
+     ...
+     对n...
+
+【步骤二指令：具体输出】
+ 1. 每个分支的生成内容，直接生成该分支的详尽内容，随即是一个单独的粘贴内容(170):...
+     保持每个段落保持在350字以内，保持简练，保持段落具有明确的单独问题，直接给出答案，像“是/否”，请直接给出答案。
+如果用户输入是“灯光》、输出，直接给出答案。
+否则，按照上述格式生成骨架，并对骨架中的每个段落进行填充，以更丰富的信息，更加完整地回答用户的问题。
+【步骤一指令】的分析详见[系统角色]。
+
+【用户输入】
+请问打篮球时，如何提高投篮命中率？请给出详细的建议。
+
+
+Detected 1 parallel branches with predicted lengths: [1000]
+Traceback (most recent call last):
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py", line 425, in <module>
+    main()
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py", line 349, in main
+    model.generate(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/SpecSoT/specsot_model.py", line 440, in generate
+    return self.generate_specsot(
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/SpecSoT/specsot_model.py", line 678, in generate_specsot
+    self.prefill_parallel(
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/SpecSoT/specsot_model.py", line 922, in prefill_parallel
+    self.eagle_layer.generate_draft_tree(batched_hidden, draft_input_ids, prefix_len=prefix_len)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/SpecSoT/eagle_layer.py", line 967, in generate_draft_tree
+    scores, parents, next_token, next_input_ids, last_hidden = self._expand_root(
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/SpecSoT/eagle_layer.py", line 1058, in _expand_root
+    out_hidden, past_key_values = self(
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/data/home/chenyu/anaconda3/envs/sdsot/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/SpecSoT/eagle_layer.py", line 728, in forward
+    position_ids = position_ids.view(-1, seq_length).long()
+RuntimeError: shape '[-1, 209]' is invalid for input of size 117

@@ -588,6 +588,22 @@ class EagleLayer(nn.Module):
         device = self.embed_tokens.weight.device
         self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
+        
+        # 分布式同步回调（在stable_kv更新后立即调用）
+        # 由DistributedPrefillManager设置
+        self._stable_kv_sync_callback = None
+    
+    def set_stable_kv_sync_callback(self, callback):
+        """
+        设置stable_kv同步回调函数
+        
+        在分布式模式下，当stable_kv更新后立即调用此回调以同步到其他rank
+        
+        Args:
+            callback: 回调函数，接受stable_kv作为参数
+                      签名: callback(stable_kv: Tuple[Tuple[torch.Tensor, torch.Tensor], ...])
+        """
+        self._stable_kv_sync_callback = callback
 
     # =========================================================================
     # 注意力掩码构建
@@ -744,6 +760,164 @@ class EagleLayer(nn.Module):
             return hidden_states, next_decoder_cache
 
         return hidden_states
+
+    # =========================================================================
+    # Draft Tree 生成：分布式Prefill专用
+    # =========================================================================
+
+    @torch.no_grad()
+    def generate_draft_tree_dist_prefill(
+        self,
+        hidden_states: torch.Tensor,
+        input_ids: torch.Tensor,
+        is_last_chunk: bool = False,
+        chunk_idx: int = 0,
+    ) -> Tuple[Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        """
+        分布式Prefill专用的Draft Tree生成
+        
+        与generate_draft_tree的区别：
+        1. 针对chunk模式设计，输入逻辑简化，不会与其他阶段混淆
+        2. 非最后chunk只执行expand_root更新stable_kv，跳过后续计算
+        3. 只有最后chunk才执行完整的tree growth和post process
+        4. 返回当前chunk的增量kv cache，供分布式管理器显式同步
+        
+        Args:
+            hidden_states: 基础模型的hidden states（来自指定层的拼接）
+            input_ids: 当前chunk的token IDs（不包含之前chunk的tokens）
+            is_last_chunk: 是否是最后一个chunk
+            
+        Returns:
+            (tree_result, incremental_kv):
+            - tree_result: 如果is_last_chunk=True则为(draft_tokens, retrieve_indices, tree_mask, tree_position_ids)，否则为None
+            - incremental_kv: 当前chunk产生的增量kv cache (new_key, new_value)，用于分布式同步
+        """
+        bsz = input_ids.shape[0]
+        input_ids = input_ids.to(hidden_states.device)
+        
+        # 记录expand_root之前的stable_kv长度，用于计算增量
+        prev_kv_len = 0
+        if self.stable_kv is not None:
+            prev_kv_len = self.stable_kv[0][0].shape[2]
+        
+        # -----------------------------------------------------------------
+        # Phase 1: Expand Root (所有chunk都要执行，更新stable_kv)
+        # -----------------------------------------------------------------
+        scores, parents, next_token, next_input_ids, last_hidden = self._expand_root_dist_prefill(
+            hidden_states, input_ids, chunk_idx
+        )
+        
+        # 计算增量KV cache
+        incremental_kv = None
+        if self.stable_kv is not None:
+            key, value = self.stable_kv[0]
+            current_len = key.shape[2]
+            if current_len > prev_kv_len:
+                # Clone出增量部分，避免异步发送时内存被修改
+                new_key = key[:, :, prev_kv_len:current_len, :].clone()
+                new_value = value[:, :, prev_kv_len:current_len, :].clone()
+                incremental_kv = (new_key, new_value)
+        
+        # 非最后chunk：只更新stable_kv，不需要后续计算
+        if not is_last_chunk:
+            return None, incremental_kv
+        
+        # -----------------------------------------------------------------
+        # 最后chunk：执行完整的tree growth和post process
+        # -----------------------------------------------------------------
+        sample_token = input_ids[:, -1]
+        len_posi = input_ids.shape[1]
+        self.tree_mask = None  # 重置 tree mask
+        
+        # 收集expand_root的结果
+        scores_list = [scores]
+        parents_list = [parents]
+        tokens_list = [next_token]
+        
+        # Phase 2: Tree Growth
+        loop_scores, loop_parents, loop_tokens, _ = self._grow_tree(
+            last_hidden, next_input_ids, scores, bsz, self.top_k, self.depth, len_posi
+        )
+        scores_list.extend(loop_scores)
+        parents_list.extend(loop_parents)
+        tokens_list.extend(loop_tokens)
+        
+        # Phase 3: Post Process
+        tree_result = self._post_process_tree(
+            bsz, scores_list, tokens_list, parents_list,
+            sample_token, self.total_tokens, self.top_k
+        )
+        return tree_result, incremental_kv
+
+    def _expand_root_dist_prefill(
+        self,
+        hidden_states: torch.Tensor,
+        input_ids: torch.Tensor,
+        chunk_idx: int = 0,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        分布式Prefill专用的根节点扩展
+        
+        与_expand_root的区别：
+        1. 输入逻辑简化：直接使用input_ids[:, 1:]作为actual_input
+        2. 不依赖stable_kv状态来判断模式，避免chunk间的混淆
+        3. stable_kv会在每个chunk累积更新
+        
+        Args:
+            hidden_states: 输入hidden states（当前chunk）
+            input_ids: 输入token IDs（当前chunk）
+            
+        Returns:
+            scores: 候选分数 [batch, top_k]
+            parents: 父节点索引 [batch]
+            next_token: 下一个token [batch, top_k]
+            next_input_ids: 下一个输入IDs [batch, top_k]
+            last_hidden: 最后一个hidden state [batch, hidden]
+        """
+        # 分布式Prefill chunk模式：直接去掉第一个token（因为embedding shift）
+        actual_input = input_ids
+        actual_hidden = hidden_states
+        
+        # 位置编码：基于stable_kv的累积长度
+        position_ids = None
+        if self.full_position_ids is not None and self.stable_kv is not None:
+            position_start = self.stable_kv[0][0].shape[2]
+            step = actual_input.shape[1]
+            position_ids = self.full_position_ids[:, position_start:position_start + step]
+        
+        # Eagle Layer Forward
+        out_hidden, past_key_values = self(
+            actual_hidden,
+            input_ids=actual_input,
+            position_ids=position_ids,
+            past_key_values=self.stable_kv,
+            use_cache=True,
+        )
+        
+        # 更新stable_kv（累积所有chunk的kv cache）
+        self.stable_kv = past_key_values
+        
+        # 生成top-k候选
+        last_hidden = out_hidden[:, -1]
+        last_headout = self.lm_head(self.norm(last_hidden))
+        last_p = self.logsoftmax(last_headout)
+        
+        top = torch.topk(last_p, self.top_k, dim=-1)
+        topk_index, topk_p = top.indices, top.values
+        
+        scores = topk_p
+        parents = torch.zeros(input_ids.shape[0], dtype=torch.long, device=input_ids.device)
+        
+        # 处理词表映射
+        if self.config.vocab_size == self.config.draft_vocab_size:
+            next_token = topk_index
+            next_input_ids = topk_index
+        else:
+            mapped_tokens = topk_index + self.d2t[topk_index]
+            next_token = mapped_tokens
+            next_input_ids = mapped_tokens
+        
+        return scores, parents, next_token, next_input_ids, last_hidden
 
     # =========================================================================
     # Draft Tree 生成：主入口

@@ -9,10 +9,6 @@ SpecSoT: Speculative Decoding + Skeleton-of-Thought 运行脚本
 """
 
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-device_index = 7  # 修改为所需的 GPU 设备索引
-os.environ["CUDA_VISIBLE_DEVICES"] = str(device_index)
-
 import random
 import numpy as np
 import torch
@@ -24,6 +20,7 @@ import pynvml
 from threading import Thread, Event
 
 from SpecSoT import SpecSoTModel
+from SpecSoT.distributed.distributed_config import DistributedConfig
 
 
 # =============================================================================
@@ -43,12 +40,15 @@ class GPUMemoryMonitor:
         >>> print(f"Peak memory: {monitor.peak_usage:.2f} MB")
     """
     
-    def __init__(self, device_index: int = 0, interval: float = 0.01):
+    def __init__(self, device_index: int = None, interval: float = 0.01):
         """
         Args:
             device_index: GPU 设备索引
             interval: 采样间隔（秒）
         """
+        # 如果未显式指定，则使用当前 CUDA 设备（与 CUDA_VISIBLE_DEVICES 对齐）
+        if device_index is None and torch.cuda.is_available():
+            device_index = torch.cuda.current_device()
         self.device_index = device_index
         self.interval = interval
         self.peak_usage = 0
@@ -180,15 +180,14 @@ def main():
         help="评估任务类型"
     )
     parser.add_argument(
-        "--enable_parallel", 
-        type=bool, 
-        default=True,
+        "--enable_parallel",
+        action="store_true",
         help="是否启用骨架并行模式"
     )
     parser.add_argument(
         "--max_new_tokens", 
         type=int, 
-        default=10000,
+        default=100,
         help="最大生成 token 数"
     )
     parser.add_argument(
@@ -197,7 +196,66 @@ def main():
         default=1,
         help="测试样本数量"
     )
+    
+    # 分布式推理参数
+    parser.add_argument(
+        "--distributed",
+        action="store_true",
+        help="启用分布式推理"
+    )
+    parser.add_argument(
+        "--rank",
+        type=int,
+        default=0,
+        help="当前进程的rank"
+    )
+    parser.add_argument(
+        "--world_size",
+        type=int,
+        default=1,
+        help="总进程数"
+    )
+    parser.add_argument(
+        "--layer_splits",
+        type=str,
+        default="",
+        help="层拆分策略，如 '14,28' 表示3台设备拆分36层模型"
+    )
+    parser.add_argument(
+        "--base_port",
+        type=int,
+        default=45000,
+        help="ZMQ通信基础端口"
+    )
+    parser.add_argument(
+        "--comm_mode",
+        type=str,
+        default="ring",
+        choices=["p2p", "ring"],
+        help="通信模式"
+    )
+    parser.add_argument(
+        "--chunk_size",
+        type=int,
+        default=128,
+        help="Sequence Parallel的chunk大小"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=36,
+        help="随机种子（用于保证结果可复现）"
+    )
+    
     args = parser.parse_args()
+
+    # 设置随机种子（保证结果可复现）
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
 
     print("=" * 60)
     print("SpecSoT: Speculative Decoding + Skeleton-of-Thought")
@@ -206,7 +264,31 @@ def main():
     print(f"Eagle Model: {args.eagle_model_path}")
     print(f"Task: {args.task}")
     print(f"Enable Parallel: {args.enable_parallel}")
+    print(f"Random Seed: {args.seed}")
+    if args.distributed:
+        print(f"Distributed Mode: rank={args.rank}/{args.world_size}")
+        print(f"Layer Splits: {args.layer_splits}")
+        print(f"Comm Mode: {args.comm_mode}")
+        print(f"Chunk Size: {args.chunk_size}")
     print("=" * 60)
+
+    # =========================================================================
+    # 0. 创建分布式配置（如果启用）
+    # =========================================================================
+    distributed_config = None
+    if args.distributed:
+        if not args.layer_splits:
+            raise ValueError("分布式模式必须指定 --layer_splits 参数")
+        
+        distributed_config = DistributedConfig.from_layer_splits_str(
+            layer_splits_str=args.layer_splits,
+            rank=args.rank,
+            world_size=args.world_size,
+            base_port=args.base_port,
+            comm_mode=args.comm_mode,
+            chunk_size=args.chunk_size,
+        )
+        print(f"[Distributed Config] {distributed_config}")
 
     # =========================================================================
     # 1. 加载 SpecSoT 模型
@@ -221,6 +303,7 @@ def main():
         total_token=40,
         depth=4,
         top_k=6,
+        distributed_config=distributed_config,
     )
     
     tokenizer = model.get_tokenizer()
@@ -231,10 +314,10 @@ def main():
     # 2. 准备特殊 Token IDs
     # =========================================================================
     para_token_ids = get_special_token_ids(tokenizer)
-    print("\nSpecial Token IDs:")
-    for key, value in para_token_ids.items():
-        token_str = tokenizer.decode([value])
-        print(f"  {key}: {value} -> '{token_str}'")
+    # print("\nSpecial Token IDs:")
+    # for key, value in para_token_ids.items():
+    #     token_str = tokenizer.decode([value])
+    #     print(f"  {key}: {value} -> '{token_str}'")
 
     # =========================================================================
     # 3. 加载数据集
@@ -248,6 +331,8 @@ def main():
     # =========================================================================
     results = []
     
+    monitor_device = torch.cuda.current_device() if torch.cuda.is_available() else 0
+
     for i in tqdm(range(len(df)), desc="Generating"):
         # task_prompt = df.loc[i, "task_prompt"]
         task_prompt = "请问打篮球时，如何提高投篮命中率？请给出详细的建议。"  
@@ -256,7 +341,7 @@ def main():
         print(f"Sample {i+1}: {task_prompt[:100]}...")
         print("=" * 60)
 
-        with GPUMemoryMonitor(device_index=device_index) as monitor:
+        with GPUMemoryMonitor(device_index=monitor_device) as monitor:
             start_time = time.time()
             
             # 调用 SpecSoT 生成
@@ -330,7 +415,7 @@ def main():
 
 if __name__ == "__main__":
     # 设置随机种子
-    seed = 35
+    seed = 42
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
