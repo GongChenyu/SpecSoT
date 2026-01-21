@@ -1,210 +1,82 @@
-2026-01-21 17:38:53,464 - SpecSoT-Rank0 - INFO - [run_specsot.py:97] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_0.log
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:285] - ============================================================
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:286] - SpecSoT Worker 启动
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:287] - ============================================================
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:288] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:289] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:290] - Task: planning
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:291] - Enable Parallel: True
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:292] - Max New Tokens: 3000
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:293] - Random Seed: 76
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:296] - Distributed Mode: rank=0/2
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:297] - Layer Splits: 14,28
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:298] - Comm Mode: p2p
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:299] - Chunk Size: 128
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:300] - Base Port: 45000
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:301] - ============================================================
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:319] - 分布式配置: DistributedConfig(rank=0/2, layer_splits=[14, 28], comm_mode=p2p)
-2026-01-21 17:38:53,626 - SpecSoT-Rank0 - INFO - [run_specsot.py:324] - >>> 正在加载 SpecSoT 模型...
-2026-01-21 17:39:00,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:340] - 模型加载完成，耗时: 7.23s
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - INFO - [run_specsot.py:346] - Special Token IDs:
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   para_begin_token_id: 820 -> '####'
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   para_end_token_id: 5321 -> '%%%%'
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   ellipsis_token_id: 28149 -> '......'
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   half_ellipsis_token_id: 1112 -> '...'
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   line_break_token_id: 271 -> '
+2026-01-22 00:22:33,766 - SpecSoT-Rank0 - INFO - [run_specsot.py:97] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_0.log
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:285] - ============================================================
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:286] - SpecSoT Worker 启动
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:287] - ============================================================
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:288] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:289] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:290] - Task: planning
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:291] - Enable Parallel: True
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:292] - Max New Tokens: 3000
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:293] - Random Seed: 76
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:301] - ============================================================
+2026-01-22 00:22:33,856 - SpecSoT-Rank0 - INFO - [run_specsot.py:324] - >>> 正在加载 SpecSoT 模型...
+2026-01-22 00:22:37,249 - SpecSoT-Rank0 - INFO - [run_specsot.py:340] - 模型加载完成，耗时: 3.39s
+2026-01-22 00:22:37,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:346] - Special Token IDs:
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   para_begin_token_id: 820 -> '####'
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   para_end_token_id: 5321 -> '%%%%'
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   ellipsis_token_id: 28149 -> '......'
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   half_ellipsis_token_id: 1112 -> '...'
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   line_break_token_id: 271 -> '
 
 '
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   colon_token_id: 25 -> ':'
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   cn_colon_token_id: 5122 -> '：'
-2026-01-21 17:39:00,857 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   colon_new_line_token_id: 510 -> ':2026-01-21 17:39:00,863 - SpecSoT-Rank0 - INFO - [run_specsot.py:225] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
-2026-01-21 17:39:00,864 - SpecSoT-Rank0 - INFO - [run_specsot.py:356] - 使用 1 条样本进行评估
-2026-01-21 17:39:00,864 - SpecSoT-Rank0 - INFO - [run_specsot.py:371] - 
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   colon_token_id: 25 -> ':'
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   cn_colon_token_id: 5122 -> '：'
+2026-01-22 00:22:37,252 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:349] -   colon_new_line_token_id: 510 -> ':
+'
+2026-01-22 00:22:37,256 - SpecSoT-Rank0 - INFO - [run_specsot.py:225] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
+2026-01-22 00:22:37,256 - SpecSoT-Rank0 - INFO - [run_specsot.py:356] - 使用 1 条样本进行评估
+2026-01-22 00:22:37,256 - SpecSoT-Rank0 - INFO - [run_specsot.py:371] - 
 ============================================================
-2026-01-21 17:39:00,864 - SpecSoT-Rank0 - INFO - [run_specsot.py:372] - 样本 1/1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
-2026-01-21 17:39:00,864 - SpecSoT-Rank0 - INFO - [run_specsot.py:373] - ============================================================
-Usi2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:396] - 
+2026-01-22 00:22:37,257 - SpecSoT-Rank0 - INFO - [run_specsot.py:372] - 样本 1/1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+2026-01-22 00:22:37,257 - SpecSoT-Rank0 - INFO - [run_specsot.py:373] - ============================================================
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:396] - 
 [统计信息]
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:397] -   总耗时: 10.61s
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:398] -   峰值显存: 1666.81 MB
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:399] -   输出长度: 744 tokens
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:400] -   吞吐量: 70.1 tokens/s
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:401] -   并行分支数: 8
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:402] -   平均接受长度: 1.39
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:403] -   平均Draft时间: 7.73 ms
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:404] -   平均Verify时间: 77.50 ms
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:405] -   平均Update时间: 2.53 ms
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:408] - 
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:397] -   总耗时: 22.97s
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:398] -   峰值显存: 14807.94 MB
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:399] -   输出长度: 1542 tokens
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:400] -   吞吐量: 67.1 tokens/s
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:401] -   并行分支数: 6
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:402] -   平均接受长度: 0.42
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:403] -   平均Draft时间: 6.18 ms
+2026-01-22 00:23:00,251 - SpecSoT-Rank0 - INFO - [run_specsot.py:404] -   平均Verify时间: 32.65 ms
+2026-01-22 00:23:00,252 - SpecSoT-Rank0 - INFO - [run_specsot.py:405] -   平均Update时间: 2.31 ms
+2026-01-22 00:23:00,252 - SpecSoT-Rank0 - INFO - [run_specsot.py:408] - 
 [响应预览]
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:409] - #### 引言【245】:......
+2026-01-22 00:23:00,252 - SpecSoT-Rank0 - INFO - [run_specsot.py:409] - 分析：......
 
-#### 帖子标题【231】:......
+#### 比赛前准备【100】:......
 
-#### 2
-<user_input>
-请问打篮球时，如何提高投篮命中率？请给出详细的建议。
-```
-#### 技术讲解
-#### 2. 拆解需求，逐层深入，减少冗余，每个分支代表一个独立的要点，组合理论、条理清晰，不包含任何解释、推理、说明、总结、摘要、概要，直接输出以下格式：......
+#### 技术动作规范【200】:......
 
-#### 生理准备【550】:......
+#### 热身训练【150】:......
 
-#### 技术关键点【342】:......
+#### 心理状态调整【120】:......
 
-#### 营养血糖【123】:......
+#### 对手分析【130】:......
+
+#### 战术配合【140】:......
 
 ####%%%%
 
-#### 引言【245】: 保持自然流畅，避免使用专业术语，口语化表达，内容应为：打篮球时，提高投篮命中率是很多球员追求的目标。无论是新手还是老手，想要在比赛中更自信地投篮，都需要掌握一些关键技巧。从身体
+#### 比赛前准备【100】: 确保比赛前准备充分，包括熟悉比赛规则、了解对手战术、检查装备是否齐全，以及进行简单的热身活动，以确保身体状态良好，减少受伤风险。同时，提前到达比赛场地，熟悉环境，调整心态，为正式比赛做好全面准备。
+</think>
 
-#### 帖子标题【231】: 保持身体平衡，双脚分开与肩同宽，膝盖微屈，重心放在前脚掌，保持稳定。投篮时，身体微微前倾，利用核心力量带动手臂发力，避免过度使用手腕。保持身体平衡是提高投篮命中
+确保比赛前准备充分，包括熟悉比赛规则、了解对手战术、检查装备是否齐全，以及进行简单的热身活动，以确保身体状态良好，减少受伤风险。同时，提前到达比赛场地，熟悉环境，调整心态，为正式比赛做好全面准备。
 
-#### 2
-<user_input>
-请问打篮球时...
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:439] - 
+#### 技术动作规范【200】:  
+保持正确的投篮姿势是提高命中率的关键。双脚分开与肩同宽，膝盖微屈，身体前倾约45度，双手持球于胸前，食指和中指控制球，无名指和小指辅助稳定。投篮时，手臂自然伸展，手腕发力将球推出，...
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:439] - 
 结果已保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/results/results_specsot_parallel_planning.json
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:442] - 
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:442] - 
 ============================================================
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:443] - 汇总统计
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:444] - ============================================================
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:452] -   总样本数: 1
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:453] -   总推理时间: 10.62s
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:454] -   平均单样本时间: 10.61s
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:455] -   平均输出长度: 744.0 tokens
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:456] -   平均峰值显存: 1666.81 MB
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:457] -   平均吞吐量: 70.1 tokens/s
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:458] -   平均接受长度: 1.39
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:459] - ============================================================
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:463] - 正在清理分布式资源...
-2026-01-21 17:39:11,585 - SpecSoT-Rank0 - INFO - [run_specsot.py:465] - 分布式资源已清理
-2026-01-21 17:39:11,585 - SpecSoT-Rank0 - INFO - [run_specsot.py:467] - Worker 执行完成
-=1 | 耗时: 34.68ms
-2026-01-21 17:39:01.193 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 1
-2026-01-21 17:39:01.195 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:554] - [CHUNK 3/5] 完成 | 总耗时: 36.40ms
-2026-01-21 17:39:01.195 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:287] - 
-[CHUNK 4/5] 开始处理 | seq_len=128, first=False, last=False
-2026-01-21 17:39:01.196 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:296] -   [PHASE 1] 执行 Embedding...
-2026-01-21 17:39:01.196 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:298] -   [PHASE 1] Embedding 完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
-2026-01-21 17:39:01.196 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
-2026-01-21 17:39:01.230 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 33.86ms
-2026-01-21 17:39:01.230 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 1
-2026-01-21 17:39:01.231 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:554] - [CHUNK 4/5] 完成 | 总耗时: 35.82ms
-2026-01-21 17:39:01.231 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:287] - 
-[CHUNK 5/5] 开始处理 | seq_len=62, first=False, last=True
-2026-01-21 17:39:01.231 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:296] -   [PHASE 1] 执行 Embedding...
-2026-01-21 17:39:01.232 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:298] -   [PHASE 1] Embedding 完成 | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB
-2026-01-21 17:39:01.232 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [0, 14)
-2026-01-21 17:39:01.270 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 38.35ms
-2026-01-21 17:39:01.270 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 1
-2026-01-21 17:39:01.272 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:554] - [CHUNK 5/5] 完成 | 总耗时: 40.32ms
-2026-01-21 17:39:01.272 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:559] - 
-============================================================
-2026-01-21 17:39:01.272 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:560] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
-2026-01-21 17:39:01.272 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:561] - ============================================================
-2026-01-21 17:39:01.272 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:567] - [RECV] 等待 Draft Tokens (from Rank 2)...
-2026-01-21 17:39:03.653 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:578] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 2381.18ms
-2026-01-21 17:39:03.653 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:581] - [SYNC] 等待所有 Cache 同步...
-2026-01-21 17:39:03.665 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:598] - [SYNC_OK] Rank 0 Cache 同步完成 | 耗时: 11.34ms
-2026-01-21 17:39:03.665 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:607] - ============================================================
-2026-01-21 17:39:03.665 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:608] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 2.774s
-2026-01-21 17:39:03.665 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:609] - ============================================================
-Generated Skeleton: #### 引言【245】:......
-
-#### 帖子标题【231】:......
-
-#### 2
-<user_input>
-请问打篮球时，如何提高投篮命中率？请给出详细的建议。
-```
-#### 技术讲解
-#### 2. 拆解需求，逐层深入，减少冗余，每个分支代表一个独立的要点，组合理论、条理清晰，不包含任何解释、推理、说明、总结、摘要、概要，直接输出以下格式：......
-
-#### 生理准备【550】:......
-
-#### 技术关键点【342】:......
-
-#### 营养血糖【123】:......
-
-####%%%%
-Detected 8 parallel branches with predicted lengths: [200, 200, 200, 200, 200, 200, 200, 200]
-Parallel Decoding Step 1
-Stopping due to KV cache limit: peak 3674 >= max 3674
-Incomplete branches due to KV cache limit: [0, 1, 2, 3, 4, 5, 6, 7]
-Avg accepted lengths: 1.391304347826087, Avg draft time: 0.0077s, Avg update time: 0.0025s, Avg verify time: 0.0775s
-Branch 0 Length: 66
-Branch 1 Length: 66
-Branch 2 Length: 77
-Branch 3 Length: 64
-Branch 4 Length: 104
-Branch 5 Length: 67
-Branch 6 Length: 68
-Branch 7 Length: 64
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:396] - 
-[统计信息]
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:397] -   总耗时: 10.61s
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:398] -   峰值显存: 1666.81 MB
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:399] -   输出长度: 744 tokens
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:400] -   吞吐量: 70.1 tokens/s
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:401] -   并行分支数: 8
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:402] -   平均接受长度: 1.39
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:403] -   平均Draft时间: 7.73 ms
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:404] -   平均Verify时间: 77.50 ms
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:405] -   平均Update时间: 2.53 ms
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:408] - 
-[响应预览]
-2026-01-21 17:39:11,484 - SpecSoT-Rank0 - INFO - [run_specsot.py:409] - #### 引言【245】:......
-
-#### 帖子标题【231】:......
-
-#### 2
-<user_input>
-请问打篮球时，如何提高投篮命中率？请给出详细的建议。
-```
-#### 技术讲解
-#### 2. 拆解需求，逐层深入，减少冗余，每个分支代表一个独立的要点，组合理论、条理清晰，不包含任何解释、推理、说明、总结、摘要、概要，直接输出以下格式：......
-
-#### 生理准备【550】:......
-
-#### 技术关键点【342】:......
-
-#### 营养血糖【123】:......
-
-####%%%%
-
-#### 引言【245】: 保持自然流畅，避免使用专业术语，口语化表达，内容应为：打篮球时，提高投篮命中率是很多球员追求的目标。无论是新手还是老手，想要在比赛中更自信地投篮，都需要掌握一些关键技巧。从身体
-
-#### 帖子标题【231】: 保持身体平衡，双脚分开与肩同宽，膝盖微屈，重心放在前脚掌，保持稳定。投篮时，身体微微前倾，利用核心力量带动手臂发力，避免过度使用手腕。保持身体平衡是提高投篮命中
-
-#### 2
-<user_input>
-请问打篮球时...
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:439] - 
-结果已保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/results/results_specsot_parallel_planning.json
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:442] - 
-============================================================
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:443] - 汇总统计
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:444] - ============================================================
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:452] -   总样本数: 1
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:453] -   总推理时间: 10.62s
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:454] -   平均单样本时间: 10.61s
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:455] -   平均输出长度: 744.0 tokens
-2026-01-21 17:39:11,485 - SpecSoT-Rank0 - INFO - [run_specsot.py:456] -   平均峰值显存: 1666.81 MB
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:457] -   平均吞吐量: 70.1 tokens/s
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:458] -   平均接受长度: 1.39
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:459] - ============================================================
-2026-01-21 17:39:11,486 - SpecSoT-Rank0 - INFO - [run_specsot.py:463] - 正在清理分布式资源...
-2026-01-21 17:39:11.486 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:206] - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 5, 'hidden_recv': 0, 'eagle_input_hidden_sent': 5, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 140, 'base_cache_recv': 110, 'eagle_cache_sent': 0, 'eagle_cache_recv': 5, 'aggregated_sends': 0, 'forwarded_messages': 0}
-2026-01-21 17:39:11.584 - DistPrefill-Rank0 - INFO - [distributed_prefill.py:209] - [CLEANUP] 分布式Prefill管理器已清理
-2026-01-21 17:39:11,585 - SpecSoT-Rank0 - INFO - [run_specsot.py:465] - 分布式资源已清理
-2026-01-21 17:39:11,585 - SpecSoT-Rank0 - INFO - [run_specsot.py:467] - Worker 执行完成
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:443] - 汇总统计
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:444] - ============================================================
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:452] -   总样本数: 1
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:453] -   总推理时间: 23.00s
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:454] -   平均单样本时间: 22.97s
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:455] -   平均输出长度: 1542.0 tokens
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:456] -   平均峰值显存: 14807.94 MB
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:457] -   平均吞吐量: 67.1 tokens/s
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:458] -   平均接受长度: 0.42
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:459] - ============================================================
+2026-01-22 00:23:00,253 - SpecSoT-Rank0 - INFO - [run_specsot.py:467] - Worker 执行完成

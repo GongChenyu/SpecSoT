@@ -589,12 +589,12 @@ class SpecSoTModel(nn.Module):
             # 分布式Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, first_token = \
                 self.distributed_prefill_manager.prefill_single_distributed(
-                    input_ids, self.past_key_values, logits_processor
+                    input_ids, self.past_key_values, skeleton_logits_processor
                 )
         else:
             # 普通Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
-                self.prefill_single(input_ids, logits_processor)
+                self.prefill_single(input_ids, skeleton_logits_processor)
         
         # ---------------------------------------------------------------------
         # Stage 1.2: Skeleton Decode 循环 (不保留统计，skeleton 阶段仅作为中间步骤)
