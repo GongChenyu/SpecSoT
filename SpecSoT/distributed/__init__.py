@@ -53,7 +53,6 @@ from .comm_utils import (
     AggregatedMessage,
 )
 from .distributed_prefill import DistributedPrefillManager
-from .distributed_inference import DistributedInferenceEngine
 
 __all__ = [
     # 配置
@@ -71,5 +70,4 @@ __all__ = [
     
     # 推理管理器
     "DistributedPrefillManager",
-    "DistributedInferenceEngine",
 ]

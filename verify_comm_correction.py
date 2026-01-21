@@ -486,11 +486,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk_size", type=int, default=128)
     parser.add_argument("--world_size", type=int, default=3)
     parser.add_argument("--layer_splits", type=str, default="12,24")
-    parser.add_argument("--gpu_ids", type=int, nargs="+", default=[5, 6, 7])
+    parser.add_argument("--gpu_ids", type=int, nargs="+", default=[1, 2, 3])
     parser.add_argument("--base_port", type=int, default=45000)
     parser.add_argument("--comm_mode", type=str, default="p2p", choices=["p2p", "ring"])
     parser.add_argument("--seed", type=int, default=72)
-    parser.add_argument("--cache_dir", type=str, default="/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/prefill_cache_specsot_verify")
+    parser.add_argument("--cache_dir", type=str, default="/data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/verify_comm")
     parser.add_argument("--max_new_tokens", type=int, default=3000)
     parser.add_argument("--rtol", type=float, default=1e-3)
     parser.add_argument("--atol", type=float, default=1e-5)
@@ -526,8 +526,112 @@ def main():
     logging.info("Done")
 
 
+def check_eagle_input(cache_dir, last_rank=2):
+    """
+    对比单机和分布式的 eagle 输入 hidden_states，分析差异。
+    cache_dir: 缓存目录
+    last_rank: 分布式 world_size-1
+    """
+    import torch
+    import pickle
+    import os
+    # 1. 加载单机数据
+    single_path = os.path.join(cache_dir, "single_draft.pkl")
+    if not os.path.exists(single_path):
+        print(f"Error: {single_path} not found.")
+        return
+    with open(single_path, "rb") as f:
+        single_data = pickle.load(f)
+    h_single = single_data["hidden_states_for_eagle"]
+    print(f"Single Hidden Shape: {h_single.shape}")
+
+    # 2. 加载分布式数据
+    dist_path = os.path.join(cache_dir, f"dist_rank{last_rank}_draft.pkl")
+    if not os.path.exists(dist_path):
+        print(f"Error: {dist_path} not found.")
+        return
+    with open(dist_path, "rb") as f:
+        dist_data = pickle.load(f)
+
+    # 3. 拼接分布式 Chunks
+    chunks = dist_data["chunks"]
+    chunks = sorted(chunks, key=lambda x: x["chunk_idx"])
+    print(f"Found {len(chunks)} distributed chunks.")
+    hidden_list = []
+    for i, c in enumerate(chunks):
+        h = c["hidden_states_for_eagle"]
+        hidden_list.append(h)
+        print(f"  Chunk {i}: {h.shape}")
+    h_dist = torch.cat(hidden_list, dim=1)
+    print(f"Distributed Hidden (Concatenated) Shape: {h_dist.shape}")
+
+    # 4. 对比分析
+    if h_single.shape != h_dist.shape:
+        print("\n[ERROR] Shapes do not match! Cannot compare directly.")
+        return
+    diff = (h_single - h_dist).abs()
+    max_diff = diff.max().item()
+    mean_diff = diff.mean().item()
+    print("\n" + "="*40)
+    print("Comparison Result: Eagle Input Hidden States")
+    print("="*40)
+    print(f"Max Difference:  {max_diff:.8f}")
+    print(f"Mean Difference: {mean_diff:.8f}")
+
+    # 5. 详细诊断
+    if max_diff > 1e-3:
+        print("\n[WARNING] Large difference detected!")
+        max_idx = torch.unravel_index(torch.argmax(diff), diff.shape)
+        print(f"Max diff at index: {max_idx}")
+        print(f"  Single value: {h_single[max_idx].item()}")
+        print(f"  Dist value:   {h_dist[max_idx].item()}")
+        print("\nChecking first 10 tokens diff:")
+        for t in range(min(10, h_single.shape[1])):
+            token_diff = diff[0, t, :].max().item()
+            print(f"  Token {t}: max_diff = {token_diff:.6f}")
+        print("\nChecking Chunk boundaries:")
+        offset = 0
+        for i, c in enumerate(chunks):
+            chunk_len = c["hidden_states_for_eagle"].shape[1]
+            if offset < diff.shape[1]:
+                chunk_start_diff = diff[0, offset, :].max().item()
+                print(f"  Chunk {i} Start (Token {offset}): max_diff = {chunk_start_diff:.6f}")
+            offset += chunk_len
+
+
+def main():
+    args = parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    run_args = RunArgs(
+        base_model_path=args.base_model_path,
+        eagle_model_path=args.eagle_model_path,
+        prompt=args.prompt,
+        chunk_size=args.chunk_size,
+        world_size=args.world_size,
+        layer_splits=args.layer_splits,
+        gpu_ids=args.gpu_ids,
+        base_port=args.base_port,
+        comm_mode=args.comm_mode,
+        seed=args.seed,
+        cache_dir=args.cache_dir,
+        max_new_tokens=args.max_new_tokens,
+    )
+
+    if args.mode in ["run", "all"]:
+        run_single(run_args)
+        run_distributed(run_args)
+
+    if args.mode in ["analyze", "all"]:
+        analyze(run_args, rtol=args.rtol, atol=args.atol)
+
+    # 新增：自动调用 eagle 输入对比
+    print("\n==== Running Eagle Input Hidden States Check ====")
+    check_eagle_input(run_args.cache_dir, last_rank=run_args.world_size-1)
+
+    logging.info("Done")
+
+
 if __name__ == "__main__":
     main()
-
-# python verify_specsot_kv.py --mode all 
 

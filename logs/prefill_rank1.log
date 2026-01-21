@@ -1,0 +1,79 @@
+2026-01-21 17:39:48.380 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:182] - [INIT] 初始化ZMQ通信管理器 | mode=p2p, base_port=45000
+2026-01-21 17:39:49.382 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:194] - [INIT] 等待其他节点就绪 (3.0秒)...
+2026-01-21 17:39:52.387 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:199] - [INIT] 通信管理器已启动
+2026-01-21 17:39:52.392 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:256] - ============================================================
+2026-01-21 17:39:52.393 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:257] - [PREFILL] 开始分布式 Prefill 阶段
+2026-01-21 17:39:52.393 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:258] - ============================================================
+2026-01-21 17:39:52.393 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:259] -   Rank: 1/2
+2026-01-21 17:39:52.394 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:260] -   负责层范围: [12, 24)
+2026-01-21 17:39:52.394 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:261] -   输入序列长度: 7
+2026-01-21 17:39:52.394 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:262] -   模型总层数: 36
+2026-01-21 17:39:52.395 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:810] - [INIT] Cache 追踪初始化: chunks=1, layers=36, seq_len=7
+2026-01-21 17:39:52.395 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:677] - [SPLIT] 输入序列切分为 1 个 chunks | seq_len=7, chunk_size=128
+2026-01-21 17:39:52.396 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:679] -     Chunk 0: shape=torch.Size([1, 7])
+2026-01-21 17:39:52.396 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:269] -   Chunk数量: 1 (chunk_size=128)
+2026-01-21 17:39:52.396 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:732] - [EAGLE] Input Layers 配置: [1, 17, 32] (总层数=36)
+2026-01-21 17:39:52.396 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:273] -   Eagle Input Layers: [1, 17, 32]
+2026-01-21 17:39:52.397 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+[CHUNK 1/1] 开始处理 | seq_len=7, first=True, last=True
+2026-01-21 17:39:52.397 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-21 17:39:52.400 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 7, 2560), dtype=float16, device=cuda:0, size=0.034MB | chunk_idx=0
+2026-01-21 17:39:52.401 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 3.43ms
+2026-01-21 17:39:52.401 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [12, 24)
+2026-01-21 17:39:52.401 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=0, seq_with_past=7
+2026-01-21 17:39:52.582 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=12 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=12 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.586 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=13 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.587 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=13 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.590 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.590 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.593 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.593 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.596 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.596 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.599 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
+2026-01-21 17:39:52.599 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.600 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.603 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.603 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.606 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.606 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.609 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.610 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.612 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.613 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.615 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.616 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.619 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.03MB
+2026-01-21 17:39:52.619 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.03MB
+2026-01-21 17:39:52.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=12, cache_sent=24, eagle_hidden_sent=1 | 耗时: 219.19ms
+2026-01-21 17:39:52.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-21 17:39:52.620 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 7, 2560), dtype=float16, device=cuda:0, size=0.034MB
+2026-01-21 17:39:52.620 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:548] -   [PHASE 3] 完成 | 耗时: 0.37ms
+2026-01-21 17:39:52.621 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=0, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.622 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=1, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.622 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=2, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.622 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=3, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.622 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=4, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.622 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=5, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=6, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=7, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=8, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=9, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=10, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=11, chunk=0 from Rank 0 | size=0.03MB
+2026-01-21 17:39:52.624 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:720] -   [CACHE] 非阻塞接收 12 个 Base Cache
+2026-01-21 17:39:52.624 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:554] - [CHUNK 1/1] 完成 | 总耗时: 227.47ms
+2026-01-21 17:39:52.624 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - 
+============================================================
+2026-01-21 17:39:52.624 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:560] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
+2026-01-21 17:39:52.624 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:561] - ============================================================
+2026-01-21 17:39:52.624 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:567] - [RECV] 等待 Draft Tokens (from Rank 2)...
+2026-01-21 17:39:53.276 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:578] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 651.62ms
+2026-01-21 17:39:53.276 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:581] - [SYNC] 等待所有 Cache 同步...
+2026-01-21 17:39:53.279 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:598] - [SYNC_OK] Rank 1 Cache 同步完成 | 耗时: 2.44ms
+2026-01-21 17:39:53.279 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:607] - ============================================================
+2026-01-21 17:39:53.279 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:608] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 0.887s
+2026-01-21 17:39:53.279 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:609] - ============================================================
+2026-01-21 17:39:58.301 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:206] - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 1, 'hidden_recv': 1, 'eagle_input_hidden_sent': 1, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 24, 'base_cache_recv': 24, 'eagle_cache_sent': 0, 'eagle_cache_recv': 1, 'aggregated_sends': 0, 'forwarded_messages': 0}
+2026-01-21 17:39:58.384 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:209] - [CLEANUP] 分布式Prefill管理器已清理

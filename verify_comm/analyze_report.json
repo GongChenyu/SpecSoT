@@ -1,0 +1,47 @@
+{
+  "base_ok": true,
+  "base_mismatched": [],
+  "eagle_ok": true,
+  "eagle_mismatched": [],
+  "draft_ok": false,
+  "draft_mismatched": [
+    {
+      "item": "input_ids_for_eagle",
+      "match": false,
+      "reason": "value_mismatch"
+    },
+    {
+      "item": "draft_tokens",
+      "match": false,
+      "reason": "value_mismatch",
+      "max_diff": 24789
+    },
+    {
+      "item": "retrieve_indices",
+      "match": false,
+      "reason": "shape_mismatch",
+      "shape_a": [
+        1,
+        21,
+        6
+      ],
+      "shape_b": [
+        1,
+        22,
+        6
+      ]
+    },
+    {
+      "item": "tree_mask",
+      "match": false,
+      "reason": "value_mismatch",
+      "max_diff": 1.0
+    },
+    {
+      "item": "tree_position_ids",
+      "match": false,
+      "reason": "value_mismatch",
+      "max_diff": 1
+    }
+  ]
+}

@@ -104,6 +104,9 @@ class SemanticLogitsProcessor(LogitsProcessor):
             scores[:, self.ellipsis_token_id] = float('-inf')
             scores[:, self.line_break_token_id] = float('-inf')
             scores[:, self.para_begin_token_id] = float('-inf')
+            scores[:, self.colon_token_id] = float('-inf')
+            scores[:, self.cn_colon_token_id] = float('-inf')
+            scores[:, self.colon_new_line_token_id] = float('-inf')
             return scores
 
         # 获取上一个 token

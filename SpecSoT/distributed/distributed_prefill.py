@@ -80,7 +80,8 @@ def setup_prefill_logger(rank: int, log_dir: str = None) -> logging.Logger:
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = os.path.join(log_dir, f"prefill_rank{rank}_{timestamp}.log")
+        log_file = os.path.join(log_dir, f"prefill_rank{rank}.log")
+        # log_file = os.path.join(log_dir, f"prefill_rank{rank}_{timestamp}.log")
         file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
@@ -727,7 +728,7 @@ class DistributedPrefillManager:
         - layer_idx == num_layers // 2
         - layer_idx == num_layers - 3
         """
-        layers = [2, num_layers // 2, num_layers - 3]
+        layers = [2 - 1, num_layers // 2 - 1, num_layers - 3 - 1]
         self.logger.debug(f"[EAGLE] Input Layers 配置: {layers} (总层数={num_layers})")
         return layers
     

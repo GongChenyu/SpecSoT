@@ -983,7 +983,7 @@ class SpecSoTModel(nn.Module):
         draft_tokens = torch.cat((draft_tokens, padding), dim=1)
         candidates = draft_tokens[0, retrieve_indices]
         
-        best_candidate, accept_length, sample_p = evaluate_single(logits, candidates, logits_processor)
+        best_candidate, accept_length, sample_p = evaluate_single(input_ids, logits, candidates, logits_processor)
         # print(f"accept_length: {accept_length.item()}")
         # if accept_length.item() > 0:
         #     best_candidate_token = candidates[0, best_candidate, :accept_length]
