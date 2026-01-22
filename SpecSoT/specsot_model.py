@@ -61,6 +61,7 @@ from .utils import (
     check_stop_conditions,
     check_stop_conditions_parallel,
     merge_outputs,
+    set_random_seed,
     evaluate_single,
     evaluate_parallel,
 )
@@ -104,6 +105,7 @@ class SpecSoTModel(nn.Module):
         eagle_layer: nn.Module,
         base_model_name_or_path: str,
         use_eagle3: bool = True,
+        seed: int = 42,
         distributed_config: Optional[DistributedConfig] = None,
     ):
         """
@@ -115,6 +117,7 @@ class SpecSoTModel(nn.Module):
             base_model_name_or_path: 基础模型路径，用于加载 tokenizer
             use_eagle3: 是否使用 Eagle3 架构
             distributed_config: 分布式推理配置
+            seed: 随机种子
         """
         super().__init__()
         
@@ -127,6 +130,7 @@ class SpecSoTModel(nn.Module):
         self.vocab_size = base_model.lm_head.weight.shape[0]
         self.base_model_name_or_path = base_model_name_or_path
         self.use_eagle3 = use_eagle3
+        self.seed = seed
         
         # Tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -150,6 +154,7 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # 4. 推理状态初始化
         # =====================================================================
+        set_random_seed(self.seed)
         self.reset_state()
         self.eagle_layer.reset_state()
 
@@ -199,6 +204,7 @@ class SpecSoTModel(nn.Module):
         depth: int = 7,
         top_k: int = 10,
         threshold: float = 1.0,
+        seed: int = 42,
         distributed_config: Optional[DistributedConfig] = None,
         **kwargs,
     ) -> "SpecSoTModel":
@@ -251,6 +257,7 @@ class SpecSoTModel(nn.Module):
             eagle_layer=eagle_layer,
             base_model_name_or_path=base_model_path,
             use_eagle3=use_eagle3,
+            seed=seed,
             distributed_config=distributed_config,
         )
 
@@ -480,7 +487,8 @@ class SpecSoTModel(nn.Module):
             # 普通Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
                 self.prefill_single(input_ids, logits_processor)
-        
+        set_random_seed(self.seed)
+
         # =====================================================================
         # 3. Decode 循环
         # =====================================================================
@@ -595,7 +603,8 @@ class SpecSoTModel(nn.Module):
             # 普通Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
                 self.prefill_single(input_ids, skeleton_logits_processor)
-        
+        set_random_seed(self.seed)
+
         # ---------------------------------------------------------------------
         # Stage 1.2: Skeleton Decode 循环 (不保留统计，skeleton 阶段仅作为中间步骤)
         # ---------------------------------------------------------------------
@@ -816,6 +825,15 @@ class SpecSoTModel(nn.Module):
             if outputs["hidden_states"][0].device != ea_device:
                 outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
             hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
+        
+        # print(f"chunk0 layer1 hidden[0, :5, :5]: {hidden_states[0, :5, :5]}")
+        # print(f"chunk0 layer17 hidden[0, :5, 2560:2560+5]: {hidden_states[0, :5, 2560:2560+5]}")
+        # print(f"chunk1 layer1 hidden[0, 128:128+5, :5]: {hidden_states[0, 128:128+5, :5]}")
+        # print(f"chunk1 layer17 hidden[0, 128:128+5, 2560:2560+5]: {hidden_states[0, 128:128+5, 2560:2560+5]}")
+        # print(f"chunk2 layer1 hidden[0, 256:256+5, :5]: {hidden_states[0, 256:256+5, :5]}")
+        # print(f"chunk2 layer17 hidden[0, 256:256+5, 2560:2560+5]: {hidden_states[0, 256:256+5, 2560:2560+5]}")
+        # print(f"chunk3 layer1 hidden[0, 384:384+5, :5]: {hidden_states[0, 384:384+5, :5]}")
+        # print(f"chunk3 layer17 hidden[0, 384:384+5, 2560:2560+5]: {hidden_states[0, 384:384+5, 2560:2560+5]}")
 
         # Generate Draft Tree
         draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \

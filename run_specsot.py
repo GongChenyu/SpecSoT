@@ -274,13 +274,13 @@ def run_worker(args):
     log_dir = os.path.join(project_dir, 'logs')
     logger = setup_logging(rank=args.rank, log_dir=log_dir)
     
-    # 设置随机种子
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(args.seed)
-        torch.cuda.manual_seed_all(args.seed)
+    # # 设置随机种子
+    # random.seed(args.seed)
+    # np.random.seed(args.seed)
+    # torch.manual_seed(args.seed)
+    # if torch.cuda.is_available():
+    #     torch.cuda.manual_seed(args.seed)
+    #     torch.cuda.manual_seed_all(args.seed)
 
     logger.info("=" * 60)
     logger.info(f"SpecSoT Worker 启动")
@@ -329,10 +329,11 @@ def run_worker(args):
         ea_model_path=args.eagle_model_path,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
-        device_map="cuda:0" if args.distributed else "cuda:4", 
+        device_map="cuda:0" if args.distributed else "cuda:0", 
         total_token=40,
         depth=4,
         top_k=6,
+        seed=args.seed,
         distributed_config=distributed_config,
     )
     

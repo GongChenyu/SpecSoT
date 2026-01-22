@@ -242,7 +242,8 @@ class RingCommManager(ZMQCommManagerBase):
         self,
         hidden: torch.Tensor,
         layer_idx: int,
-        dst_rank: int
+        dst_rank: int,
+        chunk_idx: int = -1
     ) -> None:
         """Ring模式：发送eagle input hidden，由转发机制送达最后一个rank"""
         msg = Message(
@@ -251,6 +252,7 @@ class RingCommManager(ZMQCommManagerBase):
             dst_rank=dst_rank,
             data=hidden,
             layer_idx=layer_idx,
+            chunk_idx=chunk_idx,
             seq_id=self._get_next_seq_id(),
         )
         self.send_queue.put(msg)

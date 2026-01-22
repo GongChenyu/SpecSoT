@@ -237,13 +237,14 @@ class P2PCommManager(ZMQCommManagerBase):
         self,
         hidden: torch.Tensor,
         layer_idx: int,
-        dst_rank: int
+        dst_rank: int,
+        chunk_idx: int = -1
     ) -> None:
         """P2P模式：直接发送到最后一个rank"""
         hidden_info = get_tensor_info(hidden) if torch.is_tensor(hidden) else str(type(hidden))
         self.logger.info(
             f"[QUEUE] EAGLE_INPUT_HIDDEN -> rank {dst_rank} | "
-            f"layer_idx={layer_idx}"
+            f"layer_idx={layer_idx}, chunk_idx={chunk_idx}"
         )
         self.logger.debug(f"  hidden: {hidden_info}")
         
@@ -253,6 +254,7 @@ class P2PCommManager(ZMQCommManagerBase):
             dst_rank=dst_rank,
             data=hidden,
             layer_idx=layer_idx,
+            chunk_idx=chunk_idx,
             seq_id=self._get_next_seq_id(),
         )
         self.send_queue.put(msg)

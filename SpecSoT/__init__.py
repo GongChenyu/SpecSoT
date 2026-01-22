@@ -39,6 +39,7 @@ from .utils import (
     check_stop_conditions,
     check_stop_conditions_parallel,
     merge_outputs,
+    set_random_seed,
 )
 
 # KV Cache
@@ -80,6 +81,7 @@ __all__ = [
     "parse_skeleton",
     "check_stop_conditions",
     "merge_outputs",
+    "set_random_seed",
     
     # Config
     "EConfig",

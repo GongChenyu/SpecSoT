@@ -511,7 +511,8 @@ class ZMQCommManagerBase(ABC):
         self,
         hidden: torch.Tensor,
         layer_idx: int,
-        dst_rank: int
+        dst_rank: int,
+        chunk_idx: int = -1
     ) -> None:
         """
         发送eagle layer输入的hidden state
@@ -525,12 +526,14 @@ class ZMQCommManagerBase(ABC):
             hidden: hidden state tensor
             layer_idx: 层索引
             dst_rank: 目标rank（最后一个rank）
+            chunk_idx: chunk索引，用于确保接收端正确匹配
         """
         pass
     
     def recv_eagle_input_hidden(
         self,
         layer_idx: int,
+        chunk_idx: int = -1,
         timeout: float = 30.0
     ) -> Optional[torch.Tensor]:
         """
@@ -538,13 +541,14 @@ class ZMQCommManagerBase(ABC):
         
         Args:
             layer_idx: 期望的层索引
+            chunk_idx: 期望的chunk索引，-1表示不检查chunk_idx
             timeout: 超时时间（秒）
             
         Returns:
             hidden state tensor 或 None
         """
         start_time = time.time()
-        self.logger.info(f"[WAIT] 等待接收 EAGLE_INPUT_HIDDEN (layer_idx={layer_idx}, timeout={timeout}s)")
+        self.logger.info(f"[WAIT] 等待接收 EAGLE_INPUT_HIDDEN (layer_idx={layer_idx}, chunk_idx={chunk_idx}, timeout={timeout}s)")
         
         deadline = time.time() + timeout
         pending = []
@@ -556,14 +560,18 @@ class ZMQCommManagerBase(ABC):
             if msg is None:
                 continue
             
-            if msg.layer_idx == layer_idx:
+            # 检查layer_idx匹配，如果指定了chunk_idx也要检查chunk_idx匹配
+            layer_match = (msg.layer_idx == layer_idx)
+            chunk_match = (chunk_idx == -1 or msg.chunk_idx == chunk_idx)
+            
+            if layer_match and chunk_match:
                 for pending_msg in pending:
                     self.recv_queue.put(pending_msg)
                 wait_time = time.time() - start_time
                 hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
                 self.logger.info(
                     f"[RECV_OK] EAGLE_INPUT_HIDDEN 接收成功 | "
-                    f"layer_idx={layer_idx}, from rank {msg.get_effective_src()}, "
+                    f"layer_idx={layer_idx}, chunk_idx={msg.chunk_idx}, from rank {msg.get_effective_src()}, "
                     f"wait_time={wait_time*1000:.2f}ms"
                 )
                 self.logger.debug(f"  hidden: {hidden_info}")
@@ -575,7 +583,7 @@ class ZMQCommManagerBase(ABC):
             self.recv_queue.put(pending_msg)
         
         wait_time = time.time() - start_time
-        self.logger.warning(f"[TIMEOUT] 接收 EAGLE_INPUT_HIDDEN 超时 (layer={layer_idx}) | wait_time={wait_time:.2f}s")
+        self.logger.warning(f"[TIMEOUT] 接收 EAGLE_INPUT_HIDDEN 超时 (layer={layer_idx}, chunk={chunk_idx}) | wait_time={wait_time:.2f}s")
         return None
     
     def recv_all_eagle_input_hidden(
@@ -583,6 +591,7 @@ class ZMQCommManagerBase(ABC):
         eagle_input_layers: List[int],
         my_start_layer: int,
         my_end_layer: int,
+        chunk_idx: int = -1,
         timeout: float = 60.0
     ) -> Dict[int, torch.Tensor]:
         """
@@ -594,6 +603,7 @@ class ZMQCommManagerBase(ABC):
             eagle_input_layers: 需要收集的层索引列表 [2, num_layers//2, num_layers-3]
             my_start_layer: 本rank负责的起始层
             my_end_layer: 本rank负责的结束层
+            chunk_idx: 期望的chunk索引，用于确保接收正确chunk的数据
             timeout: 超时时间（秒）
             
         Returns:
@@ -613,7 +623,7 @@ class ZMQCommManagerBase(ABC):
         
         self.logger.info(
             f"[WAIT] 等待接收 ALL_EAGLE_INPUT_HIDDEN | "
-            f"expected_layers={expected_layers}, my_range=[{my_start_layer}, {my_end_layer}), timeout={timeout}s"
+            f"expected_layers={expected_layers}, chunk_idx={chunk_idx}, my_range=[{my_start_layer}, {my_end_layer}), timeout={timeout}s"
         )
         
         result = {}
@@ -627,29 +637,38 @@ class ZMQCommManagerBase(ABC):
             if msg is None:
                 continue
             
-            if msg.layer_idx in remaining_layers:
+            # 检查layer_idx和chunk_idx是否匹配
+            layer_match = (msg.layer_idx in remaining_layers)
+            chunk_match = (chunk_idx == -1 or msg.chunk_idx == chunk_idx)
+            
+            if layer_match and chunk_match:
                 result[msg.layer_idx] = msg.data
                 remaining_layers.discard(msg.layer_idx)
                 hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
                 self.logger.info(
-                    f"[RECV_OK] EAGLE_INPUT_HIDDEN | layer_idx={msg.layer_idx}, "
+                    f"[RECV_OK] EAGLE_INPUT_HIDDEN | layer_idx={msg.layer_idx}, chunk_idx={msg.chunk_idx}, "
                     f"from rank {msg.get_effective_src()}, remaining={remaining_layers}"
                 )
                 self.logger.debug(f"  hidden: {hidden_info}")
             else:
-                # 放回队列
+                # 不匹配则放回队列（可能是其他chunk的数据）
                 self.recv_queue.put(msg)
+                if not chunk_match:
+                    self.logger.debug(
+                        f"[PENDING] EAGLE_INPUT_HIDDEN chunk不匹配 | "
+                        f"expected_chunk={chunk_idx}, received_chunk={msg.chunk_idx}, layer={msg.layer_idx}"
+                    )
         
         wait_time = time.time() - start_time
         if remaining_layers:
             self.logger.warning(
                 f"[TIMEOUT] 接收 EAGLE_INPUT_HIDDEN 不完整 | "
-                f"missing_layers={remaining_layers}, wait_time={wait_time:.2f}s"
+                f"chunk_idx={chunk_idx}, missing_layers={remaining_layers}, wait_time={wait_time:.2f}s"
             )
         else:
             self.logger.info(
                 f"[RECV_OK] ALL_EAGLE_INPUT_HIDDEN 全部接收完成 | "
-                f"layers={list(result.keys())}, wait_time={wait_time*1000:.2f}ms"
+                f"chunk_idx={chunk_idx}, layers={list(result.keys())}, wait_time={wait_time*1000:.2f}ms"
             )
         
         return result

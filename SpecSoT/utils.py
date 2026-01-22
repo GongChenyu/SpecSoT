@@ -42,6 +42,7 @@ import re
 from typing import List, Tuple, Optional, Dict
 
 import torch
+import numpy as np
 from transformers.generation.logits_process import (
     LogitsProcessorList,
     RepetitionPenaltyLogitsProcessor,
@@ -195,41 +196,6 @@ def build_parallel_prefill_mask(
 # 3. Verification Utilities
 # =============================================================================
 
-# =============================================================================
-# Evaluation 模块重构
-# 
-# 采样逻辑说明：
-# 1. Semantic Logits Processors 与温度等 Logits Processors 是正交关系
-# 2. 通过有没有温度等 logits processors 判断是否使用 greedy 采样
-# 3. 通过有没有 semantic logits processors 判断采样前的 logits 是否需要特殊语义处理
-#
-# 调用场景：
-# - Single (单序列): Eagle 投机解码、SpecSoT Skeleton 阶段
-# - Parallel (并行): SpecSoT 并行分支解码阶段（无语义约束）
-#
-# 架构：
-# ┌─────────────────────┐     ┌─────────────────────┐
-# │  evaluate_single    │     │  evaluate_parallel  │
-# │  [batch, paths,     │     │  [num_para, paths,  │
-# │   seq, vocab]       │     │   seq, vocab]       │
-# └─────────┬───────────┘     └─────────┬───────────┘
-#           │                           │
-#           └───────────┬───────────────┘
-#                       ▼
-#           ┌───────────────────────┐
-#           │  _evaluate_batch      │
-#           │  (核心评估逻辑)        │
-#           └───────────┬───────────┘
-#                       │
-#         ┌─────────────┴─────────────┐
-#         ▼                           ▼
-# ┌───────────────────┐     ┌───────────────────────┐
-# │  _greedy_evaluate │     │ _rejection_sampling   │
-# │                   │     │ _evaluate             │
-# └───────────────────┘     └───────────────────────┘
-# =============================================================================
-
-
 def _check_processors(logits_processor: Optional[LogitsProcessorList],) -> Tuple[bool, bool]:
     """
     检查 logits processor 的类型
@@ -265,50 +231,6 @@ def _check_processors(logits_processor: Optional[LogitsProcessorList],) -> Tuple
 
 
 def greedy_sampling(
-    input_ids: torch.Tensor,
-    logits: torch.Tensor,
-    candidates: torch.Tensor,
-    logits_processor: LogitsProcessorList,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Greedy 评估：直接比较 argmax 选择最佳路径
-    逐 Token Greedy 评估（支持语义约束）
-    
-    Args:
-        input_ids: [seq_len]
-        logits: [num_paths, seq_len, vocab]
-        candidates: [num_paths, seq_len]
-        
-    Returns:
-        best_candidate: 最佳候选索引 (scalar tensor)
-        accept_length: 接受长度，不含 root (scalar tensor)
-        sample_p: 用于采样下一 token 的概率分布 [vocab]（softmax 后）
-    """
-    device = logits.device
-    num_paths, seq_len, vocab_size = logits.shape
-    
-    # candidates[:, 1:] 因为第一个是 root (已知正确)
-    # logits[:, :-1] 预测的是下一个位置
-    posterior_mask = (
-        candidates[:, 1:].to(device) == torch.argmax(logits[:, :-1, :], dim=-1)
-    ).int()
-    
-    # 累积接受长度
-    candidates_accept_length = torch.cumprod(posterior_mask, dim=-1).sum(dim=-1)
-    accept_length, best_candidate = candidates_accept_length.max(dim=0)
-    
-    # 获取最佳路径的采样 logits
-    best_path_logits = logits[best_candidate, :, :]  # [seq_len, vocab]
-    next_token_pos = accept_length.clamp(max=seq_len - 1)
-    sample_logits = best_path_logits[next_token_pos]  # [vocab]
-    
-    # 返回 softmax 后的概率分布，保持与 rejection sampling 输出一致
-    sample_p = torch.softmax(sample_logits, dim=-1)
-    
-    return best_candidate, accept_length, sample_p
-
-
-def greedy_sampling_sequential(
     input_ids: torch.Tensor,
     logits: torch.Tensor,
     candidates: torch.Tensor,
@@ -597,7 +519,7 @@ def logits_sampling(
                 f"but got batch size {batch_size}. Please set batch_size=1 when using SemanticLogitsProcessor.")
             
             for b in range(batch_size):
-                bc, al, sl = greedy_sampling_sequential(input_ids[b], logits[b], candidates[b], logits_processor)
+                bc, al, sl = greedy_sampling(input_ids[b], logits[b], candidates[b], logits_processor)
                 # bc, al, sl = greedy_sampling(input_ids[b], logits[b], candidates[b], logits_processor)
                 best_candidates.append(bc)
                 accept_lengths.append(al)
@@ -952,7 +874,20 @@ def merge_outputs(
 
     return torch.tensor([merged_ids], device=device)
 
+def set_random_seed(seed: int):
+    """
+    设置随机种子以确保结果可复现
+    
+    Args:
+        seed: 随机种子值
+    """
 
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 # =============================================================================
 # 8. Skeleton & Parallel Input Preparation (骨架和并行输入准备)
 # =============================================================================

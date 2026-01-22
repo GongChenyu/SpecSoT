@@ -1,52 +1,52 @@
-2026-01-22 16:15:34,838 - SpecSoT-Rank1 - INFO - [run_specsot.py:97] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_1.log
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:285] - ============================================================
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:286] - SpecSoT Worker 启动
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:287] - ============================================================
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:288] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:289] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:290] - Task: planning
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:291] - Enable Parallel: True
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:292] - Max New Tokens: 3000
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:293] - Random Seed: 76
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:296] - Distributed Mode: rank=1/2
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:297] - Layer Splits: 14,28
-2026-01-22 16:15:34,919 - SpecSoT-Rank1 - INFO - [run_specsot.py:298] - Comm Mode: p2p
-2026-01-22 16:15:34,920 - SpecSoT-Rank1 - INFO - [run_specsot.py:299] - Chunk Size: 128
-2026-01-22 16:15:34,920 - SpecSoT-Rank1 - INFO - [run_specsot.py:300] - Base Port: 45000
-2026-01-22 16:15:34,920 - SpecSoT-Rank1 - INFO - [run_specsot.py:301] - ============================================================
-2026-01-22 16:15:34,920 - SpecSoT-Rank1 - INFO - [run_specsot.py:319] - 分布式配置: DistributedConfig(rank=1/2, layer_splits=[14, 28], comm_mode=p2p)
-2026-01-22 16:15:34,920 - SpecSoT-Rank1 - INFO - [run_specsot.py:324] - >>> 正在加载 SpecSoT 模型...
-2026-01-22 16:15:42,002 - SpecSoT-Rank1 - INFO - [run_specsot.py:340] - 模型加载完成，耗时: 7.08s
-2026-01-22 16:15:42,004 - SpecSoT-Rank1 - INFO - [run_specsot.py:346] - Special Token IDs:
-2026-01-22 16:15:42,004 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   para_begin_token_id: 820 -> '####'
-2026-01-22 16:15:42,005 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   para_end_token_id: 5321 -> '%%%%'
-2026-01-22 16:15:42,005 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   ellipsis_token_id: 28149 -> '......'
-2026-01-22 16:15:42,005 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   half_ellipsis_token_id: 1112 -> '...'
-2026-01-22 16:15:42,006 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   line_break_token_id: 271 -> '
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:97] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_1.log
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:285] - ============================================================
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:286] - SpecSoT Worker 启动
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:287] - ============================================================
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:288] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:289] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:290] - Task: planning
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:291] - Enable Parallel: True
+2026-01-22 19:31:06,334 - SpecSoT-Rank1 - INFO - [run_specsot.py:292] - Max New Tokens: 3000
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:293] - Random Seed: 76
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:296] - Distributed Mode: rank=1/2
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:297] - Layer Splits: 14,28
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:298] - Comm Mode: p2p
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:299] - Chunk Size: 128
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:300] - Base Port: 45000
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:301] - ============================================================
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:319] - 分布式配置: DistributedConfig(rank=1/2, layer_splits=[14, 28], comm_mode=p2p)
+2026-01-22 19:31:06,335 - SpecSoT-Rank1 - INFO - [run_specsot.py:324] - >>> 正在加载 SpecSoT 模型...
+2026-01-22 19:31:13,733 - SpecSoT-Rank1 - INFO - [run_specsot.py:341] - 模型加载完成，耗时: 7.40s
+2026-01-22 19:31:13,735 - SpecSoT-Rank1 - INFO - [run_specsot.py:347] - Special Token IDs:
+2026-01-22 19:31:13,736 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   para_begin_token_id: 820 -> '####'
+2026-01-22 19:31:13,736 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   para_end_token_id: 5321 -> '%%%%'
+2026-01-22 19:31:13,737 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   ellipsis_token_id: 28149 -> '......'
+2026-01-22 19:31:13,737 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   half_ellipsis_token_id: 1112 -> '...'
+2026-01-22 19:31:13,737 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   line_break_token_id: 271 -> '
 
 '
-2026-01-22 16:15:42,006 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   colon_token_id: 25 -> ':'
-2026-01-22 16:15:42,006 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   cn_colon_token_id: 5122 -> '：'
-2026-01-22 16:15:42,006 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:349] -   colon_new_line_token_id: 510 -> ':2026-01-22 16:15:42,015 - SpecSoT-Rank1 - INFO - [run_specsot.py:225] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
-2026-01-22 16:15:42,015 - SpecSoT-Rank1 - INFO - [run_specsot.py:356] - 使用 1 条样本进行评估
-2026-01-22 16:15:42,016 - SpecSoT-Rank1 - INFO - [run_specsot.py:371] - 
+2026-01-22 19:31:13,737 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   colon_token_id: 25 -> ':'
+2026-01-22 19:31:13,737 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   cn_colon_token_id: 5122 -> '：'
+2026-01-22 19:31:13,738 - SpecSoT-Rank1 - DEBUG - [run_specsot.py:350] -   colon_new_line_token_id: 510 -> ':2026-01-22 19:31:13,746 - SpecSoT-Rank1 - INFO - [run_specsot.py:225] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
+2026-01-22 19:31:13,747 - SpecSoT-Rank1 - INFO - [run_specsot.py:357] - 使用 1 条样本进行评估
+2026-01-22 19:31:13,747 - SpecSoT-Rank1 - INFO - [run_specsot.py:372] - 
 ============================================================
-2026-01-22 16:15:42,016 - SpecSoT-Rank1 - INFO - [run_specsot.py:372] - 样本 1/1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
-2026-01-22 16:15:42,016 - SpecSoT-Rank1 - INFO - [run_specsot.py:373] - ============================================================
-Usi2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:396] - 
+2026-01-22 19:31:13,747 - SpecSoT-Rank1 - INFO - [run_specsot.py:373] - 样本 1/1: 请问打篮球时，如何提高投篮命中率？请给出详细的建议。...
+2026-01-22 19:31:13,747 - SpecSoT-Rank1 - INFO - [run_specsot.py:374] - ============================================================
+Usi2026-01-22 19:31:36,513 - SpecSoT-Rank1 - INFO - [run_specsot.py:397] - 
 [统计信息]
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:397] -   总耗时: 22.34s
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:398] -   峰值显存: 4481.25 MB
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:399] -   输出长度: 1901 tokens
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:400] -   吞吐量: 85.1 tokens/s
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:401] -   并行分支数: 5
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:402] -   平均接受长度: 0.53
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:403] -   平均Draft时间: 5.56 ms
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:404] -   平均Verify时间: 29.37 ms
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:405] -   平均Update时间: 1.07 ms
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:408] - 
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:398] -   总耗时: 22.74s
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:399] -   峰值显存: 4422.19 MB
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:400] -   输出长度: 1901 tokens
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:401] -   吞吐量: 83.6 tokens/s
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:402] -   并行分支数: 5
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:403] -   平均接受长度: 0.53
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:404] -   平均Draft时间: 5.83 ms
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:405] -   平均Verify时间: 29.42 ms
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:406] -   平均Update时间: 1.10 ms
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:409] - 
 [响应预览]
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:409] - 分析这个问题是否属于需要拆解规划的“复杂任务”：
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:410] - 分析这个问题是否属于需要拆解规划的“复杂任务”：
 
 问题要求“详细建议”，涉及多个独立的方面，如技术动作、训练方法、心理因素、场地条件等，这些部分可以并行考虑，因此属于复杂任务，必须拆解规划。
 
@@ -70,49 +70,49 @@ Usi2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:396] -
 
 #### 训练计划制定【189】: 
 制定科学的训练计划是提高投篮命中率的关键。首先，要明确训练目标，例如提升远距离投篮能力或增强近距离投篮的...
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:463] - 正在清理分布式资源...
-2026-01-22 16:16:04,444 - SpecSoT-Rank1 - INFO - [run_specsot.py:465] - 分布式资源已清理
-2026-01-22 16:16:04,444 - SpecSoT-Rank1 - INFO - [run_specsot.py:467] - Worker 执行完成
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:464] - 正在清理分布式资源...
+2026-01-22 19:31:36,589 - SpecSoT-Rank1 - INFO - [run_specsot.py:466] - 分布式资源已清理
+2026-01-22 19:31:36,589 - SpecSoT-Rank1 - INFO - [run_specsot.py:468] - Worker 执行完成
 ][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=1
-2026-01-22 16:15:42.309 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 16:15:42.356 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 46.68ms
-2026-01-22 16:15:42.356 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 16:15:42.358 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 2/5] 完成 | 总耗时: 48.42ms
-2026-01-22 16:15:42.358 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 19:31:14.031 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 19:31:14.059 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:434] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 28.12ms
+2026-01-22 19:31:14.059 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:444] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 19:31:14.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:564] - [CHUNK 2/5] 完成 | 总耗时: 29.60ms
+2026-01-22 19:31:14.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 3/5] 开始处理 | seq_len=128, first=False, last=False
-2026-01-22 16:15:42.358 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 16:15:42.358 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=2
-2026-01-22 16:15:42.358 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 16:15:42.405 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 46.19ms
-2026-01-22 16:15:42.405 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 16:15:42.406 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 3/5] 完成 | 总耗时: 48.00ms
-2026-01-22 16:15:42.406 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 19:31:14.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 19:31:14.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=2
+2026-01-22 19:31:14.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 19:31:14.095 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:434] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 34.23ms
+2026-01-22 19:31:14.095 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:444] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 19:31:14.096 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:564] - [CHUNK 3/5] 完成 | 总耗时: 36.05ms
+2026-01-22 19:31:14.096 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 4/5] 开始处理 | seq_len=128, first=False, last=False
-2026-01-22 16:15:42.406 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 16:15:42.406 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=3
-2026-01-22 16:15:42.406 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 16:15:42.466 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 59.69ms
-2026-01-22 16:15:42.466 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 16:15:42.468 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 4/5] 完成 | 总耗时: 62.02ms
-2026-01-22 16:15:42.468 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 19:31:14.096 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 19:31:14.096 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=3
+2026-01-22 19:31:14.097 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 19:31:14.134 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:434] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 37.44ms
+2026-01-22 19:31:14.134 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:444] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 19:31:14.136 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:564] - [CHUNK 4/5] 完成 | 总耗时: 39.15ms
+2026-01-22 19:31:14.136 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 5/5] 开始处理 | seq_len=62, first=False, last=True
-2026-01-22 16:15:42.468 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 16:15:42.469 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB | chunk_idx=4
-2026-01-22 16:15:42.469 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 16:15:42.522 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 53.19ms
-2026-01-22 16:15:42.522 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 16:15:42.524 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 5/5] 完成 | 总耗时: 55.34ms
-2026-01-22 16:15:42.524 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:564] - 
+2026-01-22 19:31:14.136 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 19:31:14.136 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB | chunk_idx=4
+2026-01-22 19:31:14.136 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 19:31:14.169 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:434] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 32.64ms
+2026-01-22 19:31:14.169 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:444] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 19:31:14.170 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:564] - [CHUNK 5/5] 完成 | 总耗时: 34.56ms
+2026-01-22 19:31:14.170 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:569] - 
 ============================================================
-2026-01-22 16:15:42.524 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:565] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
-2026-01-22 16:15:42.524 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:566] - ============================================================
-2026-01-22 16:15:42.524 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:572] - [RECV] 等待 Draft Tokens (from Rank 2)...
-2026-01-22 16:15:43.488 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:583] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 963.34ms
-2026-01-22 16:15:43.488 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:586] - [SYNC] 等待所有 Cache 同步...
-2026-01-22 16:15:43.493 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:603] - [SYNC_OK] Rank 1 Cache 同步完成 | 耗时: 5.29ms
-2026-01-22 16:15:43.493 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:612] - ============================================================
-2026-01-22 16:15:43.493 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:613] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 1.448s
-2026-01-22 16:15:43.493 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:614] - ============================================================
+2026-01-22 19:31:14.170 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:570] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
+2026-01-22 19:31:14.170 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:571] - ============================================================
+2026-01-22 19:31:14.170 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:577] - [RECV] 等待 Draft Tokens (from Rank 2)...
+2026-01-22 19:31:15.401 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:588] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 1230.72ms
+2026-01-22 19:31:15.401 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:591] - [SYNC] 等待所有 Cache 同步...
+2026-01-22 19:31:15.407 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:608] - [SYNC_OK] Rank 1 Cache 同步完成 | 耗时: 6.19ms
+2026-01-22 19:31:15.408 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:617] - ============================================================
+2026-01-22 19:31:15.408 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:618] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 1.631s
+2026-01-22 19:31:15.408 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:619] - ============================================================
 Generated Skeleton: 分析这个问题是否属于需要拆解规划的“复杂任务”：
 
 问题要求“详细建议”，涉及多个独立的方面，如技术动作、训练方法、心理因素、场地条件等，这些部分可以并行考虑，因此属于复杂任务，必须拆解规划。
@@ -147,26 +147,26 @@ Parallel Decoding Step 451
 Branch 3 finished with EOS.
 Branch 2 finished with EOS.
 All branches finished generation.
-Avg accepted lengths: 0.5254582484725051, Avg draft time: 0.0056s, Avg update time: 0.0011s, Avg verify time: 0.0294s
+Avg accepted lengths: 0.5254582484725051, Avg draft time: 0.0058s, Avg update time: 0.0011s, Avg verify time: 0.0294s
 Branch 0 Length: 122
 Branch 1 Length: 171
 Branch 2 Length: 586
 Branch 3 Length: 567
 Branch 4 Length: 309
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:396] - 
+2026-01-22 19:31:36,513 - SpecSoT-Rank1 - INFO - [run_specsot.py:397] - 
 [统计信息]
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:397] -   总耗时: 22.34s
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:398] -   峰值显存: 4481.25 MB
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:399] -   输出长度: 1901 tokens
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:400] -   吞吐量: 85.1 tokens/s
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:401] -   并行分支数: 5
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:402] -   平均接受长度: 0.53
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:403] -   平均Draft时间: 5.56 ms
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:404] -   平均Verify时间: 29.37 ms
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:405] -   平均Update时间: 1.07 ms
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:408] - 
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:398] -   总耗时: 22.74s
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:399] -   峰值显存: 4422.19 MB
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:400] -   输出长度: 1901 tokens
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:401] -   吞吐量: 83.6 tokens/s
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:402] -   并行分支数: 5
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:403] -   平均接受长度: 0.53
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:404] -   平均Draft时间: 5.83 ms
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:405] -   平均Verify时间: 29.42 ms
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:406] -   平均Update时间: 1.10 ms
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:409] - 
 [响应预览]
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:409] - 分析这个问题是否属于需要拆解规划的“复杂任务”：
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:410] - 分析这个问题是否属于需要拆解规划的“复杂任务”：
 
 问题要求“详细建议”，涉及多个独立的方面，如技术动作、训练方法、心理因素、场地条件等，这些部分可以并行考虑，因此属于复杂任务，必须拆解规划。
 
@@ -190,8 +190,8 @@ Branch 4 Length: 309
 
 #### 训练计划制定【189】: 
 制定科学的训练计划是提高投篮命中率的关键。首先，要明确训练目标，例如提升远距离投篮能力或增强近距离投篮的...
-2026-01-22 16:16:04,376 - SpecSoT-Rank1 - INFO - [run_specsot.py:463] - 正在清理分布式资源...
-2026-01-22 16:16:04.376 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:206] - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 5, 'hidden_recv': 5, 'eagle_input_hidden_sent': 5, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 140, 'base_cache_recv': 110, 'eagle_cache_sent': 0, 'eagle_cache_recv': 5, 'aggregated_sends': 0, 'forwarded_messages': 0}
-2026-01-22 16:16:04.444 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:209] - [CLEANUP] 分布式Prefill管理器已清理
-2026-01-22 16:16:04,444 - SpecSoT-Rank1 - INFO - [run_specsot.py:465] - 分布式资源已清理
-2026-01-22 16:16:04,444 - SpecSoT-Rank1 - INFO - [run_specsot.py:467] - Worker 执行完成
+2026-01-22 19:31:36,514 - SpecSoT-Rank1 - INFO - [run_specsot.py:464] - 正在清理分布式资源...
+2026-01-22 19:31:36.514 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:206] - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 5, 'hidden_recv': 5, 'eagle_input_hidden_sent': 5, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 140, 'base_cache_recv': 110, 'eagle_cache_sent': 0, 'eagle_cache_recv': 5, 'aggregated_sends': 0, 'forwarded_messages': 0}
+2026-01-22 19:31:36.589 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:209] - [CLEANUP] 分布式Prefill管理器已清理
+2026-01-22 19:31:36,589 - SpecSoT-Rank1 - INFO - [run_specsot.py:466] - 分布式资源已清理
+2026-01-22 19:31:36,589 - SpecSoT-Rank1 - INFO - [run_specsot.py:468] - Worker 执行完成
