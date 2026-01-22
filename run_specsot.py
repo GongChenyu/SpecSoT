@@ -329,7 +329,7 @@ def run_worker(args):
         ea_model_path=args.eagle_model_path,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
-        device_map="cuda:0", 
+        device_map="cuda:0" if args.distributed else "cuda:4", 
         total_token=40,
         depth=4,
         top_k=6,

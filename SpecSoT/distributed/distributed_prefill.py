@@ -506,11 +506,16 @@ class DistributedPrefillManager:
                 input_ids_this_chunk = input_ids[:, start_idx:end_idx]
                 
                 self.logger.debug(f"    Draft Tree 生成: input_ids range=[{start_idx}, {end_idx})")
+                # original_input_len: 原始完整input_ids的长度（包含first token和采样token）
+                # 对于最后一个chunk: total_seq_length + 1 (因为添加了采样的token)
+                # 与单机版 generate_draft_tree 中的 len_posi = input_ids.shape[1] 对齐
+                original_len = total_seq_length + 1 if is_last_chunk else end_idx
                 tree_result, incremental_kv = eagle_layer.generate_draft_tree_dist_prefill(
                     hidden_states_for_eagle, 
                     input_ids_this_chunk,  # 使用当前chunk的input_ids
                     is_last_chunk=is_last_chunk,
-                    chunk_idx=chunk_idx
+                    chunk_idx=chunk_idx,
+                    original_input_len=original_len,
                 )
                 
                 # 显式发送Eagle增量KV（每个chunk都执行，只有最后rank会真正发送）

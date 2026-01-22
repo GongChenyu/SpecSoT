@@ -1,37 +1,30 @@
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:97] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/launcher.log
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:510] - ============================================================
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:511] - SpecSoT 分布式推理启动器
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:512] - ============================================================
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:524] - World Size: 3
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:525] - Layer Splits: 14,28
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:526] - GPU IDs: [1, 2, 3]
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:527] - Base Port: 45000
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:528] - Comm Mode: p2p
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:529] - Chunk Size: 128
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:530] - Random Seed: 76
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:531] - Task: planning
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:532] - Enable Parallel: True
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:533] - Max New Tokens: 3000
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:534] - Num Samples: 1
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:535] - ============================================================
-2026-01-22 00:21:16,168 - SpecSoT-Launcher - INFO - [run_specsot.py:542] - 正在清理端口...
-2026-01-22 00:21:16,954 - SpecSoT-Launcher - INFO - [run_specsot.py:131] - 已清理端口范围: 45001 - 45007
-2026-01-22 00:21:17,956 - SpecSoT-Launcher - INFO - [run_specsot.py:577] - 启动 Rank 0 (GPU 1)...
-2026-01-22 00:21:17,956 - SpecSoT-Launcher - INFO - [run_specsot.py:578] -   日志文件: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_0.log
-2026-01-22 00:21:17,956 - SpecSoT-Launcher - DEBUG - [run_specsot.py:579] -   命令: /data/home/chenyu/anaconda3/envs/sdsot/bin/python /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py --role worker --distributed True --rank 0 --world_size 3 --layer_splits 14,28 --base_port 45000 --comm_mode p2p --chunk_size 128 --base_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B --eagle_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3 --task planning --max_new_tokens 3000 --num_samples 1 --seed 76 --enable_parallel
-2026-01-22 00:21:18,976 - SpecSoT-Launcher - INFO - [run_specsot.py:577] - 启动 Rank 1 (GPU 2)...
-2026-01-22 00:21:18,976 - SpecSoT-Launcher - INFO - [run_specsot.py:578] -   日志文件: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_1.log
-2026-01-22 00:21:18,976 - SpecSoT-Launcher - DEBUG - [run_specsot.py:579] -   命令: /data/home/chenyu/anaconda3/envs/sdsot/bin/python /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py --role worker --distributed True --rank 1 --world_size 3 --layer_splits 14,28 --base_port 45000 --comm_mode p2p --chunk_size 128 --base_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B --eagle_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3 --task planning --max_new_tokens 3000 --num_samples 1 --seed 76 --enable_parallel
-2026-01-22 00:21:20,001 - SpecSoT-Launcher - INFO - [run_specsot.py:577] - 启动 Rank 2 (GPU 3)...
-2026-01-22 00:21:20,001 - SpecSoT-Launcher - INFO - [run_specsot.py:578] -   日志文件: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_2.log
-2026-01-22 00:21:20,001 - SpecSoT-Launcher - DEBUG - [run_specsot.py:579] -   命令: /data/home/chenyu/anaconda3/envs/sdsot/bin/python /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py --role worker --distributed True --rank 2 --world_size 3 --layer_splits 14,28 --base_port 45000 --comm_mode p2p --chunk_size 128 --base_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B --eagle_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3 --task planning --max_new_tokens 3000 --num_samples 1 --seed 76 --enable_parallel
-2026-01-22 00:21:21,022 - SpecSoT-Launcher - INFO - [run_specsot.py:614] - 
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:97] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/launcher.log
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:510] - ============================================================
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:511] - SpecSoT 分布式推理启动器
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:512] - ============================================================
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:524] - World Size: 3
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:525] - Layer Splits: 14,28
+2026-01-22 11:39:36,346 - SpecSoT-Launcher - INFO - [run_specsot.py:526] - GPU IDs: [1, 2, 3]
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:527] - Base Port: 45000
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:528] - Comm Mode: p2p
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:529] - Chunk Size: 128
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:530] - Random Seed: 76
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:531] - Task: planning
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:532] - Enable Parallel: True
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:533] - Max New Tokens: 3000
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:534] - Num Samples: 1
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:535] - ============================================================
+2026-01-22 11:39:36,347 - SpecSoT-Launcher - INFO - [run_specsot.py:542] - 正在清理端口...
+2026-01-22 11:39:37,160 - SpecSoT-Launcher - INFO - [run_specsot.py:131] - 已清理端口范围: 45001 - 45007
+2026-01-22 11:39:38,162 - SpecSoT-Launcher - INFO - [run_specsot.py:577] - 启动 Rank 0 (GPU 1)...
+2026-01-22 11:39:38,162 - SpecSoT-Launcher - INFO - [run_specsot.py:578] -   日志文件: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_0.log
+2026-01-22 11:39:38,163 - SpecSoT-Launcher - DEBUG - [run_specsot.py:579] -   命令: /data/home/chenyu/anaconda3/envs/sdsot/bin/python /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py --role worker --distributed True --rank 0 --world_size 3 --layer_splits 14,28 --base_port 45000 --comm_mode p2p --chunk_size 128 --base_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B --eagle_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3 --task planning --max_new_tokens 3000 --num_samples 1 --seed 76 --enable_parallel
+2026-01-22 11:39:39,184 - SpecSoT-Launcher - INFO - [run_specsot.py:577] - 启动 Rank 1 (GPU 2)...
+2026-01-22 11:39:39,185 - SpecSoT-Launcher - INFO - [run_specsot.py:578] -   日志文件: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_1.log
+2026-01-22 11:39:39,185 - SpecSoT-Launcher - DEBUG - [run_specsot.py:579] -   命令: /data/home/chenyu/anaconda3/envs/sdsot/bin/python /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py --role worker --distributed True --rank 1 --world_size 3 --layer_splits 14,28 --base_port 45000 --comm_mode p2p --chunk_size 128 --base_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B --eagle_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3 --task planning --max_new_tokens 3000 --num_samples 1 --seed 76 --enable_parallel
+2026-01-22 11:39:40,205 - SpecSoT-Launcher - INFO - [run_specsot.py:577] - 启动 Rank 2 (GPU 3)...
+2026-01-22 11:39:40,205 - SpecSoT-Launcher - INFO - [run_specsot.py:578] -   日志文件: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs/rank_2.log
+2026-01-22 11:39:40,205 - SpecSoT-Launcher - DEBUG - [run_specsot.py:579] -   命令: /data/home/chenyu/anaconda3/envs/sdsot/bin/python /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/run_specsot.py --role worker --distributed True --rank 2 --world_size 3 --layer_splits 14,28 --base_port 45000 --comm_mode p2p --chunk_size 128 --base_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B --eagle_model_path /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3 --task planning --max_new_tokens 3000 --num_samples 1 --seed 76 --enable_parallel
+2026-01-22 11:39:41,229 - SpecSoT-Launcher - INFO - [run_specsot.py:614] - 
 所有进程已启动，等待完成...
-2026-01-22 00:21:21,023 - SpecSoT-Launcher - INFO - [run_specsot.py:615] - 日志目录: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs
-2026-01-22 00:21:46,092 - SpecSoT-Launcher - INFO - [run_specsot.py:622] - ✓ Rank 0 成功完成
-2026-01-22 00:21:46,216 - SpecSoT-Launcher - INFO - [run_specsot.py:622] - ✓ Rank 1 成功完成
-2026-01-22 00:21:46,216 - SpecSoT-Launcher - INFO - [run_specsot.py:622] - ✓ Rank 2 成功完成
-2026-01-22 00:21:46,217 - SpecSoT-Launcher - INFO - [run_specsot.py:637] - 
-============================================================
-2026-01-22 00:21:46,217 - SpecSoT-Launcher - INFO - [run_specsot.py:638] - ✓ 分布式推理完成！
-2026-01-22 00:21:46,217 - SpecSoT-Launcher - INFO - [run_specsot.py:639] - ============================================================
+2026-01-22 11:39:41,230 - SpecSoT-Launcher - INFO - [run_specsot.py:615] - 日志目录: /data/home/chenyu/Coding/SD+SoT/Speculative-Decoding-Enabled-Skeleton-of-Thought/logs

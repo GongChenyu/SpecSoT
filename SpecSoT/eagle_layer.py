@@ -772,6 +772,7 @@ class EagleLayer(nn.Module):
         input_ids: torch.Tensor,
         is_last_chunk: bool = False,
         chunk_idx: int = 0,
+        original_input_len: int = -1,
     ) -> Tuple[Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         """
         分布式Prefill专用的Draft Tree生成
@@ -784,8 +785,9 @@ class EagleLayer(nn.Module):
         
         Args:
             hidden_states: 基础模型的hidden states（来自指定层的拼接）
-            input_ids: 当前chunk的token IDs（不包含之前chunk的tokens）
+            input_ids: 当前chunk的token IDs（不包含第一个token，因为已在调用处去掉）
             is_last_chunk: 是否是最后一个chunk
+            original_input_len: 原始完整input_ids的长度（包含第一个token），用于正确计算位置编码
             
         Returns:
             (tree_result, incremental_kv):
@@ -826,7 +828,10 @@ class EagleLayer(nn.Module):
         # 最后chunk：执行完整的tree growth和post process
         # -----------------------------------------------------------------
         sample_token = input_ids[:, -1]
-        len_posi = input_ids.shape[1]
+        # 使用原始input_ids的完整长度（包含第一个token），与单机版generate_draft_tree保持一致
+        # 单机版中 len_posi = input_ids.shape[1]，其中input_ids包含第一个token
+        # 分布式版中 input_ids已去掉第一个token，所以需要+1来对齐
+        len_posi = original_input_len if original_input_len > 0 else input_ids.shape[1] + 1
         self.tree_mask = None  # 重置 tree mask
         
         # 收集expand_root的结果
@@ -1134,7 +1139,6 @@ class EagleLayer(nn.Module):
         loop_scores = []
         loop_parents = []
         loop_tokens = []
-        len_posi -= 1  # 对齐调整
 
         for i in range(depth):
             self.tree_mask = tree_mask
@@ -1145,9 +1149,8 @@ class EagleLayer(nn.Module):
                 current_pos = root_pos + i + 1
                 position_ids = current_pos.unsqueeze(1).expand(-1, top_k)
             else:
-                position_ids = len_posi + self.position_ids
+                position_ids = len_posi - 1 + self.position_ids
                 position_ids = position_ids.unsqueeze(0).repeat(bsz, 1)
-                len_posi += 1
 
             # Eagle Layer Forward
             out_hidden, past_key_values = self(

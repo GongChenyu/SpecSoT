@@ -1,309 +1,307 @@
-2026-01-22 00:21:24.249 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:182] - [INIT] 初始化ZMQ通信管理器 | mode=p2p, base_port=45000
-2026-01-22 00:21:25.251 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:194] - [INIT] 等待其他节点就绪 (3.0秒)...
-2026-01-22 00:21:28.256 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:199] - [INIT] 通信管理器已启动
-2026-01-22 00:21:28.304 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:256] - ============================================================
-2026-01-22 00:21:28.304 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:257] - [PREFILL] 开始分布式 Prefill 阶段
-2026-01-22 00:21:28.304 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:258] - ============================================================
-2026-01-22 00:21:28.304 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:259] -   Rank: 1/2
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:260] -   负责层范围: [14, 28)
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:261] -   输入序列长度: 574
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:262] -   模型总层数: 36
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:810] - [INIT] Cache 追踪初始化: chunks=5, layers=36, seq_len=574
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:677] - [SPLIT] 输入序列切分为 5 个 chunks | seq_len=574, chunk_size=128
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:679] -     Chunk 0: shape=torch.Size([1, 128])
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:679] -     Chunk 1: shape=torch.Size([1, 128])
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:679] -     Chunk 2: shape=torch.Size([1, 128])
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:679] -     Chunk 3: shape=torch.Size([1, 128])
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:679] -     Chunk 4: shape=torch.Size([1, 62])
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:269] -   Chunk数量: 5 (chunk_size=128)
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:732] - [EAGLE] Input Layers 配置: [1, 17, 32] (总层数=36)
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:273] -   Eagle Input Layers: [1, 17, 32]
-2026-01-22 00:21:28.305 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 11:39:47.442 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:182] - [INIT] 初始化ZMQ通信管理器 | mode=p2p, base_port=45000
+2026-01-22 11:39:48.445 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:194] - [INIT] 等待其他节点就绪 (3.0秒)...
+2026-01-22 11:39:51.452 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:199] - [INIT] 通信管理器已启动
+2026-01-22 11:39:51.576 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:256] - ============================================================
+2026-01-22 11:39:51.577 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:257] - [PREFILL] 开始分布式 Prefill 阶段
+2026-01-22 11:39:51.578 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:258] - ============================================================
+2026-01-22 11:39:51.579 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:259] -   Rank: 1/2
+2026-01-22 11:39:51.579 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:260] -   负责层范围: [14, 28)
+2026-01-22 11:39:51.580 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:261] -   输入序列长度: 574
+2026-01-22 11:39:51.580 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:262] -   模型总层数: 36
+2026-01-22 11:39:51.581 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:815] - [INIT] Cache 追踪初始化: chunks=5, layers=36, seq_len=574
+2026-01-22 11:39:51.582 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:682] - [SPLIT] 输入序列切分为 5 个 chunks | seq_len=574, chunk_size=128
+2026-01-22 11:39:51.582 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:684] -     Chunk 0: shape=torch.Size([1, 128])
+2026-01-22 11:39:51.582 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:684] -     Chunk 1: shape=torch.Size([1, 128])
+2026-01-22 11:39:51.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:684] -     Chunk 2: shape=torch.Size([1, 128])
+2026-01-22 11:39:51.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:684] -     Chunk 3: shape=torch.Size([1, 128])
+2026-01-22 11:39:51.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:684] -     Chunk 4: shape=torch.Size([1, 62])
+2026-01-22 11:39:51.583 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:269] -   Chunk数量: 5 (chunk_size=128)
+2026-01-22 11:39:51.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:737] - [EAGLE] Input Layers 配置: [1, 17, 32] (总层数=36)
+2026-01-22 11:39:51.583 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:273] -   Eagle Input Layers: [1, 17, 32]
+2026-01-22 11:39:51.584 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 1/5] 开始处理 | seq_len=128, first=True, last=False
-2026-01-22 00:21:28.306 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 00:21:28.312 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=0
-2026-01-22 00:21:28.313 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 7.15ms
-2026-01-22 00:21:28.313 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 00:21:28.313 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=0, seq_with_past=128
-2026-01-22 00:21:28.523 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.523 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.526 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.526 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.528 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.528 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.530 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
-2026-01-22 00:21:28.530 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.530 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.532 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.532 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.533 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.534 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.535 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.535 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.536 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.537 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.538 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.538 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.539 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.540 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.541 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.541 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.543 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.543 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.545 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.545 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.546 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.546 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.546 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 233.75ms
-2026-01-22 00:21:28.547 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 00:21:28.547 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
-2026-01-22 00:21:28.547 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:548] -   [PHASE 3] 完成 | 耗时: 0.08ms
-2026-01-22 00:21:28.547 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=0, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.547 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=1, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.547 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=2, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.548 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=3, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.548 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=4, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.548 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=5, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.548 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=6, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.548 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=7, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.548 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=8, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=9, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=10, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=11, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=12, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=13, chunk=0 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=0, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=1, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=2, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=3, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=4, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=5, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=6, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=7, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=8, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=9, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=10, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=11, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=12, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=13, chunk=1 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=0, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=1, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=2, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=3, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=4, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.549 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=5, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=6, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=7, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=8, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=9, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=10, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=11, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=12, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=13, chunk=2 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=0, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=1, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=2, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=3, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=4, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=5, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=6, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=7, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=8, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=9, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=10, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=11, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=12, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=13, chunk=3 from Rank 0 | size=0.50MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=0, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=1, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=2, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.550 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=3, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=4, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=5, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=6, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=7, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=8, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=9, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=10, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=11, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=12, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.551 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:717] -   [RECV][CACHE] layer=13, chunk=4 from Rank 0 | size=0.24MB
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:720] -   [CACHE] 非阻塞接收 70 个 Base Cache
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:554] - [CHUNK 1/5] 完成 | 总耗时: 246.51ms
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 11:39:51.584 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 11:39:51.589 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=0
+2026-01-22 11:39:51.589 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 5.43ms
+2026-01-22 11:39:51.590 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 11:39:51.591 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=0, seq_with_past=128
+2026-01-22 11:39:51.795 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.795 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.800 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.800 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.804 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.804 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.807 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
+2026-01-22 11:39:51.807 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.808 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.811 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.812 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.815 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.815 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.818 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.819 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.821 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.821 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.824 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.824 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.827 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.828 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.830 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.831 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.834 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.834 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.838 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.838 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.841 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.842 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.842 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 252.46ms
+2026-01-22 11:39:51.843 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 11:39:51.844 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-22 11:39:51.844 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:553] -   [PHASE 3] 完成 | 耗时: 0.89ms
+2026-01-22 11:39:51.845 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=0, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.845 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=1, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.846 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=2, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.847 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=3, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.847 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=4, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.847 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=5, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.847 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=6, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=7, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=8, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=9, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=10, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=11, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=12, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.848 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=13, chunk=0 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=0, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=1, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=2, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=3, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=4, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=5, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=6, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.849 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=7, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=8, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=9, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=10, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=11, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=12, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=13, chunk=1 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.850 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=0, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=1, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=2, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=3, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=4, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=5, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=6, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.851 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=7, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=8, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=9, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=10, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=11, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=12, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=13, chunk=2 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=0, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.852 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=1, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=2, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=3, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=4, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=5, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=6, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=7, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=8, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.853 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=9, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.854 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=10, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.854 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=11, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.854 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=12, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.854 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=13, chunk=3 from Rank 0 | size=0.50MB
+2026-01-22 11:39:51.854 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=0, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.854 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=1, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=2, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=3, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=4, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=5, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=6, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=7, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=8, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.855 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=9, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.856 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=10, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.856 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=11, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.856 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=12, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.856 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:722] -   [RECV][CACHE] layer=13, chunk=4 from Rank 0 | size=0.24MB
+2026-01-22 11:39:51.857 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:725] -   [CACHE] 非阻塞接收 70 个 Base Cache
+2026-01-22 11:39:51.857 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 1/5] 完成 | 总耗时: 273.48ms
+2026-01-22 11:39:51.858 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 2/5] 开始处理 | seq_len=128, first=False, last=False
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=1
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.05ms
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 00:21:28.552 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=702
-2026-01-22 00:21:28.553 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.554 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.555 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.555 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.557 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.558 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.559 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
-2026-01-22 00:21:28.560 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.560 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.561 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.561 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.563 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.563 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.564 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.564 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.565 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.566 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.567 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.567 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.568 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.568 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.569 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.569 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.570 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.571 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.572 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.572 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.573 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.573 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.573 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 21.21ms
-2026-01-22 00:21:28.573 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 00:21:28.573 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
-2026-01-22 00:21:28.573 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:548] -   [PHASE 3] 完成 | 耗时: 0.07ms
-2026-01-22 00:21:28.574 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:554] - [CHUNK 2/5] 完成 | 总耗时: 22.51ms
-2026-01-22 00:21:28.575 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 11:39:51.858 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 11:39:51.858 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=1
+2026-01-22 11:39:51.858 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.39ms
+2026-01-22 11:39:51.858 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 11:39:51.858 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=702
+2026-01-22 11:39:51.861 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.861 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.865 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.865 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.869 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.869 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.873 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
+2026-01-22 11:39:51.873 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.873 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.878 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.878 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.882 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.882 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.886 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.886 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.893 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.893 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.897 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.897 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.900 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.901 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.904 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.905 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.909 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.909 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.913 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.914 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.917 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.918 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.918 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 60.23ms
+2026-01-22 11:39:51.919 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 11:39:51.919 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-22 11:39:51.920 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:553] -   [PHASE 3] 完成 | 耗时: 0.77ms
+2026-01-22 11:39:51.921 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 2/5] 完成 | 总耗时: 63.72ms
+2026-01-22 11:39:51.922 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 3/5] 开始处理 | seq_len=128, first=False, last=False
-2026-01-22 00:21:28.575 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 00:21:28.575 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=2
-2026-01-22 00:21:28.575 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.05ms
-2026-01-22 00:21:28.575 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 00:21:28.575 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=702
-2026-01-22 00:21:28.576 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.576 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.577 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.578 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.579 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.579 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.580 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
-2026-01-22 00:21:28.580 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.580 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.582 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.582 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.583 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.584 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.584 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.585 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.586 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.587 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.587 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.588 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.588 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.589 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.589 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.590 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.591 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.592 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.592 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.593 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.593 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.593 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 18.50ms
-2026-01-22 00:21:28.593 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 00:21:28.593 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
-2026-01-22 00:21:28.593 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:548] -   [PHASE 3] 完成 | 耗时: 0.06ms
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:554] - [CHUNK 3/5] 完成 | 总耗时: 19.82ms
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 11:39:51.922 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 11:39:51.923 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=2
+2026-01-22 11:39:51.923 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.85ms
+2026-01-22 11:39:51.923 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 11:39:51.924 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=702
+2026-01-22 11:39:51.928 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.929 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.933 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.933 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.937 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.938 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.941 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
+2026-01-22 11:39:51.942 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.943 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.947 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.947 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.951 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.952 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.956 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.956 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.960 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.961 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.964 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.965 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.969 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.969 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.973 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.974 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.978 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.978 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.982 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.983 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.986 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.987 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:51.987 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 64.27ms
+2026-01-22 11:39:51.988 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 11:39:51.989 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-22 11:39:51.989 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:553] -   [PHASE 3] 完成 | 耗时: 0.70ms
+2026-01-22 11:39:51.991 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 3/5] 完成 | 总耗时: 68.87ms
+2026-01-22 11:39:51.991 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 4/5] 开始处理 | seq_len=128, first=False, last=False
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=3
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.05ms
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 00:21:28.594 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=702
-2026-01-22 00:21:28.595 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.596 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.597 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.597 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.601 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.601 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.602 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
-2026-01-22 00:21:28.603 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.603 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.604 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.604 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.605 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.605 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.606 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.607 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.608 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.608 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.610 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.610 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.612 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.612 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.613 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.614 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.615 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.615 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.616 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.617 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.618 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
-2026-01-22 00:21:28.618 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
-2026-01-22 00:21:28.618 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 23.84ms
-2026-01-22 00:21:28.618 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 00:21:28.618 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
-2026-01-22 00:21:28.618 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:548] -   [PHASE 3] 完成 | 耗时: 0.10ms
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:554] - [CHUNK 4/5] 完成 | 总耗时: 25.23ms
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
+2026-01-22 11:39:51.992 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 11:39:51.992 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB | chunk_idx=3
+2026-01-22 11:39:51.992 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.86ms
+2026-01-22 11:39:51.993 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 11:39:51.993 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=702
+2026-01-22 11:39:51.996 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:51.997 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.001 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.001 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.005 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.006 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.010 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
+2026-01-22 11:39:52.011 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.012 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.017 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.017 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.021 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.022 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.026 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.026 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.030 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.031 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.034 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.035 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.039 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.039 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.043 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.044 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.047 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.048 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.052 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.052 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.056 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.50MB
+2026-01-22 11:39:52.057 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.50MB
+2026-01-22 11:39:52.057 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 64.40ms
+2026-01-22 11:39:52.058 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 11:39:52.058 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 128, 2560), dtype=float16, device=cuda:0, size=0.625MB
+2026-01-22 11:39:52.058 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:553] -   [PHASE 3] 完成 | 耗时: 0.90ms
+2026-01-22 11:39:52.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 4/5] 完成 | 总耗时: 68.73ms
+2026-01-22 11:39:52.060 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:287] - 
 [CHUNK 5/5] 开始处理 | seq_len=62, first=False, last=True
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB | chunk_idx=4
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.06ms
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
-2026-01-22 00:21:28.620 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=636
-2026-01-22 00:21:28.621 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.622 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.623 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.624 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.625 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.626 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
-2026-01-22 00:21:28.626 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.626 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.627 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.628 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.629 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.629 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.630 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.630 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.631 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.632 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.633 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.633 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.634 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.635 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.636 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.636 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.637 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.637 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.639 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.639 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.640 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.24MB
-2026-01-22 00:21:28.640 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.24MB
-2026-01-22 00:21:28.640 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 20.55ms
-2026-01-22 00:21:28.640 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
-2026-01-22 00:21:28.640 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB
-2026-01-22 00:21:28.640 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:548] -   [PHASE 3] 完成 | 耗时: 0.06ms
-2026-01-22 00:21:28.641 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:554] - [CHUNK 5/5] 完成 | 总耗时: 21.85ms
-2026-01-22 00:21:28.642 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - 
+2026-01-22 11:39:52.061 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:302] -   [PHASE 1] 等待接收 Hidden States (from Rank 0)...
+2026-01-22 11:39:52.061 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:311] -   [PHASE 1][RECV] Hidden States | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB | chunk_idx=4
+2026-01-22 11:39:52.062 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:314] -   [PHASE 1] 完成 | 耗时: 0.92ms
+2026-01-22 11:39:52.062 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:320] -   [PHASE 2] 开始计算 Decoder Layers [14, 28)
+2026-01-22 11:39:52.063 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:328] -     past_key_values_length=574, seq_with_past=636
+2026-01-22 11:39:52.066 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.067 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=14 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.071 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.072 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=15 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.075 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.076 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=16 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.080 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:408] -     [SEND][EAGLE] hidden state layer=17 -> Rank 2
+2026-01-22 11:39:52.080 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.081 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=17 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.085 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.085 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=18 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.089 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.090 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=19 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.094 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.094 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=20 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.098 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.098 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=21 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.102 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.103 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=22 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.106 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.107 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=23 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.111 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.111 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=24 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.115 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.116 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=25 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.119 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.120 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=26 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.124 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 0 | size=0.24MB
+2026-01-22 11:39:52.125 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:427] -     [SEND][CACHE] layer=27 -> Rank 2 | size=0.24MB
+2026-01-22 11:39:52.125 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:433] -   [PHASE 2] 完成 | layers=14, cache_sent=28, eagle_hidden_sent=1 | 耗时: 62.77ms
+2026-01-22 11:39:52.126 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:443] -   [PHASE 3][SEND] Hidden States -> Rank 2
+2026-01-22 11:39:52.127 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:449] -     Hidden States 发送完成 | shape=(1, 62, 2560), dtype=float16, device=cuda:0, size=0.303MB
+2026-01-22 11:39:52.127 - DistPrefill-Rank1 - DEBUG - [distributed_prefill.py:553] -   [PHASE 3] 完成 | 耗时: 0.99ms
+2026-01-22 11:39:52.128 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:559] - [CHUNK 5/5] 完成 | 总耗时: 67.66ms
+2026-01-22 11:39:52.129 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:564] - 
 ============================================================
-2026-01-22 00:21:28.642 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:560] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
-2026-01-22 00:21:28.642 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:561] - ============================================================
-2026-01-22 00:21:28.642 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:567] - [RECV] 等待 Draft Tokens (from Rank 2)...
-2026-01-22 00:21:29.818 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:578] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 1176.01ms
-2026-01-22 00:21:29.818 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:581] - [SYNC] 等待所有 Cache 同步...
-2026-01-22 00:21:29.824 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:598] - [SYNC_OK] Rank 1 Cache 同步完成 | 耗时: 5.51ms
-2026-01-22 00:21:29.824 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:607] - ============================================================
-2026-01-22 00:21:29.824 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:608] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 1.520s
-2026-01-22 00:21:29.824 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:609] - ============================================================
-2026-01-22 00:21:45.577 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:206] - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 5, 'hidden_recv': 5, 'eagle_input_hidden_sent': 5, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 140, 'base_cache_recv': 110, 'eagle_cache_sent': 0, 'eagle_cache_recv': 5, 'aggregated_sends': 0, 'forwarded_messages': 0}
-2026-01-22 00:21:45.656 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:209] - [CLEANUP] 分布式Prefill管理器已清理
+2026-01-22 11:39:52.129 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:565] - [POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段
+2026-01-22 11:39:52.130 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:566] - ============================================================
+2026-01-22 11:39:52.130 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:572] - [RECV] 等待 Draft Tokens (from Rank 2)...
+2026-01-22 12:01:30.094 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:583] - [RECV] Draft Tokens 接收完成 | shape=torch.Size([1, 40]) | 耗时: 1297963.53ms
+2026-01-22 12:01:30.096 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:586] - [SYNC] 等待所有 Cache 同步...
+2026-01-22 12:01:30.105 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:603] - [SYNC_OK] Rank 1 Cache 同步完成 | 耗时: 8.88ms
+2026-01-22 12:01:30.105 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:612] - ============================================================
+2026-01-22 12:01:30.106 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:613] - [PREFILL] 分布式 Prefill 完成 | 总耗时: 1298.529s
+2026-01-22 12:01:30.106 - DistPrefill-Rank1 - INFO - [distributed_prefill.py:614] - ============================================================
