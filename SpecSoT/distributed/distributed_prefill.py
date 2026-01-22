@@ -321,8 +321,8 @@ class DistributedPrefillManager:
             
             # 计算past_key_values_length
             past_key_values_length = 0
-            if past_key_values[0][0].current_length > 0:
-                past_key_values_length = past_key_values[0][0].current_length.item()
+            if past_key_values[start_layer][0].current_length > 0:
+                past_key_values_length = past_key_values[start_layer][0].current_length.item()
             
             seq_length_with_past = chunk_seq_length + past_key_values_length
             self.logger.debug(f"    past_key_values_length={past_key_values_length}, seq_with_past={seq_length_with_past}")
@@ -573,7 +573,7 @@ class DistributedPrefillManager:
             recv_start = time.time()
             result = self.comm.recv_draft_tokens(
                 src_rank=self.config.world_size - 1,
-                timeout=6000.0
+                timeout=60.0
             )
             if result is None:
                 self.logger.error("[TIMEOUT] 接收 draft tokens 超时")

@@ -690,7 +690,7 @@ def main():
     parser.add_argument("--num_samples", type=int, default=1,help="测试样本数量")
     
     # 分布式配置
-    parser.add_argument("--distributed", type=str2bool, default=False, help="是否启用分布式模式（单机单卡设为False）")
+    parser.add_argument("--distributed", type=str2bool, default=True, help="是否启用分布式模式（单机单卡设为False）")
     parser.add_argument("--world_size", type=int, default=3, help="总进程数（设备数）")
     parser.add_argument("--rank", type=int, default=0, help="当前进程的rank")
     parser.add_argument("--layer_splits", type=str, default="14,28", help="层拆分策略，如 '14,28' 表示3台设备拆分36层模型")
