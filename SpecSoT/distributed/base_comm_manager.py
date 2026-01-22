@@ -161,7 +161,7 @@ class ZMQCommManagerBase(ABC):
         统一接收工作线程
         持续监听所有recv_socket，收到消息后根据类型放入对应的recv_queue
         """
-        self.logger.info("接收线程启动")
+        self.logger.debug("接收线程启动")
         
         # 创建poller监听所有接收socket
         poller = zmq.Poller()
@@ -186,7 +186,7 @@ class ZMQCommManagerBase(ABC):
                 if self.is_running:
                     self.logger.error(f"接收线程出错: {e}", exc_info=True)
         
-        self.logger.info("接收线程退出")
+        self.logger.debug("接收线程退出")
     
     def _process_received_data(self, data: bytes):
         """
@@ -307,7 +307,7 @@ class ZMQCommManagerBase(ABC):
         self.recv_thread.start()
         self.send_thread.start()
         
-        self.logger.info(f"通信管理器已启动 ({self.__class__.__name__})")
+        self.logger.debug(f"通信管理器已启动 ({self.__class__.__name__})")
     
     def stop(self):
         """停止通信管理器"""
@@ -326,7 +326,7 @@ class ZMQCommManagerBase(ABC):
             socket.close()
         
         self.context.term()
-        self.logger.info("通信管理器已停止")
+        self.logger.debug("通信管理器已停止")
     
     # ==================== Draft Tokens 通信 (最高优先级) ====================
     

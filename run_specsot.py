@@ -136,10 +136,7 @@ def cleanup_ports(base_port: int, world_size: int, logger: logging.Logger = None
             pass
     
     msg = f"已清理端口范围: {min(ports_to_clean)} - {max(ports_to_clean)}"
-    if logger:
-        logger.info(msg)
-    else:
-        print(msg)
+    logger.debug(msg)
 
 
 # =============================================================================
@@ -230,10 +227,7 @@ def load_dataset(task: str, logger: logging.Logger = None) -> pd.DataFrame:
         df['task_prompt'] = df['input']
     
     msg = f"加载数据集: {df_path}, 共 {len(df)} 条样本"
-    if logger:
-        logger.info(msg)
-    else:
-        print(msg)
+    logger.info(msg)
         
     return df
 
@@ -282,14 +276,6 @@ def run_worker(args):
     # 设置日志
     log_dir = os.path.join(project_dir, 'logs')
     logger = setup_logging(rank=args.rank, log_dir=log_dir)
-    
-    # # 设置随机种子
-    # random.seed(args.seed)
-    # np.random.seed(args.seed)
-    # torch.manual_seed(args.seed)
-    # if torch.cuda.is_available():
-    #     torch.cuda.manual_seed(args.seed)
-    #     torch.cuda.manual_seed_all(args.seed)
 
     logger.info("=" * 60)
     logger.info(f"SpecSoT Worker 启动")
@@ -353,7 +339,7 @@ def run_worker(args):
     tokenizer.padding_side = "left"
     para_token_ids = get_special_token_ids(tokenizer)
     
-    logger.info("Special Token IDs:")
+    logger.debug("Special Token IDs:")
     for key, value in para_token_ids.items():
         token_str = tokenizer.decode([value])
         logger.debug(f"  {key}: {value} -> '{token_str}'")
@@ -470,9 +456,9 @@ def run_worker(args):
     
     # 清理分布式资源
     if args.distributed and model.is_distributed():
-        logger.info("正在清理分布式资源...")
+        logger.debug("正在清理分布式资源...")
         model.cleanup_distributed()
-        logger.info("分布式资源已清理")
+        logger.debug("分布式资源已清理")
     
     logger.info("Worker 执行完成")
 
@@ -549,7 +535,7 @@ def run_launcher(args):
     signal.signal(signal.SIGTERM, cleanup_processes)
 
     # 清理端口
-    logger.info("正在清理端口...")
+    logger.debug("正在清理端口...")
     cleanup_ports(args.base_port, args.world_size, logger)
     time.sleep(1)
 
@@ -671,20 +657,20 @@ def str2bool(v):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="SpecSoT Unified Runner - 统一的推理脚本",
+        description="SpecSoT Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
-  # 单机单卡推理
-  python run_specsot_final.py --distributed False
+            使用示例:
+            # 单机单卡推理
+            python run_specsot.py --distributed False
 
-  # 单机多卡分布式推理 (3 GPUs)
-  python run_specsot_final.py --world_size 3 --gpu_ids 5,6,7 --layer_splits 14,28
+            # 单机多卡分布式推理 (3 GPUs)
+            python run_specsot.py --world_size 3 --gpu_ids 5,6,7 --layer_splits 14,28
 
-  # 作为分布式Worker运行
-  python run_specsot_final.py --role worker --rank 0 --world_size 3 --layer_splits 14,28
+            # 作为分布式Worker运行
+            python run_specsot.py --role worker --rank 0 --world_size 3 --layer_splits 14,28
         """
-    )
+        )
     
     # 角色控制
     parser.add_argument("--role", type=str, default="launcher", choices=["launcher", "worker"], help="运行角色: launcher(调度器) 或 worker(计算节点)")

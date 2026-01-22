@@ -82,10 +82,10 @@ class RingCommManager(ZMQCommManagerBase):
         prev_rank = self._get_prev_rank()
         next_rank = self._get_next_rank()
         
-        self.logger.info(f"[INIT] 初始化 Ring 模式 socket 连接...")
+        self.logger.debug(f"[INIT] 初始化 Ring 模式 socket 连接...")
         
         if self.world_size == 1:
-            self.logger.info("[INIT] 单节点模式，无需设置Ring连接")
+            self.logger.debug("[INIT] 单节点模式，无需设置Ring连接")
             return
         
         # 接收socket：从上一个rank接收
@@ -94,7 +94,7 @@ class RingCommManager(ZMQCommManagerBase):
         recv_socket.setsockopt(zmq.RCVHWM, 1000)
         recv_socket.bind(f"tcp://*:{port}")
         self.recv_sockets[prev_rank] = recv_socket
-        self.logger.info(f"[BIND] 绑定接收端口 {port} (接收来自 rank {prev_rank} 的消息)")
+        self.logger.debug(f"[BIND] 绑定接收端口 {port} (接收来自 rank {prev_rank} 的消息)")
         
         # 等待所有节点设置好接收端口
         time.sleep(1)
@@ -107,7 +107,7 @@ class RingCommManager(ZMQCommManagerBase):
         send_socket.setsockopt(zmq.LINGER, 0)
         send_socket.connect(f"tcp://{addr}:{port}")
         self.send_sockets[next_rank] = send_socket
-        self.logger.info(f"[CONNECT] 连接到 rank {next_rank} ({addr}:{port})")
+        self.logger.debug(f"[CONNECT] 连接到 rank {next_rank} ({addr}:{port})")
         
         self.logger.info(f"[INIT_OK] Ring 模式初始化完成: prev={prev_rank}, next={next_rank}")
     
@@ -120,11 +120,11 @@ class RingCommManager(ZMQCommManagerBase):
         2. 非阻塞收集更多消息进行聚合
         3. 批量序列化发送，减少网络开销
         """
-        self.logger.info("[THREAD] 发送线程启动 (Ring模式)")
+        self.logger.debug("[THREAD] 发送线程启动 (Ring模式)")
         next_rank = self._get_next_rank()
         
         if self.world_size == 1:
-            self.logger.info("[THREAD] 单节点模式，发送线程退出")
+            self.logger.debug("[THREAD] 单节点模式，发送线程退出")
             return
         
         while self.is_running:
@@ -169,7 +169,7 @@ class RingCommManager(ZMQCommManagerBase):
             except Exception as e:
                 self.logger.error(f"[THREAD_ERR] 发送线程出错: {e}", exc_info=True)
         
-        self.logger.info("[THREAD] 发送线程退出")
+        self.logger.debug("[THREAD] 发送线程退出")
     
     def _log_send_event(self, msg: Message, data_size: int, send_time: float):
         """
@@ -544,7 +544,7 @@ class RingCommManager(ZMQCommManagerBase):
             chunk_idx: chunk索引
         """
         key_shape = tuple(incremental_kv[0].shape)
-        self.logger.info(
+        self.logger.debug(
             f"[BROADCAST] EAGLE_STABLE_KV -> all ranks | "
             f"chunk_idx={chunk_idx}, key_shape={key_shape}"
         )

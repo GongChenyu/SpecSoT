@@ -43,7 +43,7 @@ class P2PCommManager(ZMQCommManagerBase):
     
     def _setup_sockets(self):
         """设置P2P模式的socket连接"""
-        self.logger.info(f"[INIT] 初始化 P2P 模式 socket 连接...")
+        self.logger.debug(f"[INIT] 初始化 P2P 模式 socket 连接...")
         
         # 先设置接收socket（绑定端口）
         for other_rank in range(self.world_size):
@@ -53,7 +53,7 @@ class P2PCommManager(ZMQCommManagerBase):
                 socket.setsockopt(zmq.RCVHWM, 1000)
                 socket.bind(f"tcp://*:{port}")
                 self.recv_sockets[other_rank] = socket
-                self.logger.info(f"[BIND] 绑定接收端口 {port} (接收来自 rank {other_rank} 的消息)")
+                self.logger.debug(f"[BIND] 绑定接收端口 {port} (接收来自 rank {other_rank} 的消息)")
         
         # 等待所有节点设置好接收端口
         time.sleep(1)
@@ -68,13 +68,13 @@ class P2PCommManager(ZMQCommManagerBase):
                 socket.setsockopt(zmq.LINGER, 0)
                 socket.connect(f"tcp://{addr}:{port}")
                 self.send_sockets[other_rank] = socket
-                self.logger.info(f"[CONNECT] 连接到 rank {other_rank} ({addr}:{port})")
+                self.logger.debug(f"[CONNECT] 连接到 rank {other_rank} ({addr}:{port})")
         
         self.logger.info(f"[INIT_OK] P2P 模式初始化完成: {len(self.send_sockets)} 发送连接, {len(self.recv_sockets)} 接收连接")
     
     def _send_worker(self):
         """P2P模式发送线程：按优先级获取消息并直接发送"""
-        self.logger.info("[THREAD] 发送线程启动 (P2P模式)")
+        self.logger.debug("[THREAD] 发送线程启动 (P2P模式)")
         
         while self.is_running:
             try:
@@ -99,7 +99,7 @@ class P2PCommManager(ZMQCommManagerBase):
             except Exception as e:
                 self.logger.error(f"[THREAD_ERR] 发送线程出错: {e}", exc_info=True)
         
-        self.logger.info("[THREAD] 发送线程退出")
+        self.logger.debug("[THREAD] 发送线程退出")
     
     def _log_send_event(self, msg: Message, data_size: int, send_time: float):
         """
@@ -345,7 +345,7 @@ class P2PCommManager(ZMQCommManagerBase):
         key_shape = tuple(incremental_kv[0].shape)
         targets = [r for r in range(self.world_size) if r != self.rank]
         
-        self.logger.info(
+        self.logger.debug(
             f"[BROADCAST] EAGLE_STABLE_KV -> targets={targets} | "
             f"chunk_idx={chunk_idx}, key_shape={key_shape}"
         )

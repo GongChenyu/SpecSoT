@@ -128,7 +128,7 @@ class DistributedPrefillManager:
     
     def _init_communication(self):
         """初始化ZMQ通信"""
-        self.logger.info(f"[INIT] 初始化ZMQ通信管理器 | mode={self.config.comm_mode}, base_port={self.config.base_port}")
+        self.logger.debug(f"[INIT] 初始化ZMQ通信管理器 | mode={self.config.comm_mode}, base_port={self.config.base_port}")
         
         self.comm = create_zmq_comm_manager(
             rank=self.config.rank,
@@ -155,7 +155,7 @@ class DistributedPrefillManager:
             self.logger.info(f"[CLEANUP] 通信统计: {stats}")
             self.comm.stop()
             self.comm = None
-        self.logger.info("[CLEANUP] 分布式Prefill管理器已清理")
+        self.logger.debug("[CLEANUP] 分布式Prefill管理器已清理")
     
     # =========================================================================
     # 分布式Prefill核心方法
@@ -755,7 +755,7 @@ class DistributedPrefillManager:
             device='cpu'
         )
         
-        self.logger.info(f"[INIT] Cache 追踪初始化: chunks={self.num_chunks}, layers={num_layers}, seq_len={seq_length}")
+        self.logger.debug(f"[INIT] Cache 追踪初始化: chunks={self.num_chunks}, layers={num_layers}, seq_len={seq_length}")
 
     # =========================================================================
     # 统计信息

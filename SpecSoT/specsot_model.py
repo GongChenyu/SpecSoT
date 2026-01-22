@@ -50,6 +50,9 @@ from .logits_processor import SemanticLogitsProcessor
 # 分布式推理支持
 from .distributed import DistributedConfig, DistributedPrefillManager
 
+# 日志支持
+from .logging_utils import get_unified_logger
+
 from .utils import (
     prepare_logits_processor,
     build_parallel_prefill_mask,
@@ -143,7 +146,14 @@ class SpecSoTModel(nn.Module):
         self.eagle_layer = eagle_layer
         
         # =====================================================================
-        # 3. 分布式配置
+        # 3. 日志系统
+        # =====================================================================
+        # 获取 logger，如果是分布式模式会自动使用对应的 rank logger
+        rank = distributed_config.rank if distributed_config and distributed_config.enabled else -1
+        self.logger = get_unified_logger(rank=rank, name_suffix="-Model")
+        
+        # =====================================================================
+        # 4. 分布式配置
         # =====================================================================
         self.distributed_config = distributed_config or DistributedConfig()
         self.distributed_prefill_manager: Optional[DistributedPrefillManager] = None
@@ -152,7 +162,7 @@ class SpecSoTModel(nn.Module):
             self._init_distributed()
         
         # =====================================================================
-        # 4. 推理状态初始化
+        # 5. 推理状态初始化
         # =====================================================================
         set_random_seed(self.seed)
         self.reset_state()
@@ -307,7 +317,7 @@ class SpecSoTModel(nn.Module):
             model=self,
             device=str(device),
         )
-        print(f"[SpecSoT] 分布式推理已启用: {self.distributed_config}")
+        self.logger.info(f"分布式推理已启用: {self.distributed_config}")
     
     def cleanup_distributed(self):
         """清理分布式资源"""
@@ -465,7 +475,6 @@ class SpecSoTModel(nn.Module):
         device = self.base_model.device
         input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(device)
         input_len = input_ids.shape[1]
-        # print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         # =====================================================================
         # 1. 初始化 KV Cache
@@ -579,7 +588,6 @@ class SpecSoTModel(nn.Module):
         # 准备 skeleton 阶段的 input_ids 和 logits_processor
         input_ids, task_input_ids = prepare_skeleton_input(self.tokenizer, task_prompt, model_type, device)
         input_len = input_ids.shape[1]
-        # print(f"input_ids: {self.tokenizer.decode(input_ids[0])}")
         
         skeleton_logits_processor = create_skeleton_logits_processor(
             para_token_ids, input_len, logits_processor
@@ -639,7 +647,7 @@ class SpecSoTModel(nn.Module):
                 break
         
         skeleton_ids = input_ids[:, input_len:]
-        print("Generated Skeleton:", self.tokenizer.decode(skeleton_ids[0]))
+        self.logger.info(f"Generated Skeleton: {self.tokenizer.decode(skeleton_ids[0])}")
         self.skeleton_output = skeleton_ids.clone()
 
         # =====================================================================
@@ -651,7 +659,7 @@ class SpecSoTModel(nn.Module):
         )
         
         if not branch_headers:
-            print("Parsing failed or no branches found. Returning skeleton.")
+            self.logger.warning("Parsing failed or no branches found. Returning skeleton.")
             return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0
         
         # 2.2: 准备并行分支输入（添加上下文指令前缀）
@@ -662,7 +670,7 @@ class SpecSoTModel(nn.Module):
         num_para = len(clean_branches)
         self.parallel_branches_output = [list(br) for br in clean_branches]
         self.instruction_len = instruction_len
-        print(f"Detected {num_para} parallel branches with predicted lengths: {predicted_branch_lengths}")
+        self.logger.info(f"Detected {num_para} parallel branches with predicted lengths: {predicted_branch_lengths}")
 
         # =====================================================================
         # Stage 3: Parallel Decoding (并行分支解码)
@@ -707,11 +715,11 @@ class SpecSoTModel(nn.Module):
                 num_active_branches=len(self.active_branches),
                 tokens_per_branch=tokens_per_branch,
             ):
-                print(f"Incomplete branches due to KV cache limit: {self.active_branches}")
+                self.logger.warning(f"Incomplete branches due to KV cache limit: {self.active_branches}")
                 break
             
             if step_parallel % 50 == 0:
-                print(f"Parallel Decoding Step {step_parallel + 1}")
+                self.logger.debug(f"Parallel Decoding Step {step_parallel + 1}")
 
             evt_start_p.record()
             
@@ -745,7 +753,7 @@ class SpecSoTModel(nn.Module):
             
             # 停止条件检查
             if all_finished:
-                print("All branches finished generation.")
+                self.logger.info("All branches finished generation.")
                 break
         
         # 计算并行阶段统计
@@ -755,10 +763,10 @@ class SpecSoTModel(nn.Module):
         avg_update_time = total_update_time_parallel / num_steps_parallel
         avg_verify_time = total_verify_time_parallel / num_steps_parallel
         
-        print(f"Avg accepted lengths: {avg_accept_len}, "
-              f"Avg draft time: {avg_draft_time:.4f}s, "
-              f"Avg update time: {avg_update_time:.4f}s, "
-              f"Avg verify time: {avg_verify_time:.4f}s")
+        self.logger.info(f"Avg accepted lengths: {avg_accept_len:.2f}, "
+                        f"Avg draft time: {avg_draft_time:.4f}s, "
+                        f"Avg update time: {avg_update_time:.4f}s, "
+                        f"Avg verify time: {avg_verify_time:.4f}s")
 
         # 合并结果
         merged_ids = merge_outputs(
@@ -825,15 +833,6 @@ class SpecSoTModel(nn.Module):
             if outputs["hidden_states"][0].device != ea_device:
                 outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
             hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
-        
-        # print(f"chunk0 layer1 hidden[0, :5, :5]: {hidden_states[0, :5, :5]}")
-        # print(f"chunk0 layer17 hidden[0, :5, 2560:2560+5]: {hidden_states[0, :5, 2560:2560+5]}")
-        # print(f"chunk1 layer1 hidden[0, 128:128+5, :5]: {hidden_states[0, 128:128+5, :5]}")
-        # print(f"chunk1 layer17 hidden[0, 128:128+5, 2560:2560+5]: {hidden_states[0, 128:128+5, 2560:2560+5]}")
-        # print(f"chunk2 layer1 hidden[0, 256:256+5, :5]: {hidden_states[0, 256:256+5, :5]}")
-        # print(f"chunk2 layer17 hidden[0, 256:256+5, 2560:2560+5]: {hidden_states[0, 256:256+5, 2560:2560+5]}")
-        # print(f"chunk3 layer1 hidden[0, 384:384+5, :5]: {hidden_states[0, 384:384+5, :5]}")
-        # print(f"chunk3 layer17 hidden[0, 384:384+5, 2560:2560+5]: {hidden_states[0, 384:384+5, 2560:2560+5]}")
 
         # Generate Draft Tree
         draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
@@ -1002,10 +1001,6 @@ class SpecSoTModel(nn.Module):
         candidates = draft_tokens[0, retrieve_indices]
         
         best_candidate, accept_length, sample_p = evaluate_single(input_ids, logits, candidates, logits_processor)
-        # print(f"accept_length: {accept_length.item()}")
-        # if accept_length.item() > 0:
-        #     best_candidate_token = candidates[0, best_candidate, :accept_length]
-        #     print(f"best_candidate: {self.tokenizer.decode(best_candidate_token[0].tolist())}")
         
         # 规范化维度
         if isinstance(accept_length, int):
@@ -1322,7 +1317,6 @@ class SpecSoTModel(nn.Module):
 
         # 更新 input_ids
         input_ids = torch.cat([input_ids, new_tokens.to(input_ids.device)], dim=-1)
-        # print(f"Updated input_ids: {self.tokenizer.decode(new_tokens[0])}")
 
         # 更新 KV Cache (搬运接受的 KV 到正确位置)
         for past_kv_data in self.past_key_values_data:
