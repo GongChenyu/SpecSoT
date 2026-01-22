@@ -6,8 +6,12 @@ P2P通信管理器
 
 日志记录说明：
 - DEBUG: 详细的发送数据信息（tensor形状、大小）
-- INFO: 重要发送事件
+- INFO: 重要发送事件（初始化、广播）
 - WARNING: 发送失败或异常
+
+连接拓扑：
+- 每个rank建立到所有其他rank的PUSH socket（发送）
+- 每个rank建立从所有其他rank的PULL socket（接收）
 """
 
 import zmq
@@ -15,7 +19,8 @@ import torch
 import time
 from typing import Dict, Tuple, Optional
 
-from .base_comm_manager import ZMQCommManagerBase, get_tensor_info
+from .base_comm_manager import ZMQCommManagerBase
+from ..logging_utils import get_tensor_info
 from .comm_utils import (
     Message,
     MessageType,
@@ -97,7 +102,11 @@ class P2PCommManager(ZMQCommManagerBase):
         self.logger.info("[THREAD] 发送线程退出")
     
     def _log_send_event(self, msg: Message, data_size: int, send_time: float):
-        """记录发送事件的详细日志"""
+        """
+        记录发送事件的详细日志
+        
+        注意：所有通信细节使用DEBUG级别，只有关键事件使用INFO
+        """
         size_kb = data_size / 1024
         msg_type_name = MessageType(msg.msg_type).name
         
@@ -105,17 +114,18 @@ class P2PCommManager(ZMQCommManagerBase):
             data = msg.data
             if isinstance(data, dict):
                 draft_shape = tuple(data.get('draft_tokens', torch.empty(0)).shape)
-                self.logger.info(
+                # DRAFT_TOKENS是关键事件，使用INFO
+                self.logger.debug(
                     f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                     f"seq_id={msg.seq_id}, draft_shape={draft_shape}, "
                     f"size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
                 )
             else:
-                self.logger.info(f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | seq_id={msg.seq_id}")
+                self.logger.debug(f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | seq_id={msg.seq_id}")
                 
         elif msg.msg_type == MessageType.HIDDEN:
             hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
-            self.logger.info(
+            self.logger.debug(
                 f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                 f"seq_id={msg.seq_id}, chunk_idx={msg.chunk_idx}, "
                 f"size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
@@ -124,7 +134,7 @@ class P2PCommManager(ZMQCommManagerBase):
             
         elif msg.msg_type == MessageType.EAGLE_INPUT_HIDDEN:
             hidden_info = get_tensor_info(msg.data) if torch.is_tensor(msg.data) else str(type(msg.data))
-            self.logger.info(
+            self.logger.debug(
                 f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                 f"seq_id={msg.seq_id}, layer_idx={msg.layer_idx}, "
                 f"size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
@@ -134,13 +144,13 @@ class P2PCommManager(ZMQCommManagerBase):
         elif msg.msg_type == MessageType.BASE_CACHE:
             if isinstance(msg.data, tuple) and len(msg.data) == 2:
                 key_shape = tuple(msg.data[0].shape)
-                self.logger.info(
+                self.logger.debug(
                     f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                     f"seq_id={msg.seq_id}, layer_idx={msg.layer_idx}, chunk_idx={msg.chunk_idx}, "
                     f"key_shape={key_shape}, size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
                 )
             else:
-                self.logger.info(
+                self.logger.debug(
                     f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                     f"layer={msg.layer_idx}, chunk={msg.chunk_idx}"
                 )
@@ -149,13 +159,13 @@ class P2PCommManager(ZMQCommManagerBase):
             is_incremental = (msg.layer_idx != -1)
             if isinstance(msg.data, tuple) and len(msg.data) == 2:
                 key_shape = tuple(msg.data[0].shape)
-                self.logger.info(
+                self.logger.debug(
                     f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                     f"seq_id={msg.seq_id}, chunk_idx={msg.chunk_idx}, incremental={is_incremental}, "
                     f"key_shape={key_shape}, size={size_kb:.2f}KB, time={send_time*1000:.2f}ms"
                 )
             else:
-                self.logger.info(
+                self.logger.debug(
                     f"[SEND] {msg_type_name} -> rank {msg.dst_rank} | "
                     f"chunk={msg.chunk_idx}, incremental={is_incremental}"
                 )
@@ -193,10 +203,13 @@ class P2PCommManager(ZMQCommManagerBase):
         
         targets = [r for r in range(self.world_size) if r != self.rank] if dst_rank == -1 else [dst_rank]
         
+        # DRAFT_TOKENS 广播是关键事件，使用INFO
         self.logger.info(
-            f"[QUEUE] DRAFT_TOKENS -> targets={targets} | "
-            f"draft_shape={tuple(draft_tokens.shape)}, "
-            f"retrieve_shape={tuple(retrieve_indices.shape)}, "
+            f"[BROADCAST] DRAFT_TOKENS -> targets={targets} | "
+            f"draft_shape={tuple(draft_tokens.shape)}"
+        )
+        self.logger.debug(
+            f"  retrieve_shape={tuple(retrieve_indices.shape)}, "
             f"mask_shape={tuple(tree_mask.shape)}"
         )
         
@@ -215,7 +228,7 @@ class P2PCommManager(ZMQCommManagerBase):
     def send_hidden(self, hidden: torch.Tensor, dst_rank: int, chunk_idx: int = -1) -> None:
         """P2P模式：直接发送到目标rank"""
         hidden_info = get_tensor_info(hidden) if torch.is_tensor(hidden) else str(type(hidden))
-        self.logger.info(
+        self.logger.debug(
             f"[QUEUE] HIDDEN -> rank {dst_rank} | "
             f"chunk_idx={chunk_idx}"
         )
@@ -242,7 +255,7 @@ class P2PCommManager(ZMQCommManagerBase):
     ) -> None:
         """P2P模式：直接发送到最后一个rank"""
         hidden_info = get_tensor_info(hidden) if torch.is_tensor(hidden) else str(type(hidden))
-        self.logger.info(
+        self.logger.debug(
             f"[QUEUE] EAGLE_INPUT_HIDDEN -> rank {dst_rank} | "
             f"layer_idx={layer_idx}, chunk_idx={chunk_idx}"
         )

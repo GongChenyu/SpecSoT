@@ -40,6 +40,12 @@ from threading import Thread, Event
 # 引入项目依赖 (假设 SpecSoT 包在 python path 下)
 from SpecSoT import SpecSoTModel
 from SpecSoT.distributed.distributed_config import DistributedConfig
+from SpecSoT.logging_utils import (
+    FlushingStreamHandler,
+    FlushingFileHandler,
+    get_unified_logger,
+    cleanup_loggers,
+)
 
 # 获取项目根目录
 project_dir = os.path.abspath(os.path.dirname(__file__))
@@ -48,9 +54,16 @@ project_dir = os.path.abspath(os.path.dirname(__file__))
 # 日志配置
 # =============================================================================
 
+
 def setup_logging(rank: int = -1, log_dir: str = None) -> logging.Logger:
     """
     设置日志系统，同时输出到控制台和文件
+    
+    使用统一的日志模块，确保日志实时显示，解决输出延迟问题
+    
+    注意：
+    - 控制台只显示 INFO 级别以上的关键信息
+    - 文件记录所有 DEBUG 级别的详细信息
     
     Args:
         rank: 当前进程的rank，-1表示单机模式或launcher
@@ -64,14 +77,10 @@ def setup_logging(rank: int = -1, log_dir: str = None) -> logging.Logger:
     
     os.makedirs(log_dir, exist_ok=True)
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
     if rank >= 0:
-        # log_file = os.path.join(log_dir, f"rank_{rank}_{timestamp}.log")
         log_file = os.path.join(log_dir, f"rank_{rank}.log")
         logger_name = f"SpecSoT-Rank{rank}"
     else:
-        # log_file = os.path.join(log_dir, f"launcher_{timestamp}.log")
         log_file = os.path.join(log_dir, f"launcher.log")
         logger_name = "SpecSoT-Launcher"
     
@@ -82,14 +91,14 @@ def setup_logging(rank: int = -1, log_dir: str = None) -> logging.Logger:
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
     
-    # 文件处理器 - 记录所有级别
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
+    # 文件处理器（带刷新）- 记录所有级别
+    file_handler = FlushingFileHandler(log_file, mode='w', encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(log_format))
     logger.addHandler(file_handler)
     
-    # 控制台处理器 - 只记录INFO以上
-    console_handler = logging.StreamHandler(sys.stdout)
+    # 控制台处理器（带刷新）- 只记录INFO以上
+    console_handler = FlushingStreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(logging.Formatter(log_format))
     logger.addHandler(console_handler)

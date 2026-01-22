@@ -54,6 +54,19 @@ from .comm_utils import (
 )
 from .distributed_prefill import DistributedPrefillManager
 
+# 日志工具从父模块导入
+from ..logging_utils import (
+    FlushingStreamHandler,
+    FlushingFileHandler,
+    get_unified_logger,
+    get_comm_logger,
+    get_prefill_logger,
+    get_tensor_info,
+    format_tensor_brief,
+    format_timing,
+    format_message_info,
+)
+
 __all__ = [
     # 配置
     "DistributedConfig",
@@ -70,4 +83,15 @@ __all__ = [
     
     # 推理管理器
     "DistributedPrefillManager",
+    
+    # 日志工具
+    "FlushingStreamHandler",
+    "FlushingFileHandler",
+    "get_unified_logger",
+    "get_comm_logger",
+    "get_prefill_logger",
+    "get_tensor_info",
+    "format_tensor_brief",
+    "format_timing",
+    "format_message_info",
 ]

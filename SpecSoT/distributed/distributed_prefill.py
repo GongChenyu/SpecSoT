@@ -23,8 +23,8 @@
 5. EAGLE_CACHE: 第五优先级，异步传输，每个chunk的expand_root后增量同步
 
 日志记录说明：
-- DEBUG: 详细的层级处理信息、cache同步细节
-- INFO: 重要阶段开始/结束、关键通信事件
+- DEBUG: 详细的层级处理信息、cache同步细节（只写文件）
+- INFO: 重要阶段开始/结束、关键通信事件（控制台+文件）
 - WARNING: 超时、异常情况
 - ERROR: 错误信息
 """
@@ -44,65 +44,13 @@ from .distributed_config import DistributedConfig
 from .comm_manager import create_zmq_comm_manager, ZMQCommManagerBase, MessageType, Message
 from ..kv_cache import KVCache
 
-
-def setup_prefill_logger(rank: int, log_dir: str = None) -> logging.Logger:
-    """
-    设置分布式Prefill模块的日志记录器
-    
-    Args:
-        rank: 当前进程rank
-        log_dir: 日志目录
-        
-    Returns:
-        配置好的logger
-    """
-    logger_name = f"DistPrefill-Rank{rank}"
-    logger = logging.getLogger(logger_name)
-    
-    # 如果已经配置过，直接返回
-    if logger.handlers:
-        return logger
-    
-    logger.setLevel(logging.DEBUG)
-    
-    # 日志格式
-    log_format = '%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
-    date_format = '%Y-%m-%d %H:%M:%S'
-    formatter = logging.Formatter(log_format, datefmt=date_format)
-    
-    # 控制台处理器
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-    
-    # 文件处理器
-    if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = os.path.join(log_dir, f"prefill_rank{rank}.log")
-        # log_file = os.path.join(log_dir, f"prefill_rank{rank}_{timestamp}.log")
-        file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-    
-    return logger
-
-
-def get_tensor_info(tensor: torch.Tensor) -> str:
-    """获取tensor的详细信息字符串"""
-    if tensor is None:
-        return "None"
-    
-    shape = tuple(tensor.shape)
-    dtype = str(tensor.dtype).replace('torch.', '')
-    device = str(tensor.device)
-    numel = tensor.numel()
-    size_bytes = tensor.element_size() * numel
-    size_mb = size_bytes / (1024 * 1024)
-    
-    return f"shape={shape}, dtype={dtype}, device={device}, size={size_mb:.3f}MB"
+# 使用统一的日志模块
+from ..logging_utils import (
+    FlushingStreamHandler,
+    FlushingFileHandler,
+    get_unified_logger,
+    get_tensor_info,
+)
 
 
 class DistributedPrefillManager:
@@ -137,10 +85,11 @@ class DistributedPrefillManager:
         self.model = model
         self.device = device
         
-        # 设置日志（带文件输出）
+        # 设置日志（使用统一的日志模块）
+        # 获取与 run_specsot.py 相同的 logger，确保日志合并到同一个文件
         project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         log_dir = os.path.join(project_dir, 'logs')
-        self.logger = setup_prefill_logger(config.rank, log_dir)
+        self.logger = get_unified_logger(rank=config.rank, log_dir=log_dir)
         
         # 通信管理器
         self.comm: Optional[ZMQCommManagerBase] = None
@@ -253,24 +202,18 @@ class DistributedPrefillManager:
         total_seq_length = input_ids.shape[1]
         batch_size = input_ids.shape[0]
         
-        self.logger.info("=" * 60)
-        self.logger.info("[PREFILL] 开始分布式 Prefill 阶段")
-        self.logger.info("=" * 60)
-        self.logger.info(f"  Rank: {self.config.rank}/{self.config.world_size-1}")
-        self.logger.info(f"  负责层范围: [{start_layer}, {end_layer})")
-        self.logger.info(f"  输入序列长度: {total_seq_length}")
-        self.logger.info(f"  模型总层数: {num_layers}")
+        self.logger.info(f"[PREFILL] 开始 | Rank={self.config.rank}/{self.config.world_size-1} | layers=[{start_layer},{end_layer}) | seq_len={total_seq_length}")
         
         # 初始化cache接收状态
         self._init_cache_tracking(num_layers, total_seq_length)
         
         # 切分chunks
         chunks = self._split_into_chunks(input_ids)
-        self.logger.info(f"  Chunk数量: {len(chunks)} (chunk_size={self.config.chunk_size})")
+        self.logger.debug(f"  Chunk数量: {len(chunks)} (chunk_size={self.config.chunk_size})")
         
         # 确定需要传输给eagle layer的hidden state层
         eagle_input_layers = self._get_eagle_input_layers(num_layers)
-        self.logger.info(f"  Eagle Input Layers: {eagle_input_layers}")
+        self.logger.debug(f"  Eagle Input Layers: {eagle_input_layers}")
         eagle_hidden_states = {}  # 收集eagle input hidden states
         
         # =====================================================================
@@ -284,7 +227,7 @@ class DistributedPrefillManager:
             self._current_chunk_idx = chunk_idx
             chunk_start_time = time.time()
             
-            self.logger.info(f"\n[CHUNK {chunk_idx+1}/{len(chunks)}] 开始处理 | seq_len={chunk_seq_length}, first={is_first_chunk}, last={is_last_chunk}")
+            self.logger.debug(f"[CHUNK {chunk_idx+1}/{len(chunks)}] 开始处理 | seq_len={chunk_seq_length}, first={is_first_chunk}, last={is_last_chunk}")
             
             # =================================================================
             # Phase 1: Embedding / 接收hidden states
@@ -293,13 +236,13 @@ class DistributedPrefillManager:
             
             if self.config.is_first_rank():
                 # 第一个rank执行embedding
-                self.logger.info(f"  [PHASE 1] 执行 Embedding...")
+                self.logger.debug(f"  [PHASE 1] 执行 Embedding...")
                 hidden_states = base_model.model.embed_tokens(chunk)
-                self.logger.info(f"  [PHASE 1] Embedding 完成 | {get_tensor_info(hidden_states)}")
+                self.logger.debug(f"  [PHASE 1] Embedding 完成 | {get_tensor_info(hidden_states)}")
             else:
                 # 接收上一个rank的hidden states（阻塞）
                 prev_rank = self.config.get_prev_rank()
-                self.logger.info(f"  [PHASE 1] 等待接收 Hidden States (from Rank {prev_rank})...")
+                self.logger.debug(f"  [PHASE 1] 等待接收 Hidden States (from Rank {prev_rank})...")
                 result = self.comm.recv_hidden(
                     src_rank=prev_rank, 
                     timeout=60.0
@@ -308,7 +251,7 @@ class DistributedPrefillManager:
                     self.logger.error(f"  [PHASE 1][TIMEOUT] 接收hidden states超时 (chunk={chunk_idx})")
                     raise RuntimeError(f"Rank {self.config.rank}: 接收hidden states超时 (chunk={chunk_idx})")
                 hidden_states, recv_chunk_idx = result
-                self.logger.info(f"  [PHASE 1][RECV] Hidden States | {get_tensor_info(hidden_states)} | chunk_idx={recv_chunk_idx}")
+                self.logger.debug(f"  [PHASE 1][RECV] Hidden States | {get_tensor_info(hidden_states)} | chunk_idx={recv_chunk_idx}")
             
             phase1_time = (time.time() - phase1_start) * 1000
             self.logger.debug(f"  [PHASE 1] 完成 | 耗时: {phase1_time:.2f}ms")
@@ -317,7 +260,7 @@ class DistributedPrefillManager:
             # Phase 2: Decoder Layers (各rank计算各自负责的层)
             # =================================================================
             phase2_start = time.time()
-            self.logger.info(f"  [PHASE 2] 开始计算 Decoder Layers [{start_layer}, {end_layer})")
+            self.logger.debug(f"  [PHASE 2] 开始计算 Decoder Layers [{start_layer}, {end_layer})")
             
             # 计算past_key_values_length
             past_key_values_length = 0
@@ -431,7 +374,7 @@ class DistributedPrefillManager:
                 self.cache_received_indicator[chunk_idx, layer_idx] = 1
             
             phase2_time = (time.time() - phase2_start) * 1000
-            self.logger.info(f"  [PHASE 2] 完成 | layers={layers_computed}, cache_sent={layers_cache_sent}, eagle_hidden_sent={eagle_hidden_sent} | 耗时: {phase2_time:.2f}ms")
+            self.logger.debug(f"  [PHASE 2] 完成 | layers={layers_computed}, cache_sent={layers_cache_sent}, eagle_hidden_sent={eagle_hidden_sent} | 耗时: {phase2_time:.2f}ms")
             
             # =================================================================
             # Phase 3: 发送hidden states给下一个rank / 执行Eagle Layer
@@ -441,7 +384,7 @@ class DistributedPrefillManager:
             if not self.config.is_last_rank():
                 # 非最后rank：发送hidden states给下一个rank
                 next_rank = self.config.get_next_rank()
-                self.logger.info(f"  [PHASE 3][SEND] Hidden States -> Rank {next_rank}")
+                self.logger.debug(f"  [PHASE 3][SEND] Hidden States -> Rank {next_rank}")
                 self.comm.send_hidden(
                     hidden_states, 
                     dst_rank=next_rank, 
@@ -450,7 +393,7 @@ class DistributedPrefillManager:
                 self.logger.debug(f"    Hidden States 发送完成 | {get_tensor_info(hidden_states)}")
             else:
                 # 最后一个rank：执行Eagle Layer计算（Pipeline的一部分）
-                self.logger.info(f"  [PHASE 3] 执行 Eagle Layer 计算...")
+                self.logger.debug(f"  [PHASE 3] 执行 Eagle Layer 计算...")
                 
                 # Norm
                 hidden_states_normed = base_model.model.norm(hidden_states)
@@ -461,7 +404,7 @@ class DistributedPrefillManager:
                 self.logger.debug(f"    LM Head 完成 | {get_tensor_info(orig)}")
                 
                 # 接收其他rank发送的eagle input hidden states（阻塞等待收集完毕）
-                self.logger.info(f"  [PHASE 3][RECV] 等待 Eagle Input Hidden States (chunk={chunk_idx})...")
+                self.logger.debug(f"  [PHASE 3][RECV] 等待 Eagle Input Hidden States (chunk={chunk_idx})...")
                 recv_start = time.time()
                 received_eagle_hidden = self.comm.recv_all_eagle_input_hidden(
                     eagle_input_layers=eagle_input_layers,
@@ -471,7 +414,7 @@ class DistributedPrefillManager:
                     timeout=60.0
                 )
                 recv_time = (time.time() - recv_start) * 1000
-                self.logger.info(f"  [PHASE 3][RECV] 收到 {len(received_eagle_hidden)} 个 Eagle Hidden (chunk={chunk_idx}) | 耗时: {recv_time:.2f}ms")
+                self.logger.debug(f"  [PHASE 3][RECV] 收到 {len(received_eagle_hidden)} 个 Eagle Hidden (chunk={chunk_idx}) | 耗时: {recv_time:.2f}ms")
                 
                 # 合并本地和接收的eagle hidden states
                 eagle_hidden_states.update(received_eagle_hidden)
@@ -502,7 +445,7 @@ class DistributedPrefillManager:
                         token = token[None, None]
                     
                     input_ids = torch.cat((input_ids, token.to(input_ids.device)), dim=1)
-                    self.logger.info(f"  [PHASE 3] First Token 采样: {token.item()}")
+                    self.logger.debug(f"  [PHASE 3] First Token 采样: {token.item()}")
 
                 # Eagle Layer生成Draft Tree（使用分布式Prefill专用函数）
                 # 非最后chunk只更新stable_kv，最后chunk才生成完整的draft tree
@@ -527,7 +470,7 @@ class DistributedPrefillManager:
                 if self.config.is_last_rank() and incremental_kv is not None:
                     key, value = incremental_kv
                     kv_size_mb = (key.numel() + value.numel()) * key.element_size() / 1024 / 1024
-                    self.logger.info(f"  [PHASE 3][BROADCAST] Eagle Stable KV | chunk={chunk_idx}, size={kv_size_mb:.2f}MB")
+                    self.logger.debug(f"  [PHASE 3][BROADCAST] Eagle Stable KV | chunk={chunk_idx}, size={kv_size_mb:.2f}MB")
                     self.comm.broadcast_eagle_stable_kv(
                         incremental_kv=incremental_kv, 
                         chunk_idx=chunk_idx,
@@ -547,12 +490,12 @@ class DistributedPrefillManager:
                     final_tree_position_ids = tree_position_ids
                     
                     # 广播Draft Tokens结果 (最高优先级)
-                    self.logger.info(f"  [PHASE 3][BROADCAST] Draft Tokens | shape={draft_tokens.shape}")
+                    self.logger.debug(f"  [PHASE 3][BROADCAST] Draft Tokens | shape={draft_tokens.shape}")
                     self.comm.send_draft_tokens(
                         draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
                         dst_rank=-1  # 广播
                     )
-                    self.logger.info(f"  [PHASE 3] Draft Tokens 广播完成")
+                    self.logger.debug(f"  [PHASE 3] Draft Tokens 广播完成")
             
             phase3_time = (time.time() - phase3_start) * 1000
             self.logger.debug(f"  [PHASE 3] 完成 | 耗时: {phase3_time:.2f}ms")
@@ -561,20 +504,18 @@ class DistributedPrefillManager:
             self._process_received_caches_nonblocking(past_key_values, num_layers, chunk_idx)
             
             chunk_time = (time.time() - chunk_start_time) * 1000
-            self.logger.info(f"[CHUNK {chunk_idx+1}/{len(chunks)}] 完成 | 总耗时: {chunk_time:.2f}ms")
+            self.logger.debug(f"[CHUNK {chunk_idx+1}/{len(chunks)}] 完成 | 总耗时: {chunk_time:.2f}ms")
         
         # =====================================================================
         # 所有chunks处理完成后的后续处理
         # =====================================================================
-        self.logger.info("\n" + "=" * 60)
-        self.logger.info("[POST-CHUNK] 所有 Chunks 处理完成，开始同步阶段")
-        self.logger.info("=" * 60)
+        self.logger.info("[PREFILL] Chunks处理完成，开始 Cache 同步...")
         
         if not self.config.is_last_rank():
             # -----------------------------------------------------------------
             # 非最后rank：等待接收Draft Tree结果
             # -----------------------------------------------------------------
-            self.logger.info(f"[RECV] 等待 Draft Tokens (from Rank {self.config.world_size - 1})...")
+            self.logger.debug(f"[RECV] 等待 Draft Tokens (from Rank {self.config.world_size - 1})...")
             recv_start = time.time()
             result = self.comm.recv_draft_tokens(
                 src_rank=self.config.world_size - 1,
@@ -585,10 +526,10 @@ class DistributedPrefillManager:
                 raise RuntimeError("接收draft tokens超时")
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids = result
             recv_time = (time.time() - recv_start) * 1000
-            self.logger.info(f"[RECV] Draft Tokens 接收完成 | shape={draft_tokens.shape} | 耗时: {recv_time:.2f}ms")
+            self.logger.debug(f"[RECV] Draft Tokens 接收完成 | shape={draft_tokens.shape} | 耗时: {recv_time:.2f}ms")
             
             # 等待所有cache同步（base cache和eagle cache）
-            self.logger.info("[SYNC] 等待所有 Cache 同步...")
+            self.logger.debug("[SYNC] 等待所有 Cache 同步...")
             sync_start = time.time()
             eagle_layer = self.model.eagle_layer
             start_layer, end_layer = self.config.get_layer_range(num_layers)
@@ -605,7 +546,8 @@ class DistributedPrefillManager:
                 timeout=60.0
             )
             sync_time = (time.time() - sync_start) * 1000
-            self.logger.info(f"[SYNC_OK] Rank {self.config.rank} Cache 同步完成 | 耗时: {sync_time:.2f}ms")
+            sync_time = (time.time() - sync_start) * 1000
+            self.logger.debug(f"[SYNC_OK] Rank {self.config.rank} Cache 同步完成 | 耗时: {sync_time:.2f}ms")
             
             # 清除prefill阶段标记
             self._is_prefill_phase = False
@@ -614,9 +556,7 @@ class DistributedPrefillManager:
             self.timing_stats['prefill_end'] = time.time()
             
             prefill_time = self.timing_stats['prefill_end'] - self.timing_stats['prefill_start']
-            self.logger.info("=" * 60)
-            self.logger.info(f"[PREFILL] 分布式 Prefill 完成 | 总耗时: {prefill_time:.3f}s")
-            self.logger.info("=" * 60)
+            self.logger.info(f"[PREFILL] 分布式 Prefill 完成 | Rank={self.config.rank} | 耗时: {prefill_time:.3f}s")
             
             # 非最后rank不需要返回值
             return draft_tokens, retrieve_indices, tree_mask, tree_position_ids, None, None, None
@@ -625,7 +565,7 @@ class DistributedPrefillManager:
         # 最后一个rank：等待cache同步并返回结果
         # -----------------------------------------------------------------
         # 等待所有base model cache同步
-        self.logger.info("[SYNC] 最后一个 Rank 等待所有 Cache 同步...")
+        self.logger.debug("[SYNC] 最后一个 Rank 等待所有 Cache 同步...")
         sync_start = time.time()
         eagle_layer = self.model.eagle_layer
         start_layer, end_layer = self.config.get_layer_range(num_layers)
@@ -642,7 +582,7 @@ class DistributedPrefillManager:
             timeout=60.0
         )
         sync_time = (time.time() - sync_start) * 1000
-        self.logger.info(f"[SYNC_OK] Rank {self.config.rank} Cache 同步完成 | 耗时: {sync_time:.2f}ms")
+        self.logger.debug(f"[SYNC_OK] Rank {self.config.rank} Cache 同步完成 | 耗时: {sync_time:.2f}ms")
         
         # 清除prefill阶段标记
         self._is_prefill_phase = False
@@ -651,9 +591,7 @@ class DistributedPrefillManager:
         self.timing_stats['prefill_end'] = time.time()
         
         prefill_time = self.timing_stats['prefill_end'] - self.timing_stats['prefill_start']
-        self.logger.info("=" * 60)
-        self.logger.info(f"[PREFILL] 分布式 Prefill 完成 | 总耗时: {prefill_time:.3f}s")
-        self.logger.info("=" * 60)
+        self.logger.info(f"[PREFILL] 分布式 Prefill 完成 | Rank={self.config.rank} | 耗时: {prefill_time:.3f}s")
         
         return (
             final_draft_tokens,

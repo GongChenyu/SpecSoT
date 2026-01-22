@@ -56,6 +56,23 @@ from .distributed import (
     ZMQCommManagerBase,
 )
 
+# 日志工具
+from .logging_utils import (
+    FlushingStreamHandler,
+    FlushingFileHandler,
+    get_unified_logger,
+    get_comm_logger,
+    get_prefill_logger,
+    get_tensor_info,
+    format_tensor_brief,
+    format_timing,
+    format_message_info,
+    log_phase_start,
+    log_phase_end,
+    log_progress,
+    cleanup_loggers,
+)
+
 # Prompts
 from .prompts import base_prompt_zh, skeleton_trigger_zh, parallel_trigger_zh
 from .prompts import base_prompt_en, skeleton_trigger_en, parallel_trigger_en
@@ -91,6 +108,21 @@ __all__ = [
     "DistributedPrefillManager",
     "create_zmq_comm_manager",
     "ZMQCommManagerBase",
+    
+    # Logging
+    "FlushingStreamHandler",
+    "FlushingFileHandler",
+    "get_unified_logger",
+    "get_comm_logger",
+    "get_prefill_logger",
+    "get_tensor_info",
+    "format_tensor_brief",
+    "format_timing",
+    "format_message_info",
+    "log_phase_start",
+    "log_phase_end",
+    "log_progress",
+    "cleanup_loggers",
     
     # Prompts
     "base_prompt_zh",
