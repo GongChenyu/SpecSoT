@@ -53,6 +53,7 @@ from transformers.generation.logits_process import (
 from .prompts import (
     base_prompt_zh, skeleton_trigger_zh, parallel_trigger_zh,
     base_prompt_en, skeleton_trigger_en, parallel_trigger_en,
+    vicuna_chat_template,
 )
 from .logits_processor import SemanticLogitsProcessor
 
@@ -906,7 +907,7 @@ def prepare_skeleton_input(
     Args:
         tokenizer: 分词器
         task_prompt: 用户输入的任务描述
-        model_type: 模型类型 ('qwen', 'llama', 'other')
+        model_type: 模型类型 ('qwen', 'llama', 'vicuna', 'other')
         device: 目标设备
         
     Returns:
@@ -918,46 +919,179 @@ def prepare_skeleton_input(
         base_prompt_template = base_prompt_zh
         skeleton_trigger = skeleton_trigger_zh
         print(f"Using Chinese prompts for {model_type} model")
+        
+        task_input = base_prompt_template.format(user_inputs=task_prompt)
+        skeleton_input = skeleton_trigger.format(user_inputs=task_prompt)
+        task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
+        skeleton_input_ids = tokenizer([skeleton_input], return_tensors="pt").input_ids.to(device)
+        input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
+    elif model_type == 'vicuna':
+        # Vicuna 模型使用特定的 chat template (从 prompts.py 导入)
+        base_prompt_template = base_prompt_en
+        skeleton_trigger = skeleton_trigger_en
+        print(f"Using Vicuna chat template with English prompts for {model_type} model")
+        
+        # 构建完整的用户消息
+        full_prompt = base_prompt_template.format(user_inputs=task_prompt) + skeleton_trigger.format(user_inputs=task_prompt)
+        input_text = vicuna_chat_template.format(prompt=full_prompt)
+        input_ids = tokenizer([input_text], return_tensors="pt").input_ids.to(device)
+        
+        # 对于 task_input_ids，也需要应用同样的模板
+        task_input = base_prompt_template.format(user_inputs=task_prompt)
+        task_input_text = vicuna_chat_template.format(prompt=task_input)
+        task_input_ids = tokenizer([task_input_text], return_tensors="pt").input_ids.to(device)
+    elif model_type == 'llama':
+        # LLaMA 3.1 Instruct 模型使用 chat template
+        base_prompt_template = base_prompt_en
+        skeleton_trigger = skeleton_trigger_en
+        print(f"Using chat template with English prompts for {model_type} model")
+        
+        # 构建完整的用户消息
+        full_prompt = base_prompt_template.format(user_inputs=task_prompt) + skeleton_trigger.format(user_inputs=task_prompt)
+        
+        # 使用 chat template 包装消息 (tokenize=True 直接返回 token IDs)
+        messages = [{"role": "user", "content": full_prompt}]
+        input_ids = tokenizer.apply_chat_template(
+            messages, 
+            tokenize=True, 
+            add_generation_prompt=True,
+            return_tensors="pt"
+        ).to(device)
+        
+        # 对于 task_input_ids，也需要应用 chat template
+        task_input = base_prompt_template.format(user_inputs=task_prompt)
+        task_messages = [{"role": "user", "content": task_input}]
+        task_input_ids = tokenizer.apply_chat_template(
+            task_messages, 
+            tokenize=True, 
+            add_generation_prompt=True,
+            return_tensors="pt"
+        ).to(device)
     else:
-        # Llama 和其他模型使用英文 prompt
+        # 其他模型使用英文 prompt（无 chat template）
         base_prompt_template = base_prompt_en
         skeleton_trigger = skeleton_trigger_en
         print(f"Using English prompts for {model_type} model")
-    
-    task_input = base_prompt_template.format(user_inputs=task_prompt)
-    skeleton_input = skeleton_trigger.format(user_inputs=task_prompt)
-    task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
-    skeleton_input_ids = tokenizer([skeleton_input], return_tensors="pt").input_ids.to(device)
-    input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
+        
+        task_input = base_prompt_template.format(user_inputs=task_prompt)
+        skeleton_input = skeleton_trigger.format(user_inputs=task_prompt)
+        task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
+        skeleton_input_ids = tokenizer([skeleton_input], return_tensors="pt").input_ids.to(device)
+        input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
     
     return input_ids, task_input_ids
+
+
+def parse_skeleton_str(
+    tokenizer,
+    skeleton_ids: torch.Tensor,
+) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
+    """
+    基于字符串的骨架解析（适用于所有模型）
+    
+    将skeleton token IDs转换为字符串后进行解析，避免不同模型tokenizer
+    对于特殊标记（如####）分词不一致的问题。
+    
+    骨架格式示例：
+    ####标题1【100】:...
+    ####标题2【200】:...
+    ####%%%%
+    
+    Args:
+        tokenizer: 分词器
+        skeleton_ids: 骨架 token IDs
+        
+    Returns:
+        branch_headers: 分支标题列表（token ID格式）
+        predicted_lengths: 每个分支的预测长度
+    """
+    # 将skeleton token IDs转换为字符串
+    skeleton_text = tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
+    
+    # 使用正则表达式查找所有分支
+    # 支持多种格式:
+    # - #### 标题【数字】:... (中文全角方括号)
+    # - #### 标题(数字):... (英文圆括号)
+    # - #### 标题（数字）:... (中文圆括号)
+    # - #### 标题（数字 tokens）:... (带 tokens 后缀)
+    branch_pattern = r'####\s*([^#\n]+?)[\[【\(（](\d+)(?:\s*tokens?)?[\]】\)）]:?\.{0,3}'
+    matches = list(re.finditer(branch_pattern, skeleton_text, re.IGNORECASE))
+    
+    if not matches:
+        # 尝试备用模式 (不带token数量预估)
+        branch_pattern_fallback = r'####\s*([^#\n:]+):\.{0,3}'
+        matches = list(re.finditer(branch_pattern_fallback, skeleton_text))
+        if not matches:
+            print(f"Warning: No branches found in skeleton text. Text preview: {skeleton_text[:500]}")
+            return None, None
+    
+    branch_headers = []
+    predicted_lengths = []
+    
+    for match in matches:
+        if len(match.groups()) >= 2:
+            # 有长度预估
+            title = match.group(1).strip()
+            length = int(match.group(2))
+        else:
+            # 没有长度预估
+            title = match.group(1).strip()
+            length = 200  # 默认长度
+        
+        # 重新构建分支标题并转为token IDs
+        # 格式: #### 标题【长度】:
+        branch_text = f"#### {title}【{length}】:"
+        branch_tokens = tokenizer.encode(branch_text, add_special_tokens=False)
+        
+        branch_headers.append(branch_tokens)
+        predicted_lengths.append(length)
+    
+    if branch_headers:
+        print(f"[parse_skeleton_str] Found {len(branch_headers)} branches")
+        for i, (tokens, length) in enumerate(zip(branch_headers, predicted_lengths)):
+            preview = tokenizer.decode(tokens)[:50]
+            print(f"  Branch {i+1}: {preview}... (predicted length: {length})")
+    
+    return branch_headers, predicted_lengths
 
 
 def parse_skeleton(
     tokenizer,
     skeleton_ids: torch.Tensor,
     para_token_ids: Dict[str, int],
+    use_str_parse: bool = True,  # 默认使用字符串解析
 ) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
     """
     解析骨架，提取分支标题和预测长度
     
-    骨架格式示例：
-    ####标题1(100):...
-    ####标题2(200):...
-    ####%%%%
+    支持两种解析模式：
+    1. 字符串解析 (use_str_parse=True): 将token转为字符串后用正则匹配，适用于所有模型
+    2. Token解析 (use_str_parse=False): 直接用token ID匹配，依赖特定tokenizer
     
-    注意：此函数只解析骨架，不添加指令前缀。
-    要准备并行输入，请使用 prepare_parallel_branches。
+    骨架格式示例：
+    ####标题1【100】:...
+    ####标题2【200】:...
+    ####%%%%
     
     Args:
         tokenizer: 分词器
         skeleton_ids: 骨架 token IDs
         para_token_ids: 特殊 token IDs 字典
+        use_str_parse: 是否使用字符串解析（默认True）
         
     Returns:
         branch_headers: 分支标题列表（不含指令前缀）
         predicted_lengths: 每个分支的预测长度（从括号中解析）
     """
+    # 优先使用字符串解析模式
+    if use_str_parse:
+        result = parse_skeleton_str(tokenizer, skeleton_ids)
+        if result[0] is not None:
+            return result
+        # 如果字符串解析失败，回退到token解析
+        print("[parse_skeleton] String parsing failed, falling back to token-based parsing...")
+    
+    # Token-based parsing
     seq_list = skeleton_ids[0].tolist()
     para_begin_id = para_token_ids['para_begin_token_id']
     para_end_id = para_token_ids['para_end_token_id']
@@ -976,7 +1110,7 @@ def parse_skeleton(
         except ValueError:
             para_end_idx = len(seq_list)
     except ValueError:
-        print("Warning: No '####' found in generated output.")
+        print("Warning: No '####' found in generated output (token-based parsing).")
         return None, None
 
     # 提取并行片段
@@ -1041,7 +1175,7 @@ def prepare_parallel_branches(
     Args:
         tokenizer: 分词器
         branch_headers: 分支标题列表（来自 parse_skeleton）
-        model_type: 模型类型 ('qwen', 'llama', 'other')
+        model_type: 模型类型 ('qwen', 'llama', 'vicuna', 'other')
         
     Returns:
         clean_branches: 完整的分支列表（含指令前缀）
@@ -1070,8 +1204,23 @@ def prepare_parallel_branches(
             skeleton_context=result_skeleton_str,
             current_point=branch_str,
         )
-        # print(f"Branch ID:{i}, Instruction: {instruction}")
-        instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
+        
+        if model_type == 'llama':
+            # LLaMA 3.1 Instruct 需要使用 chat template
+            messages = [{"role": "user", "content": instruction}]
+            # 使用 tokenize=True 直接获取 token IDs
+            instruction_ids = tokenizer.apply_chat_template(
+                messages, 
+                tokenize=True, 
+                add_generation_prompt=True
+            )
+        elif model_type == 'vicuna':
+            # Vicuna 使用特定的 chat template (从 prompts.py 导入)
+            instruction_text = vicuna_chat_template.format(prompt=instruction)
+            instruction_ids = tokenizer.encode(instruction_text, add_special_tokens=False)
+        else:
+            instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
+        
         full_branch = instruction_ids + br
         clean_branches.append(full_branch)
         instruction_lengths.append(len(instruction_ids))

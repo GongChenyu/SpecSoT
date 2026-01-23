@@ -1,26 +1,19 @@
 # coding=utf-8
 """
-Eagle Layer: 轻量级草稿模型
+Eagle Layer2: EAGLE2 适配版本
 
-Eagle Layer 是投机推理中的核心组件，负责快速生成候选 token 树。
-它使用基础模型的 hidden states 和 embeddings 作为输入，预测下一批可能的 tokens。
+本文件适配 EAGLE2 架构 (对应 cnets1.py)，用于支持 Vicuna 等使用 EAGLE2 的模型。
 
-Draft Tree 生成流程：
-1. Root Expansion (根节点扩展): 从单个 hidden state 生成 top-k 个候选 token
-2. Tree Growth (树生长): 递归扩展，每层保留 top-k 个最优路径
-3. Post Process (后处理): 构建最终的 draft tree 结构
+EAGLE2 与 EAGLE3 的主要区别：
+1. Decoder 层数：EAGLE2 使用多层 Decoder Stack，EAGLE3 使用单层
+2. 注意力输入维度：EAGLE2 使用 hidden_size，EAGLE3 使用 hidden_size * 2
+3. fc 层输入维度：EAGLE2 使用 hidden_size * 2，EAGLE3 使用 hidden_size * 3
+4. lm_head：EAGLE2 使用外部传入的 head，EAGLE3 使用内置的 lm_head
+5. DecoderLayer：EAGLE2 使用标准 LlamaDecoderLayer，EAGLE3 使用特殊的 LlamaDecoderLayeremb
 
-关键数据结构：
-- draft_tokens: 候选 token 树 [batch, total_nodes]
-- retrieve_indices: 叶节点到根的路径索引 [batch, num_leaves, depth]
-- tree_mask: 树结构的注意力掩码 [batch, 1, nodes, nodes]
-- tree_position_ids: 树节点的位置编码 [batch, nodes]
-
-分布式适配说明：
-- generate_draft_tree: 主入口，可独立部署
-- _expand_root: 根节点扩展，依赖基础模型 hidden states
-- _grow_tree: 树生长循环，纯 Eagle Layer 计算
-- _post_process: 后处理，CPU/GPU 均可执行
+继承关系：
+- 本模块尽可能复用 eagle_layer.py (EAGLE3) 中的公共组件
+- 仅重写必要的组件：EagleAttention2, EagleDecoderLayer2, EagleLayer2
 """
 
 import math
@@ -31,163 +24,60 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn as nn
 from huggingface_hub import hf_hub_download
+from transformers.activations import ACT2FN
 
 from .configs import EConfig
 from .utils_c import *
 
+# 复用 eagle_layer3.py 中的公共组件
+from .eagle_layer3 import (
+    _make_causal_mask,
+    _expand_mask,
+    rotate_half,
+    apply_rotary_pos_emb,
+    repeat_kv,
+    LlamaRotaryEmbedding,
+    LlamaRMSNorm,
+    EagleMLP,
+)
 
-# Copied from transformers.models.bart.modeling_bart._make_causal_mask
-def _make_causal_mask(
-        input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device, past_key_values_length: int = 0
-):
+
+# =============================================================================
+# EAGLE2 Attention Layer
+# =============================================================================
+
+class EagleAttention2(nn.Module):
     """
-    Make causal mask used for bi-directional self-attention.
+    EAGLE2 的注意力模块
+    
+    与 EAGLE3 的区别：
+    - 输入维度是 hidden_size (不是 hidden_size * 2)
+    - 用于标准的单输入 Decoder Layer
     """
-    bsz, tgt_len = input_ids_shape
-    mask = torch.full((tgt_len, tgt_len), torch.finfo(dtype).min, device=device)
-    mask_cond = torch.arange(mask.size(-1), device=device)
-    mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
-    mask = mask.to(dtype)
-
-    if past_key_values_length > 0:
-        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
-    return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
-
-
-# Copied from transformers.models.bart.modeling_bart._expand_mask
-def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] = None):
-    """
-    Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
-    """
-    bsz, src_len = mask.size()
-    tgt_len = tgt_len if tgt_len is not None else src_len
-
-    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype)
-
-    inverted_mask = 1.0 - expanded_mask
-
-    return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
-
-
-# =============================================================================
-# Rotary Embedding (旋转位置编码)
-# =============================================================================
-
-def rotate_half(x: torch.Tensor) -> torch.Tensor:
-    """旋转张量的后半部分"""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2:]
-    return torch.cat((-x2, x1), dim=-1)
-
-
-def apply_rotary_pos_emb(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    cos: torch.Tensor,
-    sin: torch.Tensor,
-    position_ids: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """应用旋转位置编码"""
-    cos = cos.squeeze(1).squeeze(0)
-    sin = sin.squeeze(1).squeeze(0)
-    cos = cos[position_ids].unsqueeze(1)
-    sin = sin[position_ids].unsqueeze(1)
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    return q_embed, k_embed
-
-
-def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """重复 KV heads 以匹配 Query heads 数量"""
-    batch, num_kv_heads, slen, head_dim = hidden_states.shape
-    if n_rep == 1:
-        return hidden_states
-    hidden_states = hidden_states[:, :, None, :, :].expand(
-        batch, num_kv_heads, n_rep, slen, head_dim
-    )
-    return hidden_states.reshape(batch, num_kv_heads * n_rep, slen, head_dim)
-
-
-class LlamaRotaryEmbedding(nn.Module):
-    """Llama 风格的旋转位置编码"""
-
-    def __init__(self, dim: int, max_position_embeddings: int = 2048, base: int = 10000, device=None):
-        super().__init__()
-        self.dim = dim
-        self.max_position_embeddings = max_position_embeddings
-        self.base = base
-        inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
-        self.register_buffer("inv_freq", inv_freq, persistent=False)
-        self._set_cos_sin_cache(
-            seq_len=max_position_embeddings,
-            device=self.inv_freq.device,
-            dtype=torch.get_default_dtype()
-        )
-
-    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
-        self.max_seq_len_cached = seq_len
-        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
-        freqs = torch.einsum("i,j->ij", t, self.inv_freq)
-        emb = torch.cat((freqs, freqs), dim=-1)
-        self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False)
-        self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False)
-
-    def forward(self, x: torch.Tensor, seq_len: int = None):
-        if seq_len > self.max_seq_len_cached:
-            self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
-        return (
-            self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
-            self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
-        )
-
-
-# =============================================================================
-# RMSNorm
-# =============================================================================
-
-class LlamaRMSNorm(nn.Module):
-    """Llama 风格的 RMS 归一化"""
-
-    def __init__(self, hidden_size: int, eps: float = 1e-6):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
-        self.variance_epsilon = eps
-
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        input_dtype = hidden_states.dtype
-        hidden_states = hidden_states.to(torch.float32)
-        variance = hidden_states.pow(2).mean(-1, keepdim=True)
-        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
-        return self.weight * hidden_states.to(input_dtype)
-
-
-# =============================================================================
-# Attention Layer
-# =============================================================================
-
-class EagleAttention(nn.Module):
-    """Eagle Layer 的注意力模块"""
 
     def __init__(self, config: EConfig):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
         self.num_heads = config.num_attention_heads
-        
-        # 处理 head_dim
-        if hasattr(config, "head_dim"):
-            self.head_dim = config.head_dim
-        else:
-            self.head_dim = self.hidden_size // self.num_heads
-
+        self.head_dim = self.hidden_size // self.num_heads
         self.num_key_value_heads = config.num_key_value_heads
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
         self.max_position_embeddings = config.max_position_embeddings
 
-        # 投影层 (输入维度是 hidden_size * 2，因为拼接了 embedding 和 hidden state)
-        self.q_proj = nn.Linear(self.hidden_size * 2, self.num_heads * self.head_dim, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size * 2, self.num_key_value_heads * self.head_dim, bias=False)
-        self.v_proj = nn.Linear(self.hidden_size * 2, self.num_key_value_heads * self.head_dim, bias=False)
+        if (self.head_dim * self.num_heads) != self.hidden_size:
+            raise ValueError(
+                f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
+                f" and `num_heads`: {self.num_heads})."
+            )
+        
+        # 检查是否有 qkv_bias 配置
+        qkv_bias = getattr(config, 'qkv_bias', False)
+        
+        # 标准投影层（输入维度是 hidden_size）
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=qkv_bias)
+        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=qkv_bias)
+        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=qkv_bias)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
         
         self._init_rope(config)
@@ -195,13 +85,13 @@ class EagleAttention(nn.Module):
     def _init_rope(self, config):
         """初始化旋转位置编码"""
         if config.rope_scaling is None:
+            base = getattr(config, 'rope_theta', 10000)
             self.rotary_emb = LlamaRotaryEmbedding(
                 self.head_dim,
                 max_position_embeddings=self.max_position_embeddings,
+                base=base,
             )
         else:
-            scaling_type = config.rope_scaling["type"]
-            scaling_factor = config.rope_scaling["factor"]
             # 可扩展其他 RoPE 变体
             self.rotary_emb = LlamaRotaryEmbedding(
                 self.head_dim,
@@ -253,7 +143,7 @@ class EagleAttention(nn.Module):
         attn_output = torch.matmul(attn_weights, value_states)
 
         attn_output = attn_output.transpose(1, 2).contiguous()
-        attn_output = attn_output.reshape(bsz, q_len, self.num_heads * self.head_dim)
+        attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
         attn_output = self.o_proj(attn_output)
 
         if not output_attentions:
@@ -263,48 +153,33 @@ class EagleAttention(nn.Module):
 
 
 # =============================================================================
-# MLP Layer
+# EAGLE2 Decoder Layer
 # =============================================================================
 
-class EagleMLP(nn.Module):
-    """Eagle Layer 的 MLP 模块"""
+class EagleDecoderLayer2(nn.Module):
+    """
+    EAGLE2 的 Decoder 层
+    
+    与 EAGLE3 的区别：
+    - 标准单输入接口（不需要额外的 input_emb 参数）
+    - 第一层没有 input_layernorm
+    - 用于多层堆叠
+    """
 
-    def __init__(self, config: EConfig):
+    def __init__(self, config: EConfig, layer_index: int):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.intermediate_size = config.intermediate_size
-        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
-        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
-        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
-        
-        # 激活函数
-        from transformers.activations import ACT2FN
-        self.act_fn = ACT2FN[config.hidden_act]
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
-
-
-# =============================================================================
-# Decoder Layer
-# =============================================================================
-
-class EagleDecoderLayer(nn.Module):
-    """Eagle Layer 的 Decoder 层"""
-
-    def __init__(self, config: EConfig, last: bool = True):
-        super().__init__()
-        self.hidden_size = config.hidden_size
-        self.self_attn = EagleAttention(config)
+        self.self_attn = EagleAttention2(config)
         self.mlp = EagleMLP(config)
-        self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.last = last
-        if last:
-            self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.layer_index = layer_index
+        
+        # 第一层没有 input_layernorm
+        if layer_index != 0:
+            self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
-        input_emb: torch.Tensor,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
@@ -312,11 +187,25 @@ class EagleDecoderLayer(nn.Module):
         output_attentions: bool = False,
         use_cache: bool = False,
     ) -> Tuple[torch.Tensor, ...]:
-        # 拼接 embedding 和 hidden state
-        combined = torch.cat([input_emb, hidden_states], dim=-1)
+        """
+        标准 Decoder Layer 前向传播
+        
+        Args:
+            hidden_states: 输入隐藏状态 [batch, seq_len, hidden_size]
+            attention_mask: 注意力掩码
+            position_ids: 位置编码
+            past_key_value: KV Cache
+            output_attentions: 是否输出注意力权重
+            use_cache: 是否使用缓存
+            
+        Returns:
+            outputs: (hidden_states, [attn_weights], [present_kv])
+        """
         residual = hidden_states
-        hidden_states = self.input_layernorm(hidden_states)
-        hidden_states = torch.cat([input_emb, hidden_states], dim=-1)
+
+        # 第一层跳过 input_layernorm
+        if self.layer_index != 0:
+            hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
@@ -329,12 +218,11 @@ class EagleDecoderLayer(nn.Module):
         )
         hidden_states = residual + hidden_states
 
-        # MLP (仅在最后一层)
-        if self.last:
-            residual = hidden_states
-            hidden_states = self.post_attention_layernorm(hidden_states)
-            hidden_states = self.mlp(hidden_states)
-            hidden_states = residual + hidden_states
+        # MLP
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
         if output_attentions:
@@ -346,22 +234,23 @@ class EagleDecoderLayer(nn.Module):
 
 
 # =============================================================================
-# Eagle Layer 主类
+# EAGLE2 Layer 主类
 # =============================================================================
 
-class EagleLayer(nn.Module):
+class EagleLayer2(nn.Module):
     """
-    Eagle Layer: 轻量级草稿模型
+    EAGLE2 Layer: 多层 Decoder Stack 版本
     
-    负责快速生成候选 token 树，供基础模型验证。
+    与 EAGLE3 的区别：
+    1. 多层结构：使用 ModuleList 存储多个 Decoder Layer
+    2. fc 层：输入是 hidden_size * 2 (embedding + hidden)
+    3. 无内置 lm_head：使用外部传入的 head（基础模型的 lm_head）
     
     Attributes:
         config: 模型配置
         embed_tokens: Token 嵌入层
-        lm_head: 语言模型头
-        midlayer: Decoder 层
-        fc: 特征融合层 (用于 Eagle3)
-        norm: 输出归一化
+        layers: Decoder Layer 堆叠
+        fc: 特征融合层 (embedding + hidden -> hidden)
         
         # Tree 生成参数
         total_tokens: 最大生成 token 数
@@ -371,10 +260,6 @@ class EagleLayer(nn.Module):
         
         # KV Cache
         stable_kv: 稳定的 KV Cache (已接受的 tokens)
-        
-        # 并行状态
-        cache_padding_mask: 批次填充掩码
-        full_position_ids: 完整位置编码
     """
 
     def __init__(
@@ -397,10 +282,9 @@ class EagleLayer(nn.Module):
 
         # Token 嵌入
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
-        self.lm_head = nn.Linear(config.hidden_size, config.draft_vocab_size, bias=False)
         
         # 加载预训练嵌入 (可选)
-        if load_emb and not hasattr(config, "target_hidden_size"):
+        if load_emb:
             self._load_embeddings(path)
 
         # Tree 生成参数
@@ -409,28 +293,26 @@ class EagleLayer(nn.Module):
         self.depth = depth
         self.threshold = math.log(threshold)
 
-        # 网络结构
-        self.midlayer = EagleDecoderLayer(config)
+        # 网络结构：多层 Decoder
+        self.layers = nn.ModuleList([
+            EagleDecoderLayer2(config, index) 
+            for index in range(config.num_hidden_layers)
+        ])
         
-        # 特征融合层 (用于处理基础模型的 hidden states)
-        if hasattr(config, "target_hidden_size"):
-            self.fc = nn.Linear(config.target_hidden_size * 3, self.hidden_size, bias=False)
-        else:
-            self.fc = nn.Linear(config.hidden_size * 3, self.hidden_size, bias=False)
-        
-        self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        # 特征融合层 (embedding + hidden -> hidden)
+        self.fc = nn.Linear(2 * config.hidden_size, config.hidden_size, bias=bias)
+        self.act = ACT2FN[config.hidden_act]
         self.logsoftmax = nn.LogSoftmax(dim=-1)
-
-        # 词表映射 (用于处理不同大小的草稿词表)
-        d2t = torch.zeros((config.draft_vocab_size), dtype=torch.long)
-        t2d = torch.zeros((config.vocab_size), dtype=torch.bool)
-        self.register_buffer("d2t", d2t)
-        self.register_buffer("t2d", t2d)
 
         # 冻结嵌入层
         for param in self.embed_tokens.parameters():
             param.requires_grad = False
 
+        # 外部 lm_head（由 from_pretrained 设置）
+        self.head = None
+        self.diff_device = False
+        self.headweight = None
+        
         self.reset_state()
 
     @classmethod
@@ -439,41 +321,31 @@ class EagleLayer(nn.Module):
         ea_model_path: str,
         base_model: nn.Module,
         base_model_name_or_path: str,
-        use_eagle3: bool = True,
+        use_eagle3: bool = False,  # EAGLE2 固定为 False
         total_token: int = 60,
         depth: int = 7,
         top_k: int = 10,
         threshold: float = 1.0,
     ):
         """
-        从预训练模型加载 Eagle Layer
-        
-        加载流程：
-        1. 加载配置: 从 config.json 加载 Eagle 配置
-        2. 加载权重: 从 model.safetensors 或 pytorch_model.bin 加载权重
-        3. 创建实例: 初始化 Eagle Layer
-        4. 设备管理: 处理跨设备权重
-        5. 词表映射: 处理 draft vocab 到 target vocab 的映射 (Eagle3)
-        6. 加载权重: 应用预训练权重
+        从预训练模型加载 Eagle Layer2
         
         Args:
             ea_model_path: Eagle 模型目录路径
-            base_model: 基础模型实例 (用于获取设备和 dtype)
-            base_model_name_or_path: 基础模型路径 (用于加载 embedding)
-            use_eagle3: 是否使用 Eagle3 架构
+            base_model: 基础模型实例
+            base_model_name_or_path: 基础模型路径
+            use_eagle3: 是否使用 Eagle3（EAGLE2 固定为 False）
             total_token: 每次 draft 生成的总 token 数
             depth: draft 树的深度
             top_k: 每层选择的 top-k 数量
             threshold: 接受阈值
             
         Returns:
-            初始化好的 EagleLayer 实例
+            初始化好的 EagleLayer2 实例
         """
         # =====================================================================
         # 1. 加载配置
         # =====================================================================
-        from .configs import EConfig
-        
         config_path = os.path.join(ea_model_path, "config.json")
         if not os.path.exists(config_path):
             config_path = hf_hub_download(ea_model_path, "config.json")
@@ -501,7 +373,7 @@ class EagleLayer(nn.Module):
             ea_state_dict = load_file(load_path)
 
         # =====================================================================
-        # 3. 创建 Eagle Layer 实例
+        # 3. 创建 Eagle Layer2 实例
         # =====================================================================
         eagle_layer = cls(
             config=config,
@@ -515,8 +387,11 @@ class EagleLayer(nn.Module):
         )
 
         # =====================================================================
-        # 4. 设备管理：处理跨设备权重
+        # 4. 设置外部 lm_head
         # =====================================================================
+        eagle_layer.head = base_model.lm_head
+        
+        # 处理跨设备权重
         if device != base_model.lm_head.weight.device:
             eagle_layer.diff_device = True
             eagle_layer.headweight = base_model.lm_head.weight.clone().to(device)
@@ -524,16 +399,7 @@ class EagleLayer(nn.Module):
             eagle_layer.diff_device = False
 
         # =====================================================================
-        # 5. Eagle3 词表映射：如果 draft_vocab == target_vocab，删除映射 buffer
-        # =====================================================================
-        if use_eagle3 and config.vocab_size == config.draft_vocab_size:
-            if hasattr(eagle_layer, 'd2t'):
-                del eagle_layer.d2t
-            if hasattr(eagle_layer, 't2d'):
-                del eagle_layer.t2d
-
-        # =====================================================================
-        # 6. 加载权重并移动到正确设备
+        # 5. 加载权重并移动到正确设备
         # =====================================================================
         eagle_layer.load_state_dict(ea_state_dict, strict=False)
         eagle_layer.to(base_model.dtype).to(device)
@@ -575,11 +441,11 @@ class EagleLayer(nn.Module):
         self.embed_tokens.weight.data = tensor
 
     # =========================================================================
-    # 初始化和状态管理 (Initialization & State Management)
+    # 初始化和状态管理
     # =========================================================================
 
     def reset_state(self):
-        # 状态变量
+        """重置状态"""
         self.stable_kv = None
         self.cache_padding_mask = None
         self.full_position_ids = None
@@ -589,20 +455,11 @@ class EagleLayer(nn.Module):
         self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
         
-        # 分布式同步回调（在stable_kv更新后立即调用）
-        # 由DistributedPrefillManager设置
+        # 分布式同步回调
         self._stable_kv_sync_callback = None
     
     def set_stable_kv_sync_callback(self, callback):
-        """
-        设置stable_kv同步回调函数
-        
-        在分布式模式下，当stable_kv更新后立即调用此回调以同步到其他rank
-        
-        Args:
-            callback: 回调函数，接受stable_kv作为参数
-                      签名: callback(stable_kv: Tuple[Tuple[torch.Tensor, torch.Tensor], ...])
-        """
+        """设置 stable_kv 同步回调函数"""
         self._stable_kv_sync_callback = callback
 
     # =========================================================================
@@ -616,14 +473,7 @@ class EagleLayer(nn.Module):
         inputs_embeds: torch.Tensor,
         past_key_values_length: int,
     ) -> torch.Tensor:
-        """
-        构建解码器注意力掩码
-        
-        处理三种情况：
-        1. 基本因果掩码
-        2. Tree mask (用于 draft tree 内部)
-        3. Cache padding mask (用于并行解码的批次对齐)
-        """
+        """构建解码器注意力掩码"""
         combined_attention_mask = None
         
         # 因果掩码
@@ -660,7 +510,6 @@ class EagleLayer(nn.Module):
             mask_len = padding_bool.shape[1]
             bsz = padding_bool.shape[0]
             
-            # 扩展 mask 以适应新生成的 tokens
             if current_src_len > mask_len:
                 diff = current_src_len - mask_len
                 new_valid = torch.zeros((bsz, diff), dtype=torch.bool, device=padding_bool.device)
@@ -685,22 +534,28 @@ class EagleLayer(nn.Module):
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
         use_cache: bool = True,
+        output_attentions: bool = False,
+        output_hidden_states: bool = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, ...]:
         """
-        Eagle Layer 前向传播
+        EAGLE2 前向传播
+        
+        与 EAGLE3 的区别：
+        - 使用 fc 融合 embedding 和 hidden states: fc(cat(emb, hidden))
+        - 多层 Decoder 堆叠
         
         Args:
-            hidden_states: 基础模型的 hidden states [batch, seq, hidden*3] 或 [batch, seq, hidden]
+            hidden_states: 基础模型的 hidden states [batch, seq, hidden]
             input_ids: 输入 token IDs [batch, seq]
             attention_mask: 注意力掩码
             position_ids: 位置编码
-            past_key_values: KV Cache
+            past_key_values: KV Cache (list of tuples for each layer)
             use_cache: 是否使用 cache
             
         Returns:
             hidden_states: 输出 hidden states
-            next_decoder_cache: 更新后的 KV Cache (如果 use_cache=True)
+            next_decoder_cache: 更新后的 KV Cache
         """
         batch_size, seq_length, _ = hidden_states.shape
         seq_length_with_past = seq_length
@@ -737,192 +592,54 @@ class EagleLayer(nn.Module):
             attention_mask, (batch_size, seq_length), hidden_states, past_key_values_length
         )
 
-        # 对齐 hidden_states 和 embeddings 维度
+        # EAGLE2: fc(cat(embedding, hidden)) -> hidden
         inputs_embeds = inputs_embeds.to(hidden_states.dtype)
-        if hidden_states.shape[-1] != inputs_embeds.shape[-1]:
-            hidden_states = self.fc(hidden_states)
+        hidden_states = self.fc(torch.cat((inputs_embeds, hidden_states), dim=-1))
 
-        # Decoder Layer
-        past_key_value = past_key_values[0] if past_key_values is not None else None
-        layer_outputs = self.midlayer(
-            input_emb=inputs_embeds,
-            hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            past_key_value=past_key_value,
-            output_attentions=False,
-            use_cache=True,
-        )
-        hidden_states = layer_outputs[0]
+        # 多层 Decoder
+        all_hidden_states = () if output_hidden_states else None
+        next_decoder_cache = () if use_cache else None
+
+        for idx, decoder_layer in enumerate(self.layers):
+            if output_hidden_states:
+                all_hidden_states += (hidden_states,)
+
+            past_key_value = past_key_values[idx] if past_key_values is not None else None
+
+            layer_outputs = decoder_layer(
+                hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_value=past_key_value,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+            )
+
+            hidden_states = layer_outputs[0]
+
+            if use_cache:
+                next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
 
         if use_cache:
-            next_decoder_cache = (layer_outputs[1],)
             return hidden_states, next_decoder_cache
 
         return hidden_states
 
     # =========================================================================
-    # Draft Tree 生成：分布式Prefill专用
+    # 获取 lm_head 输出
     # =========================================================================
 
-    @torch.no_grad()
-    def generate_draft_tree_dist_prefill(
-        self,
-        hidden_states: torch.Tensor,
-        input_ids: torch.Tensor,
-        is_last_chunk: bool = False,
-        chunk_idx: int = 0,
-        original_input_len: int = -1,
-    ) -> Tuple[Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+    def _get_head_output(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """
-        分布式Prefill专用的Draft Tree生成
+        获取 lm_head 输出
         
-        与generate_draft_tree的区别：
-        1. 针对chunk模式设计，输入逻辑简化，不会与其他阶段混淆
-        2. 非最后chunk只执行expand_root更新stable_kv，跳过后续计算
-        3. 只有最后chunk才执行完整的tree growth和post process
-        4. 返回当前chunk的增量kv cache，供分布式管理器显式同步
-        
-        Args:
-            hidden_states: 基础模型的hidden states（来自指定层的拼接）
-            input_ids: 当前chunk的token IDs（不包含第一个token，因为已在调用处去掉）
-            is_last_chunk: 是否是最后一个chunk
-            original_input_len: 原始完整input_ids的长度（包含第一个token），用于正确计算位置编码
-            
-        Returns:
-            (tree_result, incremental_kv):
-            - tree_result: 如果is_last_chunk=True则为(draft_tokens, retrieve_indices, tree_mask, tree_position_ids)，否则为None
-            - incremental_kv: 当前chunk产生的增量kv cache (new_key, new_value)，用于分布式同步
+        EAGLE2 使用外部传入的 head（基础模型的 lm_head）
         """
-        bsz = input_ids.shape[0]
-        input_ids = input_ids.to(hidden_states.device)
-        
-        # 记录expand_root之前的stable_kv长度，用于计算增量
-        prev_kv_len = 0
-        if self.stable_kv is not None:
-            prev_kv_len = self.stable_kv[0][0].shape[2]
-        
-        # -----------------------------------------------------------------
-        # Phase 1: Expand Root (所有chunk都要执行，更新stable_kv)
-        # -----------------------------------------------------------------
-        scores, parents, next_token, next_input_ids, last_hidden = self._expand_root_dist_prefill(
-            hidden_states, input_ids, chunk_idx
-        )
-        
-        # 计算增量KV cache
-        incremental_kv = None
-        if self.stable_kv is not None:
-            key, value = self.stable_kv[0]
-            current_len = key.shape[2]
-            if current_len > prev_kv_len:
-                # Clone出增量部分，避免异步发送时内存被修改
-                new_key = key[:, :, prev_kv_len:current_len, :].clone()
-                new_value = value[:, :, prev_kv_len:current_len, :].clone()
-                incremental_kv = (new_key, new_value)
-        
-        # 非最后chunk：只更新stable_kv，不需要后续计算
-        if not is_last_chunk:
-            return None, incremental_kv
-        
-        # -----------------------------------------------------------------
-        # 最后chunk：执行完整的tree growth和post process
-        # -----------------------------------------------------------------
-        sample_token = input_ids[:, -1]
-        # 使用原始input_ids的完整长度（包含第一个token），与单机版generate_draft_tree保持一致
-        # 单机版中 len_posi = input_ids.shape[1]，其中input_ids包含第一个token
-        # 分布式版中 input_ids已去掉第一个token，所以需要+1来对齐
-        len_posi = original_input_len if original_input_len > 0 else input_ids.shape[1] + 1
-        self.tree_mask = None  # 重置 tree mask
-        
-        # 收集expand_root的结果
-        scores_list = [scores]
-        parents_list = [parents]
-        tokens_list = [next_token]
-        
-        # Phase 2: Tree Growth
-        loop_scores, loop_parents, loop_tokens, _ = self._grow_tree(
-            last_hidden, next_input_ids, scores, bsz, self.top_k, self.depth, len_posi
-        )
-        scores_list.extend(loop_scores)
-        parents_list.extend(loop_parents)
-        tokens_list.extend(loop_tokens)
-        
-        # Phase 3: Post Process
-        tree_result = self._post_process_tree(
-            bsz, scores_list, tokens_list, parents_list,
-            sample_token, self.total_tokens, self.top_k
-        )
-        return tree_result, incremental_kv
-
-    def _expand_root_dist_prefill(
-        self,
-        hidden_states: torch.Tensor,
-        input_ids: torch.Tensor,
-        chunk_idx: int = 0,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        分布式Prefill专用的根节点扩展
-        
-        与_expand_root的区别：
-        1. 输入逻辑简化：直接使用input_ids[:, 1:]作为actual_input
-        2. 不依赖stable_kv状态来判断模式，避免chunk间的混淆
-        3. stable_kv会在每个chunk累积更新
-        
-        Args:
-            hidden_states: 输入hidden states（当前chunk）
-            input_ids: 输入token IDs（当前chunk）
-            
-        Returns:
-            scores: 候选分数 [batch, top_k]
-            parents: 父节点索引 [batch]
-            next_token: 下一个token [batch, top_k]
-            next_input_ids: 下一个输入IDs [batch, top_k]
-            last_hidden: 最后一个hidden state [batch, hidden]
-        """
-        # 分布式Prefill chunk模式：直接去掉第一个token（因为embedding shift）
-        actual_input = input_ids
-        actual_hidden = hidden_states
-        
-        # 位置编码：基于stable_kv的累积长度
-        position_ids = None
-        if self.full_position_ids is not None and self.stable_kv is not None:
-            position_start = self.stable_kv[0][0].shape[2]
-            step = actual_input.shape[1]
-            position_ids = self.full_position_ids[:, position_start:position_start + step]
-        
-        # Eagle Layer Forward
-        out_hidden, past_key_values = self(
-            actual_hidden,
-            input_ids=actual_input,
-            position_ids=position_ids,
-            past_key_values=self.stable_kv,
-            use_cache=True,
-        )
-        
-        # 更新stable_kv（累积所有chunk的kv cache）
-        self.stable_kv = past_key_values
-        
-        # 生成top-k候选
-        last_hidden = out_hidden[:, -1]
-        last_headout = self.lm_head(self.norm(last_hidden))
-        last_p = self.logsoftmax(last_headout)
-        
-        top = torch.topk(last_p, self.top_k, dim=-1)
-        topk_index, topk_p = top.indices, top.values
-        
-        scores = topk_p
-        parents = torch.zeros(input_ids.shape[0], dtype=torch.long, device=input_ids.device)
-        
-        # 处理词表映射
-        if self.config.vocab_size == self.config.draft_vocab_size:
-            next_token = topk_index
-            next_input_ids = topk_index
+        if self.diff_device:
+            # 使用复制的权重
+            return nn.functional.linear(hidden_states, self.headweight)
         else:
-            mapped_tokens = topk_index + self.d2t[topk_index]
-            next_token = mapped_tokens
-            next_input_ids = mapped_tokens
-        
-        return scores, parents, next_token, next_input_ids, last_hidden
+            return self.head(hidden_states)
 
     # =========================================================================
     # Draft Tree 生成：主入口
@@ -938,11 +655,6 @@ class EagleLayer(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         生成 Draft Tree
-        
-        三阶段流程：
-        1. Root Expansion: 生成 top-k 个根候选
-        2. Tree Growth: 递归扩展树
-        3. Post Process: 构建最终树结构
         
         Args:
             hidden_states: 基础模型的 hidden states
@@ -960,15 +672,13 @@ class EagleLayer(nn.Module):
         input_ids = input_ids.to(hidden_states.device)
         sample_token = input_ids[:, -1]
         len_posi = input_ids.shape[1]
-        self.tree_mask = None  # 重置 tree mask
+        self.tree_mask = None
 
         scores_list = []
         parents_list = []
         tokens_list = []
 
-        # -----------------------------------------------------------------
-        # Phase 1: Root Expansion (根节点扩展)
-        # -----------------------------------------------------------------
+        # Phase 1: Root Expansion
         scores, parents, next_token, next_input_ids, last_hidden = self._expand_root(
             hidden_states, input_ids, prefix_len=prefix_len, active_branch=active_branch
         )
@@ -976,9 +686,7 @@ class EagleLayer(nn.Module):
         parents_list.append(parents)
         tokens_list.append(next_token)
 
-        # -----------------------------------------------------------------
-        # Phase 2: Tree Growth (树生长)
-        # -----------------------------------------------------------------
+        # Phase 2: Tree Growth
         loop_scores, loop_parents, loop_tokens, _ = self._grow_tree(
             last_hidden, next_input_ids, scores, bsz, self.top_k, self.depth, len_posi
         )
@@ -986,16 +694,14 @@ class EagleLayer(nn.Module):
         parents_list.extend(loop_parents)
         tokens_list.extend(loop_tokens)
 
-        # -----------------------------------------------------------------
-        # Phase 3: Post Process (后处理)
-        # -----------------------------------------------------------------
+        # Phase 3: Post Process
         return self._post_process_tree(
             bsz, scores_list, tokens_list, parents_list,
             sample_token, self.total_tokens, self.top_k
         )
 
     # =========================================================================
-    # Phase 1: Root Expansion (根节点扩展)
+    # Phase 1: Root Expansion
     # =========================================================================
 
     def _expand_root(
@@ -1006,51 +712,24 @@ class EagleLayer(nn.Module):
         prefix_len: int = -1,
         active_branch: Optional[List[int]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        根节点扩展：从单个 hidden state 生成 top-k 个候选
-        
-        处理三种模式：
-        1. Skeleton Prefill: 首次运行，无 KV Cache
-        2. Skeleton Decoding: 单序列解码
-        3. Parallel Decoding: 多分支并行解码
-        
-        Args:
-            hidden_states: 输入 hidden states
-            input_ids: 输入 token IDs
-            position_ids: 位置编码 (可选)
-            prefix_len: 前缀长度
-            active_branch: 活跃分支列表
-            
-        Returns:
-            scores: 候选分数 [batch, top_k]
-            parents: 父节点索引 [batch]
-            next_token: 下一个 token [batch, top_k]
-            next_input_ids: 下一个输入 IDs [batch, top_k]
-            last_hidden: 最后一个 hidden state [batch, hidden]
-        """
+        """根节点扩展"""
         actual_hidden = hidden_states
 
         # 根据当前状态确定输入
         if self.stable_kv is not None:
-            # 非 Prefill 阶段
             kv_len = self.stable_kv[0][0].shape[2]
             
             if input_ids.shape[0] == 1:
                 if active_branch is not None:
-                    # 并行阶段只剩一个 branch
                     actual_input = input_ids
                 else:
-                    # Skeleton 解码
                     actual_input = input_ids[:, 1:]
                     actual_input = actual_input[:, kv_len:]
             elif hidden_states.shape[1] != input_ids.shape[1]:
-                # 并行初始化
                 actual_input = input_ids[:, 1:]
             else:
-                # 并行解码
                 actual_input = input_ids
         else:
-            # Skeleton Prefill
             actual_input = input_ids[:, 1:]
 
         # 处理位置编码
@@ -1059,7 +738,7 @@ class EagleLayer(nn.Module):
             step = actual_input.shape[1]
             position_ids = self.full_position_ids[:, position_start:position_start + step]
 
-        # Eagle Layer Forward
+        # EAGLE2 Forward
         out_hidden, past_key_values = self(
             actual_hidden,
             input_ids=actual_input,
@@ -1068,12 +747,11 @@ class EagleLayer(nn.Module):
             use_cache=True,
         )
         
-        # 更新 stable KV (只保存已接受的 tokens)
         self.stable_kv = past_key_values
         
         # 生成 top-k 候选
         last_hidden = out_hidden[:, -1]
-        last_headout = self.lm_head(self.norm(last_hidden))
+        last_headout = self._get_head_output(last_hidden)
         last_p = self.logsoftmax(last_headout)
 
         top = torch.topk(last_p, self.top_k, dim=-1)
@@ -1082,19 +760,14 @@ class EagleLayer(nn.Module):
         scores = topk_p
         parents = torch.zeros(input_ids.shape[0], dtype=torch.long, device=input_ids.device)
 
-        # 处理词表映射
-        if self.config.vocab_size == self.config.draft_vocab_size:
-            next_token = topk_index
-            next_input_ids = topk_index
-        else:
-            mapped_tokens = topk_index + self.d2t[topk_index]
-            next_token = mapped_tokens
-            next_input_ids = mapped_tokens
+        # EAGLE2 没有词表映射
+        next_token = topk_index
+        next_input_ids = topk_index
 
         return scores, parents, next_token, next_input_ids, last_hidden
 
     # =========================================================================
-    # Phase 2: Tree Growth (树生长)
+    # Phase 2: Tree Growth
     # =========================================================================
 
     def _grow_tree(
@@ -1107,30 +780,7 @@ class EagleLayer(nn.Module):
         depth: int,
         len_posi: int,
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], torch.Tensor]:
-        """
-        树生长：递归扩展候选树
-        
-        每层：
-        1. 对当前 top-k 节点生成 top-k 个子节点 (共 k*k 个)
-        2. 从 k*k 个候选中选择全局 top-k
-        3. 更新 tree mask
-        
-        Args:
-            last_hidden: 根节点的 hidden state
-            input_ids: 当前输入 token IDs
-            scores: 当前分数
-            bsz: batch size
-            top_k: 每层保留数量
-            depth: 树深度
-            len_posi: 位置起点
-            
-        Returns:
-            loop_scores: 各层分数列表
-            loop_parents: 各层父节点列表
-            loop_tokens: 各层 token 列表
-            tree_mask: 最终 tree mask
-        """
-        # 初始化
+        """树生长"""
         input_hidden = last_hidden[:, None, :].repeat(1, top_k, 1)
         tree_mask = self.tree_mask_init.repeat(bsz, 1, 1, 1)
         local_range = torch.arange(top_k, device=self.embed_tokens.weight.device)
@@ -1152,7 +802,7 @@ class EagleLayer(nn.Module):
                 position_ids = len_posi - 1 + self.position_ids
                 position_ids = position_ids.unsqueeze(0).repeat(bsz, 1)
 
-            # Eagle Layer Forward
+            # EAGLE2 Forward
             out_hidden, past_key_values = self(
                 input_hidden, input_ids=input_ids,
                 past_key_values=past_key_values,
@@ -1160,7 +810,6 @@ class EagleLayer(nn.Module):
             )
 
             # 计算父节点索引
-            # bias 用于计算节点在整棵树中的全局索引
             bias1 = top_k if i > 0 else 0
             bias2 = max(0, i - 1)
             bias = 1 + top_k ** 2 * bias2 + bias1
@@ -1168,7 +817,7 @@ class EagleLayer(nn.Module):
             loop_parents.append(parents.unsqueeze(0).repeat(bsz, 1))
 
             # 预测下一层
-            last_headout = self.lm_head(self.norm(out_hidden))
+            last_headout = self._get_head_output(out_hidden)
             last_p = self.logsoftmax(last_headout)
 
             top = torch.topk(last_p, top_k, dim=-1)
@@ -1187,15 +836,9 @@ class EagleLayer(nn.Module):
             out_ids_expanded = out_ids.unsqueeze(-1).expand(-1, -1, self.hidden_size)
             input_hidden = torch.gather(out_hidden, 1, out_ids_expanded)
 
-            # 保存 tokens
-            if self.config.vocab_size == self.config.draft_vocab_size:
-                loop_tokens.append(local_topk_index)
-                flat_source = local_topk_index.view(bsz, -1)
-            else:
-                mapped = local_topk_index + self.d2t[local_topk_index]
-                loop_tokens.append(mapped)
-                flat_source = mapped.view(bsz, -1)
-
+            # EAGLE2 没有词表映射
+            loop_tokens.append(local_topk_index)
+            flat_source = local_topk_index.view(bsz, -1)
             input_ids = torch.gather(flat_source, 1, selected_indices)
             loop_scores.append(cu_scores)
 
@@ -1212,7 +855,7 @@ class EagleLayer(nn.Module):
         return loop_scores, loop_parents, loop_tokens, tree_mask
 
     # =========================================================================
-    # Phase 3: Post Process (后处理)
+    # Phase 3: Post Process
     # =========================================================================
 
     def _post_process_tree(
@@ -1225,24 +868,7 @@ class EagleLayer(nn.Module):
         total_tokens: int,
         top_k: int,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        后处理：构建最终的 draft tree 结构
-        
-        Args:
-            bsz: batch size
-            scores_list: 各层分数
-            tokens_list: 各层 tokens
-            parents_list: 各层父节点
-            sample_token: 采样的 root token
-            total_tokens: 总节点数
-            top_k: top-k 值
-            
-        Returns:
-            draft_tokens: 候选 tokens [batch, total_nodes]
-            retrieve_indices: 路径索引 [batch, num_leaves, depth]
-            tree_mask: 注意力掩码 [batch, 1, nodes, nodes]
-            tree_position_ids: 位置编码 [batch, nodes]
-        """
+        """后处理：构建最终的 draft tree 结构"""
         draft_tokens_list = []
         retrieve_indices_list = []
         tree_mask_list = []
@@ -1281,7 +907,7 @@ class EagleLayer(nn.Module):
 
             tree_position_ids_b = torch.sum(tree_mask_b, dim=1) - 1
 
-            # 构建 retrieve indices (叶节点到根的路径)
+            # 构建 retrieve indices
             max_depth = torch.max(tree_position_ids_b) + 1
             noleaf_index = torch.unique(mask_index).tolist()
             leaf_num = total_tokens - (len(noleaf_index) - 1)
@@ -1298,7 +924,7 @@ class EagleLayer(nn.Module):
                         cid = mask_index_list[cid - 1]
                     rid += 1
 
-            # 排序 retrieve indices
+            # 排序
             def custom_sort(lst):
                 return [lst[i] if lst[i] >= 0 else total_tokens + 5 for i in range(len(lst))]
             retrieve_indices_b = sorted(retrieve_indices_b, key=custom_sort)
@@ -1313,7 +939,7 @@ class EagleLayer(nn.Module):
         tree_mask = torch.stack(tree_mask_list, dim=0)[:, None, :, :]
         tree_position_ids = torch.stack(tree_position_ids_list, dim=0).to(sample_token.device)
 
-        # 对齐 retrieve indices (不同批次可能有不同的叶节点数和深度)
+        # 对齐 retrieve indices
         max_depth = max([ri.shape[1] for ri in retrieve_indices_list])
         max_leaves = max([ri.shape[0] for ri in retrieve_indices_list])
 
@@ -1331,3 +957,115 @@ class EagleLayer(nn.Module):
         retrieve_indices = torch.stack(padded_retrieve, dim=0)
 
         return draft_tokens, retrieve_indices, tree_mask, tree_position_ids
+
+    # =========================================================================
+    # 分布式 Prefill 支持（可选）
+    # =========================================================================
+
+    @torch.no_grad()
+    def generate_draft_tree_dist_prefill(
+        self,
+        hidden_states: torch.Tensor,
+        input_ids: torch.Tensor,
+        is_last_chunk: bool = False,
+        chunk_idx: int = 0,
+        original_input_len: int = -1,
+    ) -> Tuple[Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        """分布式 Prefill 专用的 Draft Tree 生成"""
+        bsz = input_ids.shape[0]
+        input_ids = input_ids.to(hidden_states.device)
+        
+        # 记录之前的 KV 长度
+        prev_kv_len = 0
+        if self.stable_kv is not None:
+            prev_kv_len = self.stable_kv[0][0].shape[2]
+        
+        # Phase 1: Expand Root
+        scores, parents, next_token, next_input_ids, last_hidden = self._expand_root_dist_prefill(
+            hidden_states, input_ids, chunk_idx
+        )
+        
+        # 计算增量 KV cache
+        incremental_kv = None
+        if self.stable_kv is not None:
+            # 对于多层，返回所有层的增量
+            incremental_kvs = []
+            for layer_kv in self.stable_kv:
+                key, value = layer_kv
+                current_len = key.shape[2]
+                if current_len > prev_kv_len:
+                    new_key = key[:, :, prev_kv_len:current_len, :].clone()
+                    new_value = value[:, :, prev_kv_len:current_len, :].clone()
+                    incremental_kvs.append((new_key, new_value))
+            if incremental_kvs:
+                incremental_kv = tuple(incremental_kvs)
+        
+        # 非最后 chunk
+        if not is_last_chunk:
+            return None, incremental_kv
+        
+        # 最后 chunk：执行完整的 tree growth 和 post process
+        sample_token = input_ids[:, -1]
+        len_posi = original_input_len if original_input_len > 0 else input_ids.shape[1] + 1
+        self.tree_mask = None
+        
+        scores_list = [scores]
+        parents_list = [parents]
+        tokens_list = [next_token]
+        
+        # Phase 2: Tree Growth
+        loop_scores, loop_parents, loop_tokens, _ = self._grow_tree(
+            last_hidden, next_input_ids, scores, bsz, self.top_k, self.depth, len_posi
+        )
+        scores_list.extend(loop_scores)
+        parents_list.extend(loop_parents)
+        tokens_list.extend(loop_tokens)
+        
+        # Phase 3: Post Process
+        tree_result = self._post_process_tree(
+            bsz, scores_list, tokens_list, parents_list,
+            sample_token, self.total_tokens, self.top_k
+        )
+        return tree_result, incremental_kv
+
+    def _expand_root_dist_prefill(
+        self,
+        hidden_states: torch.Tensor,
+        input_ids: torch.Tensor,
+        chunk_idx: int = 0,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """分布式 Prefill 专用的根节点扩展"""
+        actual_input = input_ids
+        actual_hidden = hidden_states
+        
+        position_ids = None
+        if self.full_position_ids is not None and self.stable_kv is not None:
+            position_start = self.stable_kv[0][0].shape[2]
+            step = actual_input.shape[1]
+            position_ids = self.full_position_ids[:, position_start:position_start + step]
+        
+        out_hidden, past_key_values = self(
+            actual_hidden,
+            input_ids=actual_input,
+            position_ids=position_ids,
+            past_key_values=self.stable_kv,
+            use_cache=True,
+        )
+        
+        self.stable_kv = past_key_values
+        
+        last_hidden = out_hidden[:, -1]
+        last_headout = self._get_head_output(last_hidden)
+        last_p = self.logsoftmax(last_headout)
+        
+        top = torch.topk(last_p, self.top_k, dim=-1)
+        topk_index, topk_p = top.indices, top.values
+        
+        scores = topk_p
+        parents = torch.zeros(input_ids.shape[0], dtype=torch.long, device=input_ids.device)
+        
+        # EAGLE2 没有词表映射
+        next_token = topk_index
+        next_input_ids = topk_index
+        
+        return scores, parents, next_token, next_input_ids, last_hidden

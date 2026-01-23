@@ -162,3 +162,19 @@ parallel_trigger_en = (
     "4. **Stop**: Stop writing immediately after covering this specific point.\n\n"
     "[Answer Directly]:\n"
 )
+
+
+# =============================================================================
+# Vicuna Chat Template
+# =============================================================================
+
+# Vicuna 模型使用特定的对话格式
+# 格式: A chat between a curious user and an AI assistant.
+#       USER: {prompt}
+#       ASSISTANT:
+vicuna_chat_template = (
+    "A chat between a curious user and an artificial intelligence assistant. "
+    "The assistant gives helpful, detailed, and polite answers to the user's questions.\n\n"
+    "USER: {prompt}\n"
+    "ASSISTANT:"
+)

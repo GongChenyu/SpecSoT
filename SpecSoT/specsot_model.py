@@ -42,7 +42,8 @@ from .modeling_mixtral_kv import MixtralForCausalLM as KVMixtralForCausalLM
 from .modeling_qwen2_kv import Qwen2ForCausalLM as KVQwen2ForCausalLM
 from .modeling_qwen3_kv import Qwen3ForCausalLM as KVQwen3ForCausalLM
 
-from .eagle_layer import EagleLayer
+from .eagle_layer3 import EagleLayer3
+from .eagle_layer2 import EagleLayer2  # EAGLE2 支持
 from .kv_cache import initialize_past_key_values
 from .configs import EConfig
 from .logits_processor import SemanticLogitsProcessor
@@ -246,18 +247,32 @@ class SpecSoTModel(nn.Module):
         base_model = cls._load_base_model(base_model_path, **kwargs)
 
         # =====================================================================
-        # 2. 加载 Eagle Layer
+        # 2. 加载 Eagle Layer (根据 use_eagle3 选择不同版本)
         # =====================================================================
-        eagle_layer = EagleLayer.from_pretrained(
-            ea_model_path=ea_model_path,
-            base_model=base_model,
-            base_model_name_or_path=base_model_path,
-            use_eagle3=use_eagle3,
-            total_token=total_token,
-            depth=depth,
-            top_k=top_k,
-            threshold=threshold,
-        )
+        if use_eagle3:
+            # EAGLE3: 单层 Decoder，用于 LLaMA 3.1, Qwen3 等新模型
+            eagle_layer = EagleLayer3.from_pretrained(
+                ea_model_path=ea_model_path,
+                base_model=base_model,
+                base_model_name_or_path=base_model_path,
+                use_eagle3=use_eagle3,
+                total_token=total_token,
+                depth=depth,
+                top_k=top_k,
+                threshold=threshold,
+            )
+        else:
+            # EAGLE2: 多层 Decoder Stack，用于 Vicuna 等旧模型
+            eagle_layer = EagleLayer2.from_pretrained(
+                ea_model_path=ea_model_path,
+                base_model=base_model,
+                base_model_name_or_path=base_model_path,
+                use_eagle3=use_eagle3,
+                total_token=total_token,
+                depth=depth,
+                top_k=top_k,
+                threshold=threshold,
+            )
 
         # =====================================================================
         # 3. 组装 SpecSoT 模型
@@ -349,13 +364,16 @@ class SpecSoTModel(nn.Module):
         
         Returns:
             'qwen': Qwen 系列模型
-            'llama': Llama 系列模型
+            'llama': LLaMA 3.1 Instruct 等使用 chat template 的模型
+            'vicuna': Vicuna 模型（有特定的 chat template）
             'other': 其他模型
         """
         model_name = self.base_model_name_or_path.lower()
         
         if 'qwen' in model_name:
             return 'qwen'
+        elif 'vicuna' in model_name:
+            return 'vicuna'
         elif 'llama' in model_name:
             return 'llama'
         else:
@@ -828,11 +846,19 @@ class SpecSoTModel(nn.Module):
         input_ids = torch.cat((input_ids, token.to(input_ids.device)), dim=1)
 
         # Prepare Hidden States for Eagle Layer
+        # EAGLE3: 拼接 3 层 hidden states，维度 hidden_size * 3
+        # EAGLE2: 只需要最后一层，维度 hidden_size
         if self.use_eagle3:
             ea_device = self.eagle_layer.lm_head.weight.device
             if outputs["hidden_states"][0].device != ea_device:
                 outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
             hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
+        else:
+            # EAGLE2: 只需要最后一层 hidden state
+            hidden_states = outputs[0]  # outputs[0] 是 last hidden state
+            ea_device = self.eagle_layer.embed_tokens.weight.device
+            if hidden_states.device != ea_device:
+                hidden_states = hidden_states.to(ea_device)
 
         # Generate Draft Tree
         draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
@@ -917,10 +943,19 @@ class SpecSoTModel(nn.Module):
         draft_input_ids = torch.cat([draft_input_ids, root_tokens], dim=1)
 
         # 处理 Hidden States for Eagle Layer
-        ea_device = self.eagle_layer.lm_head.weight.device
-        if outputs["hidden_states"][0].device != ea_device:
-            outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-        packed_hidden = torch.cat(outputs["hidden_states"], dim=-1)[0]
+        # EAGLE3: 拼接 3 层 hidden states，维度 hidden_size * 3
+        # EAGLE2: 只需要最后一层，维度 hidden_size
+        if self.use_eagle3:
+            ea_device = self.eagle_layer.lm_head.weight.device
+            if outputs["hidden_states"][0].device != ea_device:
+                outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
+            packed_hidden = torch.cat(outputs["hidden_states"], dim=-1)[0]
+        else:
+            # EAGLE2: 使用 outputs[0] (last hidden state)
+            packed_hidden = outputs[0][0]  # [seq_len, hidden_size]
+            ea_device = self.eagle_layer.embed_tokens.weight.device
+            if packed_hidden.device != ea_device:
+                packed_hidden = packed_hidden.to(ea_device)
 
         # 提取各分支的 Hidden States
         branch_hidden_list = []
@@ -1154,12 +1189,20 @@ class SpecSoTModel(nn.Module):
             position_ids=position_ids,
         )
 
-        # 处理 Hidden States for Eagle Layer (if Eagle3)
+        # 处理 Hidden States for Eagle Layer
+        # EAGLE3: 拼接 3 层 hidden states
+        # EAGLE2: 只需要最后一层
         if self.use_eagle3:
             ea_device = self.eagle_layer.lm_head.weight.device
             if outputs["hidden_states"][0].device != ea_device:
                 outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
             hidden_state = torch.cat(outputs["hidden_states"], dim=-1)
+        else:
+            # EAGLE2: 使用 outputs[0] (last hidden state)
+            hidden_state = outputs[0]
+            ea_device = self.eagle_layer.embed_tokens.weight.device
+            if hidden_state.device != ea_device:
+                hidden_state = hidden_state.to(ea_device)
 
         # 按检索索引重组 logits
         logits = tree_logits[0, retrieve_indices]
@@ -1265,10 +1308,19 @@ class SpecSoTModel(nn.Module):
         logits = logits.view(num_para, num_nodes, -1)
         
         # 处理 Hidden States for Eagle Layer
-        ea_device = self.eagle_layer.lm_head.weight.device
-        if outputs["hidden_states"][0].device != ea_device:
-            outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
-        hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
+        # EAGLE3: 拼接 3 层 hidden states
+        # EAGLE2: 只需要最后一层
+        if self.use_eagle3:
+            ea_device = self.eagle_layer.lm_head.weight.device
+            if outputs["hidden_states"][0].device != ea_device:
+                outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
+            hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
+        else:
+            # EAGLE2: 使用 outputs[0] (last hidden state)
+            hidden_states = outputs[0]
+            ea_device = self.eagle_layer.embed_tokens.weight.device
+            if hidden_states.device != ea_device:
+                hidden_states = hidden_states.to(ea_device)
         
         return logits, hidden_states
 

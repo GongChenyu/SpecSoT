@@ -20,7 +20,8 @@ SpecSoT Module
 from .specsot_model import SpecSoTModel
 
 # Eagle Layer
-from .eagle_layer import EagleLayer
+from .eagle_layer3 import EagleLayer3
+from .eagle_layer2 import EagleLayer2  # EAGLE2 支持 (用于 Vicuna 等模型)
 
 # Logits Processors
 from .logits_processor import SemanticLogitsProcessor
@@ -33,6 +34,7 @@ from .utils import (
     evaluate_parallel,
     stack_with_left_padding,
     parse_skeleton,
+    parse_skeleton_str,  # 新增: 字符串解析方式
     prepare_parallel_branches,
     prepare_skeleton_input,
     create_skeleton_logits_processor,
@@ -82,7 +84,8 @@ __all__ = [
     "SpecSoTModel",
     
     # Eagle Layer
-    "EagleLayer",
+    "EagleLayer3",
+    "EagleLayer2",  # EAGLE2 支持
     
     # Processors
     "SemanticLogitsProcessor",
@@ -96,6 +99,7 @@ __all__ = [
     "stack_with_left_padding",
     "initialize_past_key_values",
     "parse_skeleton",
+    "parse_skeleton_str",  # 字符串解析方式
     "check_stop_conditions",
     "merge_outputs",
     "set_random_seed",
