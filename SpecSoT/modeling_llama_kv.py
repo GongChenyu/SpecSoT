@@ -27,7 +27,7 @@ from transformers.utils import (
     replace_return_docstrings,
 )
 from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS
-from transformers import LlamaConfig
+from transformers import LlamaConfig, GenerationMixin
 
 logger = logging.get_logger(__name__)
 
@@ -1012,6 +1012,11 @@ class LlamaModel(LlamaPreTrainedModel):
     ):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
+
+        # 如果用户直接传入了4维的attention_mask，则直接返回 
+        if attention_mask is not None and attention_mask.dim() == 4:
+            return attention_mask
+        
         combined_attention_mask = None
         if input_shape[-1] > 1:
             combined_attention_mask = _make_causal_mask(
@@ -1200,7 +1205,7 @@ class LlamaModel(LlamaPreTrainedModel):
         )
 
 
-class LlamaForCausalLM(LlamaPreTrainedModel):
+class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
 
     def __init__(self, config):

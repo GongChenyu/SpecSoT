@@ -1426,7 +1426,7 @@ class SpecSoTModel(nn.Module):
         """
         device = self.base_model.device
         eos_token_id = self.tokenizer.eos_token_id
-        pad_token_id = self.tokenizer.pad_token_id
+        pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else eos_token_id 
 
         # 获取当前有效历史长度
         valid_history_len = (self.branch_index_map != -2).sum().item()
@@ -1587,6 +1587,7 @@ class SpecSoTModel(nn.Module):
         device = self.base_model.device
         num_para = len(branches_prompts)
         prefix_len = prefix_ids.shape[1]
+        pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.tokenizer.eos_token_id
         
         # 初始化活跃分支列表
         self.active_branches = list(range(num_para))
@@ -1652,12 +1653,9 @@ class SpecSoTModel(nn.Module):
         self.branch_index_map[:len(branch_index_list)] = torch.tensor(
             branch_index_list, device=device
         )
-
-        # 构建 Draft 模型的 Batched 输入（左填充）
-        draft_input_ids, branch_mask = stack_with_left_padding(
-            draft_branch_list, pad_id=self.tokenizer.pad_token_id,
-            device=device, return_mask=True
-        )
+ 
+        # 构建 Draft 模型的 Batched 输入（左填充）,用什么填充无所谓，都会mask掉
+        draft_input_ids, branch_mask = stack_with_left_padding(draft_branch_list, pad_id=pad_token_id, device=device, return_mask=True)
         padded_branch_pos = stack_with_left_padding(draft_pos_list, pad_id=0, device=device)
 
         prefix_mask = torch.ones((num_para, prefix_len), dtype=torch.long, device=device)
