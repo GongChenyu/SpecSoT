@@ -335,7 +335,7 @@ class DistributedPrefillManager:
                 layers_computed += 1
                 
                 # 收集eagle input hidden states（每个chunk都要收集）
-                if layer_idx in eagle_input_layers:
+                if (layer_idx in eagle_input_layers) and self.model.use_eagle3:
                     if self.config.is_last_rank():
                         # 最后一个rank直接保存
                         eagle_hidden_states[layer_idx] = hidden_states.clone()
@@ -403,31 +403,26 @@ class DistributedPrefillManager:
                 orig = base_model.lm_head(hidden_states_normed)
                 self.logger.debug(f"    LM Head 完成 | {get_tensor_info(orig)}")
                 
-                # 接收其他rank发送的eagle input hidden states（阻塞等待收集完毕）
-                self.logger.debug(f"  [PHASE 3][RECV] 等待 Eagle Input Hidden States (chunk={chunk_idx})...")
-                recv_start = time.time()
-                received_eagle_hidden = self.comm.recv_all_eagle_input_hidden(
-                    eagle_input_layers=eagle_input_layers,
-                    my_start_layer=start_layer,
-                    my_end_layer=end_layer,
-                    chunk_idx=chunk_idx,
-                    timeout=60.0
-                )
-                recv_time = (time.time() - recv_start) * 1000
-                self.logger.debug(f"  [PHASE 3][RECV] 收到 {len(received_eagle_hidden)} 个 Eagle Hidden (chunk={chunk_idx}) | 耗时: {recv_time:.2f}ms")
-                
-                # 合并本地和接收的eagle hidden states
-                eagle_hidden_states.update(received_eagle_hidden)
-                self.logger.debug(f"    合并后 Eagle Hidden States 层: {sorted(eagle_hidden_states.keys())}")
-
-                # print(f"chunk={chunk_idx} layer=1 eagle_hidden_states[1][0, :5, :5]: {eagle_hidden_states[1][0, :5, :5]}")
-                # print(f"chunk={chunk_idx} layer=17 eagle_hidden_states[17][0, :5, :5]: {eagle_hidden_states[17][0, :5, :5]}")
-                
                 # 准备Eagle Layer的hidden states
                 if self.model.use_eagle3:
-                    hidden_states_for_eagle = self._cat_eagle_hidden_states(
-                        eagle_hidden_states, num_layers
+                    # 接收其他rank发送的eagle input hidden states（阻塞等待收集完毕）
+                    self.logger.debug(f"  [PHASE 3][RECV] 等待 Eagle Input Hidden States (chunk={chunk_idx})...")
+                    recv_start = time.time()
+                    received_eagle_hidden = self.comm.recv_all_eagle_input_hidden(
+                        eagle_input_layers=eagle_input_layers,
+                        my_start_layer=start_layer,
+                        my_end_layer=end_layer,
+                        chunk_idx=chunk_idx,
+                        timeout=60.0
                     )
+                    recv_time = (time.time() - recv_start) * 1000
+                    self.logger.debug(f"  [PHASE 3][RECV] 收到 {len(received_eagle_hidden)} 个 Eagle Hidden (chunk={chunk_idx}) | 耗时: {recv_time:.2f}ms")
+                    
+                    # 合并本地和接收的eagle hidden states
+                    eagle_hidden_states.update(received_eagle_hidden)
+                    self.logger.debug(f"    合并后 Eagle Hidden States 层: {sorted(eagle_hidden_states.keys())}")
+                
+                    hidden_states_for_eagle = self._cat_eagle_hidden_states(eagle_hidden_states, num_layers)
                     self.logger.debug(f"    EAGLE3 Hidden States | {get_tensor_info(hidden_states_for_eagle)}")
                 else:
                     hidden_states_for_eagle = hidden_states_normed

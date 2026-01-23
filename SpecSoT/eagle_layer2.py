@@ -985,20 +985,16 @@ class EagleLayer2(nn.Module):
             hidden_states, input_ids, chunk_idx
         )
         
-        # 计算增量 KV cache
+        # 计算增量KV cache
         incremental_kv = None
         if self.stable_kv is not None:
-            # 对于多层，返回所有层的增量
-            incremental_kvs = []
-            for layer_kv in self.stable_kv:
-                key, value = layer_kv
-                current_len = key.shape[2]
-                if current_len > prev_kv_len:
-                    new_key = key[:, :, prev_kv_len:current_len, :].clone()
-                    new_value = value[:, :, prev_kv_len:current_len, :].clone()
-                    incremental_kvs.append((new_key, new_value))
-            if incremental_kvs:
-                incremental_kv = tuple(incremental_kvs)
+            key, value = self.stable_kv[0]
+            current_len = key.shape[2]
+            if current_len > prev_kv_len:
+                # Clone出增量部分，避免异步发送时内存被修改
+                new_key = key[:, :, prev_kv_len:current_len, :].clone()
+                new_value = value[:, :, prev_kv_len:current_len, :].clone()
+                incremental_kv = (new_key, new_value)
         
         # 非最后 chunk
         if not is_last_chunk:
