@@ -1,81 +1,64 @@
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:106] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:280] - ============================================================
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:281] - SpecSoT Worker 启动
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:282] - ============================================================
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:283] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:284] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:285] - Use Eagle3: True
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:286] - Task: planning
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:287] - Enable Parallel: True
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:288] - Max New Tokens: 3000
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:289] - Random Seed: 35
-2026-01-23 21:34:55,919 - SpecSoT-Rank0 - INFO - [run_specsot.py:297] - ============================================================
-2026-01-23 21:34:55,920 - SpecSoT-Rank0 - INFO - [run_specsot.py:320] - >>> 正在加载 SpecSoT 模型...
-2026-01-23 21:34:59,464 - SpecSoT-Rank0 - INFO - [run_specsot.py:338] - 模型加载完成，耗时: 3.54s
-2026-01-23 21:34:59,464 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:344] - Special Token IDs:
-2026-01-23 21:34:59,464 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   para_begin_token_id: 820 -> '####'
-2026-01-23 21:34:59,464 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   para_end_token_id: 5321 -> '%%%%'
-2026-01-23 21:34:59,464 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   ellipsis_token_id: 28149 -> '......'
-2026-01-23 21:34:59,465 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   half_ellipsis_token_id: 1112 -> '...'
-2026-01-23 21:34:59,465 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   line_break_token_id: 271 -> '
-
-'
-2026-01-23 21:34:59,465 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   colon_token_id: 25 -> ':'
-2026-01-23 21:34:59,465 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   cn_colon_token_id: 5122 -> '：'
-2026-01-23 21:34:59,465 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   colon_new_line_token_id: 510 -> ':
-'
-2026-01-23 21:34:59,468 - SpecSoT-Rank0 - INFO - [run_specsot.py:230] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/SpecSoT/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
-2026-01-23 21:34:59,468 - SpecSoT-Rank0 - INFO - [run_specsot.py:354] - 使用 1 条样本进行评估
-2026-01-23 21:34:59,468 - SpecSoT-Rank0 - INFO - [run_specsot.py:370] - 
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:106] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:280] - ============================================================
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:281] - SpecSoT Worker 启动
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:282] - ============================================================
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:283] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:284] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:285] - Use Eagle3: True
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:286] - Task: planning
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:287] - Enable Parallel: True
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:288] - Max New Tokens: 3000
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:289] - Random Seed: 35
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:297] - ============================================================
+2026-01-23 21:54:08,569 - SpecSoT-Rank0 - INFO - [run_specsot.py:320] - >>> 正在加载 SpecSoT 模型...
+2026-01-23 21:54:14,999 - SpecSoT-Rank0 - INFO - [run_specsot.py:338] - 模型加载完成，耗时: 6.43s
+2026-01-23 21:54:15,006 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:344] - Special Token IDs:
+2026-01-23 21:54:15,006 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   para_begin_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,006 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   para_end_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,007 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   ellipsis_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,007 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   half_ellipsis_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,007 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   line_break_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,007 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   colon_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,007 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   cn_colon_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,007 - SpecSoT-Rank0 - DEBUG - [run_specsot.py:347] -   colon_new_line_token_id: 128000 -> '<|begin_of_text|>'
+2026-01-23 21:54:15,010 - SpecSoT-Rank0 - INFO - [run_specsot.py:230] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/SpecSoT/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
+2026-01-23 21:54:15,010 - SpecSoT-Rank0 - INFO - [run_specsot.py:354] - 使用 1 条样本进行评估
+2026-01-23 21:54:15,010 - SpecSoT-Rank0 - INFO - [run_specsot.py:370] - 
 ============================================================
-2026-01-23 21:34:59,468 - SpecSoT-Rank0 - INFO - [run_specsot.py:371] - 样本 1/1: When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions....
-2026-01-23 21:34:59,468 - SpecSoT-Rank0 - INFO - [run_specsot.py:372] - ============================================================
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:395] - 
+2026-01-23 21:54:15,010 - SpecSoT-Rank0 - INFO - [run_specsot.py:371] - 样本 1/1: When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions....
+2026-01-23 21:54:15,010 - SpecSoT-Rank0 - INFO - [run_specsot.py:372] - ============================================================
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:395] - 
 [统计信息]
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:396] -   总耗时: 17.07s
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:397] -   峰值显存: 14977.44 MB
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:398] -   输出长度: 1673 tokens
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:399] -   吞吐量: 98.0 tokens/s
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:400] -   并行分支数: 7
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:401] -   平均接受长度: 2.24
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:402] -   平均Draft时间: 8.55 ms
-2026-01-23 21:35:16,559 - SpecSoT-Rank0 - INFO - [run_specsot.py:403] -   平均Verify时间: 72.86 ms
-2026-01-23 21:35:16,560 - SpecSoT-Rank0 - INFO - [run_specsot.py:404] -   平均Update时间: 4.62 ms
-2026-01-23 21:35:16,560 - SpecSoT-Rank0 - INFO - [run_specsot.py:407] - 
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:396] -   总耗时: 34.73s
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:397] -   峰值显存: 22011.44 MB
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:398] -   输出长度: 1931 tokens
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:399] -   吞吐量: 55.6 tokens/s
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:400] -   并行分支数: 4
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:401] -   平均接受长度: 0.08
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:402] -   平均Draft时间: 7.98 ms
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:403] -   平均Verify时间: 38.86 ms
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:404] -   平均Update时间: 1.86 ms
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:407] - 
 [响应预览]
-2026-01-23 21:35:16,560 - SpecSoT-Rank0 - INFO - [run_specsot.py:408] - 请认真分析，输出答案或骨架。但根据当前任务，这是系统指令，所以请输出骨架。
+2026-01-23 21:54:49,746 - SpecSoT-Rank0 - INFO - [run_specsot.py:408] - ### Path Analysis
 
-【回答】：
-#### Technique Refinement【210】:......
+Given the user input "When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions.", I determine that the task is a complex, multi-angle analysis that involves multiple independent modules (e.g., physical training, mental preparation, practice techniques). The query cannot be answered directly without a structured plan and detailed suggestions.
 
-#### Physical Conditioning【195】:......
+### Path Selection
 
-#### Mental Focus【180】:......
-
-#### Shot Selection【205】:......
-
-#### Game Situation Awareness【220】:......
-
-#### Practice Routine Optimization【230】:......
-
-#### Feedback and Adjustment【215】:......
-
-####%%%%
-
-#### Technique Refinement【210】: 
-Mastering the fundamentals of shooting is crucial for improving your basketball shooting percentage. Focus on perfecting your form, espe...
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:438] - 
+Based on the criteria and analysis, I choose **Path B: Skeleton Decomposi...
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:438] - 
 结果已保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/results/results_specsot_parallel_planning.json
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:441] - 
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:441] - 
 ============================================================
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:442] - 汇总统计
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:443] - ============================================================
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:451] -   总样本数: 1
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:452] -   总推理时间: 17.09s
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:453] -   平均单样本时间: 17.07s
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:454] -   平均输出长度: 1673.0 tokens
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:455] -   平均峰值显存: 14977.44 MB
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:456] -   平均吞吐量: 98.0 tokens/s
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:457] -   平均接受长度: 2.24
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:458] - ============================================================
-2026-01-23 21:35:16,561 - SpecSoT-Rank0 - INFO - [run_specsot.py:466] - Worker 执行完成
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:442] - 汇总统计
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:443] - ============================================================
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:451] -   总样本数: 1
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:452] -   总推理时间: 34.74s
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:453] -   平均单样本时间: 34.73s
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:454] -   平均输出长度: 1931.0 tokens
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:455] -   平均峰值显存: 22011.44 MB
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:456] -   平均吞吐量: 55.6 tokens/s
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:457] -   平均接受长度: 0.08
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:458] - ============================================================
+2026-01-23 21:54:49,748 - SpecSoT-Rank0 - INFO - [run_specsot.py:466] - Worker 执行完成
