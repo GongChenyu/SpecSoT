@@ -1,55 +1,58 @@
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:106] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:254] - ============================================================
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:255] - SpecSoT Worker 启动
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:256] - ============================================================
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:257] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:258] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:259] - Use Eagle3: False
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:260] - Task: planning
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:261] - Enable Parallel: True
-2026-01-25 19:24:18,255 - SpecSoT-Rank0 - INFO - [run_specsot.py:262] - Max New Tokens: 3000
-2026-01-25 19:24:18,256 - SpecSoT-Rank0 - INFO - [run_specsot.py:263] - Random Seed: 35
-2026-01-25 19:24:18,256 - SpecSoT-Rank0 - INFO - [run_specsot.py:271] - ============================================================
-2026-01-25 19:24:18,256 - SpecSoT-Rank0 - INFO - [run_specsot.py:294] - >>> 正在加载 SpecSoT 模型...
-2026-01-25 19:24:24,660 - SpecSoT-Rank0 - INFO - [run_specsot.py:312] - 模型加载完成，耗时: 6.40s
-2026-01-25 19:24:24,664 - SpecSoT-Rank0 - INFO - [run_specsot.py:230] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/SpecSoT/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
-2026-01-25 19:24:24,664 - SpecSoT-Rank0 - INFO - [run_specsot.py:322] - 使用 1 条样本进行评估
-2026-01-25 19:24:24,664 - SpecSoT-Rank0 - INFO - [run_specsot.py:338] - 
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:106] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:254] - ============================================================
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:255] - SpecSoT Worker 启动
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:256] - ============================================================
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:257] - Base Model: /data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:258] - Eagle Model: /data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:259] - Use Eagle3: True
+2026-01-26 00:26:44,373 - SpecSoT-Rank0 - INFO - [run_specsot.py:260] - Task: planning
+2026-01-26 00:26:44,374 - SpecSoT-Rank0 - INFO - [run_specsot.py:261] - Enable Parallel: True
+2026-01-26 00:26:44,374 - SpecSoT-Rank0 - INFO - [run_specsot.py:262] - Max New Tokens: 3000
+2026-01-26 00:26:44,374 - SpecSoT-Rank0 - INFO - [run_specsot.py:263] - Random Seed: 74
+2026-01-26 00:26:44,374 - SpecSoT-Rank0 - INFO - [run_specsot.py:271] - ============================================================
+2026-01-26 00:26:44,374 - SpecSoT-Rank0 - INFO - [run_specsot.py:294] - >>> 正在加载 SpecSoT 模型...
+2026-01-26 00:26:50,847 - SpecSoT-Rank0 - INFO - [run_specsot.py:312] - 模型加载完成，耗时: 6.47s
+2026-01-26 00:26:50,851 - SpecSoT-Rank0 - INFO - [run_specsot.py:230] - 加载数据集: /data/home/chenyu/Coding/SD+SoT/SpecSoT/datasets/planning/industry_tasks_no_ascii.jsonl, 共 9 条样本
+2026-01-26 00:26:50,851 - SpecSoT-Rank0 - INFO - [run_specsot.py:322] - 使用 1 条样本进行评估
+2026-01-26 00:26:50,851 - SpecSoT-Rank0 - INFO - [run_specsot.py:339] - 
 ============================================================
-2026-01-25 19:24:24,664 - SpecSoT-Rank0 - INFO - [run_specsot.py:339] - 样本 1/1: When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions ...
-2026-01-25 19:24:24,665 - SpecSoT-Rank0 - INFO - [run_specsot.py:340] - ============================================================
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:362] - 
+2026-01-26 00:26:50,851 - SpecSoT-Rank0 - INFO - [run_specsot.py:340] - 样本 1/1: Please analyze the benefits of green energy from three aspects: political, economic, and environment...
+2026-01-26 00:26:50,851 - SpecSoT-Rank0 - INFO - [run_specsot.py:341] - ============================================================
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:363] - 
 [统计信息]
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:363] -   总耗时: 3.28s
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:364] -   峰值显存: 20764.44 MB
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:365] -   输出长度: 355 tokens
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:366] -   吞吐量: 108.1 tokens/s
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:367] -   并行分支数: 0
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:368] -   平均接受长度: 0.00
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:369] -   平均Draft时间: 0.00 ms
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:370] -   平均Verify时间: 0.00 ms
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:371] -   平均Update时间: 0.00 ms
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:374] - 
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:364] -   总耗时: 38.68s
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:365] -   峰值显存: 22044.44 MB
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:366] -   输出长度: 1126 tokens
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:367] -   吞吐量: 29.1 tokens/s
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:368] -   并行分支数: 3
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:369] -   平均接受长度: 0.17
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:370] -   平均Draft时间: 7.82 ms
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:371] -   平均Verify时间: 32.51 ms
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:372] -   平均Update时间: 1.97 ms
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:375] - 
 [响应预览]
-2026-01-25 19:24:27,952 - SpecSoT-Rank0 - INFO - [run_specsot.py:375] - [DIRECT]
-To improve your shooting percentage, focus on the following aspects:
+2026-01-26 00:27:29,546 - SpecSoT-Rank0 - INFO - [run_specsot.py:376] - [PLAN]
+1.<265><Search>[-]Political Benefits of Green Energy
+2.<312><Search>[-]Economic Benefits of Green Energy
+3.<478><Search>[-]Environmental Benefits of Green Energy
+[END]
 
-1. Shooting form: Practice proper shooting form, including footwork, balance, and shooting mechanics.
-2. Shooting drills: Work on shooting drills that target specific areas, such as ball handling, shooting off the dribble, and shooting off the pass.
-3. Muscle memory: Repeat shooting drills regularly to build muscle memory and improve your shooting accuracy.
-4. Film study: Analyze the shooting form and techniques of su...
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:405] - 
+## 1. Political Benefits of Green Energy
+The political benefits of green energy are multifaceted and far-reaching, impacting various aspects of governance and society. One of the primary advantages of green energy is its potential to reduce a country's dependence on imported fossil fuels, thereby improving energy security and reducing the risks associated with price volatility. This, in turn, can lead to increased energy independence, which can have a positive impact on a nation's economy and politics.
+
+Green energy can also create new job opportunities in the renewable energy sector, stimulating local economies and contributing to economic growth. Furthermore, the development and implementation of green energy policies can foster a sense of national pride and unity, as citizens work together to address a pressin...
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:406] - 
 结果已保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/results/results_specsot_parallel_planning.json
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:408] - 
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:409] - 
 ============================================================
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:409] - 汇总统计
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:410] - ============================================================
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:418] -   总样本数: 1
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:419] -   总推理时间: 3.29s
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:420] -   平均单样本时间: 3.28s
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:421] -   平均输出长度: 355.0 tokens
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:422] -   平均峰值显存: 20764.44 MB
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:423] -   平均吞吐量: 108.1 tokens/s
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:424] -   平均接受长度: 0.00
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:425] - ============================================================
-2026-01-25 19:24:27,954 - SpecSoT-Rank0 - INFO - [run_specsot.py:433] - Worker 执行完成
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:410] - 汇总统计
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:411] - ============================================================
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:419] -   总样本数: 1
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:420] -   总推理时间: 38.70s
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:421] -   平均单样本时间: 38.68s
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:422] -   平均输出长度: 1126.0 tokens
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:423] -   平均峰值显存: 22044.44 MB
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:424] -   平均吞吐量: 29.1 tokens/s
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:425] -   平均接受长度: 0.17
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:426] - ============================================================
+2026-01-26 00:27:29,548 - SpecSoT-Rank0 - INFO - [run_specsot.py:434] - Worker 执行完成

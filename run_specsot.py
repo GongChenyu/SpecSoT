@@ -333,7 +333,8 @@ def run_worker(args):
         # 获取任务prompt
         # task_prompt = df.loc[i, "task_prompt"]
         # task_prompt = "请问打篮球时，如何提高投篮命中率？请从六个方面给出详细的建议。"
-        task_prompt = "When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions from six aspects."
+        # task_prompt = "When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions from six parallel aspects."
+        task_prompt = "Please analyze the benefits of green energy from three aspects: political, economic, and environmental."
         
         logger.info(f"\n{'='*60}")
         logger.info(f"样本 {i+1}/{len(df)}: {task_prompt[:100]}...")
@@ -372,7 +373,7 @@ def run_worker(args):
         
         # 打印响应预览
         logger.info(f"\n[响应预览]")
-        logger.info(response[:500] + "..." if len(response) > 500 else response)
+        logger.info(response[:1000] + "..." if len(response) > 1000 else response)
 
         results.append({
             "prompt": task_prompt,
@@ -649,11 +650,11 @@ def main():
     # 模型配置
     # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B", help="Base Model 路径")
     # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
-    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
-    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
-    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3", help="Base Model 路径")
-    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
-    parser.add_argument("--use_eagle3", type=str2bool, default=False, help="是否使用 Eagle3 模型")
+    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
+    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
+    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
+    parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
     parser.add_argument("--enable_parallel", action="store_true", default=True, help="启用骨架并行模式")
     parser.add_argument("--max_new_tokens", type=int, default=3000,help="最大生成token数")
     
@@ -672,7 +673,7 @@ def main():
     parser.add_argument("--chunk_size", type=int, default=128, help="Sequence Parallel的chunk大小")
     
     # 其他配置
-    parser.add_argument("--seed", type=int, default=35, help="随机种子")  # 66 work 
+    parser.add_argument("--seed", type=int, default=74, help="随机种子")  
 
     args = parser.parse_args()
 

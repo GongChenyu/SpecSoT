@@ -6,16 +6,16 @@ SpecSoT Prompts - Topology-Aware Skeleton Protocol
 - 模式 A：直接回答 [DIRECT] - 用于简单、原子或无法拆分的任务
 - 模式 B：规划模式 [PLAN]...[END] - 用于复杂任务的并行拆解
 
-行格式：ID. <Length> <Tool> [Deps] Title
+简化行格式：ID.<Length><Tool>[-]Title (无空格)
 - ID: 数字加点 (1. 2. ...)
-- Length: <数字> 预估 Token 数量
+- Length: <数字> 预估 Token 数量 (支持多位数如 <127>, <1500>)
 - Tool: <工具名> 或 <None>
-- Deps: [依赖列表] 目前强制 [-] 表示纯并行
+- Deps: [-] 表示纯并行
 - Title: 任务描述
 """
 
 # =============================================================================
-# Chinese Prompts (中文提示词) - V2 Protocol
+# Chinese Prompts (中文提示词) - Protocol
 # =============================================================================
 
 # 中文 Base Prompt
@@ -35,19 +35,36 @@ skeleton_trigger_zh = (
     "### 格式一：直接回答（适用于简单/原子/不可并行任务）\n"
     "输出格式：\n"
     "[DIRECT]\n"
-    "(在此处直接写出答案内容...)\n\n"
+    "(在此处直接写出答案内容...)\n"
+    "[END]\n\n"
     "### 格式二：拆解规划（适用于分支独立的可并行任务）\n"
-    "输出格式：\n"
+    "输出格式（紧凑格式，无空格）：\n"
     "[PLAN]\n"
-    "1. <预估长度> <工具名> [-] 分支一标题\n"
-    "2. <预估长度> <工具名> [-] 分支二标题\n"
+    "1.<预估长度><工具名>[-]分支一标题\n"
+    "2.<预估长度><工具名>[-]分支二标题\n"
     "...\n"
     "[END]\n\n"
     "**严格约束**：\n"
-    "1. **长度**：必须填写数字，如 <200>。\n"
+    "1. **长度**：必须填写数字，如 <127><793><1500>等，支持三位数。\n"
     "2. **工具**：如果不需要外部工具，请填写 <None>；如果需要，填写工具名如 <Search>。\n"
     "3. **拓扑**：目前请强制使用 [-]，表示所有步骤并行执行，互不依赖。\n"
     "4. 直接以 [DIRECT] 或 [PLAN] 开头，不要废话。\n"
+    "5. 两种格式都必须以 [END] 结尾。[END]后面禁止输出任何内容。\n"
+    "6. **紧凑格式**：各字段之间不要有空格。\n\n"
+    "### 示例一：直接回答\n"
+    "用户问：1+1等于多少？\n"
+    "输出：\n"
+    "[DIRECT]\n"
+    "1+1等于2。\n"
+    "[END]\n\n"
+    "### 示例二：拆解规划\n"
+    "用户问：分别介绍中国的三大城市\n"
+    "输出：\n"
+    "[PLAN]\n"
+    "1.<652><None>[-]介绍北京\n"
+    "2.<234><None>[-]介绍上海\n"
+    "3.<356><None>[-]介绍广州\n"
+    "[END]\n\n"
     "【开始输出】：\n"
 )
 
@@ -68,7 +85,7 @@ parallel_trigger_zh = (
 
 
 # =============================================================================
-# English Prompts (英文提示词) - V2 Protocol
+# English Prompts (英文提示词) - Protocol
 # =============================================================================
 
 # English Base Prompt
@@ -88,19 +105,36 @@ skeleton_trigger_en = (
     "### Format 1: Direct Answer (For simple/atomic/non-parallelizable tasks)\n"
     "Output:\n"
     "[DIRECT]\n"
-    "(Write your answer content here...)\n\n"
+    "(Write your answer content here...)\n"
+    "[END]\n\n"
     "### Format 2: Decomposition Plan (For tasks with independent parallel branches)\n"
-    "Output:\n"
+    "Output (compact format, no spaces between fields):\n"
     "[PLAN]\n"
-    "1. <Est_Tokens> <Tool_Name> [-] Branch 1 Title\n"
-    "2. <Est_Tokens> <Tool_Name> [-] Branch 2 Title\n"
+    "1.<Est_Tokens><Tool_Name>[-]Branch 1 Title\n"
+    "2.<Est_Tokens><Tool_Name>[-]Branch 2 Title\n"
     "...\n"
     "[END]\n\n"
     "**Constraints**:\n"
-    "1. **Length**: Must be a number, e.g., <200>.\n"
+    "1. **Length**: Must be a number (supports multi-digit like <127>, <1500>).\n"
     "2. **Tool**: Use <None> if no tool is needed, otherwise <Search>, etc.\n"
     "3. **Topology**: Strictly use [-] for now to indicate parallel execution.\n"
     "4. Start immediately with [DIRECT] or [PLAN].\n"
+    "5. Both formats MUST end with [END]. [END] must not be followed by any content.\n"
+    "6. **Compact Format**: No spaces between fields.\n\n"
+    "### Example 1: Direct Answer\n"
+    "User asks: What is 1+1?\n"
+    "Output:\n"
+    "[DIRECT]\n"
+    "1+1 equals 2.\n"
+    "[END]\n\n"
+    "### Example 2: Decomposition Plan\n"
+    "User asks: Introduce the top 3 cities in China separately.\n"
+    "Output:\n"
+    "[PLAN]\n"
+    "1.<154><None>[-]Introduce Beijing\n"
+    "2.<543><None>[-]Introduce Shanghai\n"
+    "3.<456><None>[-]Introduce Guangzhou\n"
+    "[END]\n\n"
     "[Output]:\n"
 )
 

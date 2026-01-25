@@ -62,6 +62,7 @@ from .utils import (
     create_skeleton_logits_processor,
     check_stop_conditions,
     check_stop_conditions_parallel,
+    check_skeleton_stop,
     merge_outputs,
     set_random_seed,
     evaluate_single,
@@ -601,9 +602,11 @@ class SpecSoTModel(nn.Module):
         )
         input_len = input_ids.shape[1]
         
-        # 使用 FSM 状态机约束或不使用约束（依赖模型本身能力）
-        # 对于大模型，通常不需要强制约束，直接使用采样 processor 即可
-        skeleton_logits_processor = logits_processor
+        # 使用 FSM 状态机约束或不使用约束（这里的的设计还有错误，因此先不使用）
+        # skeleton_logits_processor = logits_processor
+        skeleton_logits_processor = create_skeleton_logits_processor(
+            tokenizer=self.tokenizer, prefix_len=input_len, enforce_format=True, sampling_processor=logits_processor
+        )
         
         # 初始化 KV Cache
         max_kv_len = input_len + max_new_tokens + 100
@@ -649,12 +652,11 @@ class SpecSoTModel(nn.Module):
             
             # 骨架的停止条件：检测是否生成了 [END] 或遇到 EOS
             generated_text = self.tokenizer.decode(input_ids[0, input_len:])
-            if "[END]" in generated_text or eos_token_id in input_ids[0, input_len:].tolist():
-                break
-            
-            # KV Cache 溢出检查
-            if self.current_length_data[0].item() + self.eagle_layer.total_tokens + 1 > max_kv_len:
-                self.logger.warning("KV cache limit reached during skeleton generation")
+            if check_skeleton_stop(
+                generated_text, eos_token_id, input_ids, input_len, 
+                self.current_length_data[0].item(), max_kv_len,
+                self.eagle_layer.total_tokens + 1
+            ):
                 break
         
         skeleton_ids = input_ids[:, input_len:]
@@ -782,48 +784,16 @@ class SpecSoTModel(nn.Module):
                         f"Avg verify time: {avg_verify_time:.4f}s")
 
         # 合并结果
-        merged_ids = self._merge_outputs(
-            skeleton_ids=self.skeleton_output,
-            tasks=tasks,
+        merged_ids = merge_outputs(
+            skeleton_output=self.skeleton_output,
             parallel_branches_output=self.parallel_branches_output,
             instruction_len=self.instruction_len,
             device=device,
+            tasks=tasks,
+            tokenizer=self.tokenizer,
         )
         
         return merged_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
-
-    def _merge_outputs(
-        self,
-        skeleton_ids: torch.Tensor,
-        tasks: List[Dict],
-        parallel_branches_output: List[List[int]],
-        instruction_len: List[int],
-        device: torch.device,
-    ) -> torch.Tensor:
-        """
-        合并格式的骨架和分支输出
-        
-        不需要替换 "..." 占位符，而是直接拼接：
-        [skeleton header] + [branch 1 content] + [branch 2 content] + ...
-        """
-        # 简单合并：骨架 + 各分支内容
-        merged = skeleton_ids[0].tolist()
-        
-        for i, (branch_tokens, instr_len) in enumerate(zip(parallel_branches_output, instruction_len)):
-            # 跳过指令前缀，只取生成的内容
-            branch_content = branch_tokens[instr_len:]
-            
-            # 添加分支标题和内容
-            if i < len(tasks):
-                task = tasks[i]
-                # 可选：添加分支标题标记
-                title_text = f"\n\n## {task['id']}. {task['title']}\n"
-                title_tokens = self.tokenizer.encode(title_text, add_special_tokens=False)
-                merged.extend(title_tokens)
-            
-            merged.extend(branch_content)
-        
-        return torch.tensor([merged], dtype=torch.long, device=device)
 
     # =========================================================================
     # Prefill 和 Verify 方法 (Prefill & Verify Methods)

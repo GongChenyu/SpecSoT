@@ -799,6 +799,46 @@ def check_stop_conditions(
     return False
 
 
+def check_skeleton_stop(
+    generated_text: str,
+    eos_token_id: int,
+    input_ids: torch.Tensor,
+    input_len: int,
+    current_length: int,
+    max_kv_len: int,
+    tokens_per_step: int = 60,
+) -> bool:
+    """
+    检查骨架生成的停止条件
+    
+    统一检测 [DIRECT]...[END] 和 [PLAN]...[END] 两种格式的结束标记
+    
+    Args:
+        generated_text: 已生成的文本
+        eos_token_id: EOS token ID
+        input_ids: 当前 input_ids [1, total_len]
+        input_len: 原始输入长度
+        
+    Returns:
+        should_stop: 是否应该停止生成
+    """
+    # 检查 EOS
+    if eos_token_id in input_ids[0, input_len:].tolist():
+        return True
+    
+    # 检查 [END] 标记（适用于 DIRECT 和 PLAN 两种模式）
+    if "[END]" in generated_text:
+        return True
+    
+    # KV Cache 溢出检查
+    peak_length = current_length + tokens_per_step
+    if peak_length >= max_kv_len:
+        print(f"Stopping due to KV cache limit: peak {peak_length} >= max {max_kv_len}")
+        return True
+    
+    return False
+
+
 def check_stop_conditions_parallel(
     current_length: int,
     max_kv_len: int,
@@ -837,38 +877,76 @@ def merge_outputs(
     skeleton_output: torch.Tensor,
     parallel_branches_output: List[List[int]],
     instruction_len: List[int],
-    para_token_ids: Dict[str, int],
-    num_para: int,
     device: torch.device,
+    tasks: Optional[List[Dict]] = None,
+    tokenizer = None,
+    para_token_ids: Optional[Dict[str, int]] = None,
 ) -> torch.Tensor:
     """
     合并骨架和并行分支的输出
     
+    支持两种模式：
+    1. 带任务标题模式 (tasks + tokenizer): 添加分支标题标记
+    2. 简单合并模式 (para_token_ids): 使用特殊 token 分隔
+    
     Args:
-        skeleton_output: 骨架输出 tensor
+        skeleton_output: 骨架输出 tensor [1, seq_len]
         parallel_branches_output: 各分支的输出列表
         instruction_len: 各分支的指令长度
-        para_token_ids: 特殊 token IDs
-        num_para: 分支数量
         device: 目标设备
+        tasks: 任务列表（可选，用于添加标题）
+        tokenizer: 分词器（可选，用于编码标题）
+        para_token_ids: 特殊 token IDs（可选，用于简单合并模式）
         
     Returns:
-        合并后的 token IDs tensor
+        合并后的 token IDs tensor [1, merged_len]
     """
+    num_para = len(parallel_branches_output)
     skeleton_part = skeleton_output[0].tolist()
-    skeleton_part.append(para_token_ids['line_break_token_id'])
+    
+    # 模式 1: 带任务标题模式
+    if tasks is not None and tokenizer is not None:
+        merged = skeleton_part.copy()
+        
+        for i, (branch_tokens, instr_len) in enumerate(zip(parallel_branches_output, instruction_len)):
+            # 跳过指令前缀，只取生成的内容
+            branch_content = branch_tokens[instr_len:]
+            
+            # 添加分支标题和内容
+            if i < len(tasks):
+                task = tasks[i]
+                title_text = f"\n\n## {task['id']}. {task['title']}\n"
+                title_tokens = tokenizer.encode(title_text, add_special_tokens=False)
+                merged.extend(title_tokens)
+            
+            merged.extend(branch_content)
+        
+        return torch.tensor([merged], dtype=torch.long, device=device)
+    
+    # 模式 2: 简单合并模式（使用特殊 token）
+    elif para_token_ids is not None:
+        skeleton_part.append(para_token_ids['line_break_token_id'])
 
-    parallel_part = []
-    for i in range(num_para):
-        branch_output = parallel_branches_output[i][instruction_len[i]:]
-        parallel_part.extend(branch_output)
-        parallel_part.append(para_token_ids['line_break_token_id'])
-        print(f"Branch {i} Length: {len(branch_output)}")
+        parallel_part = []
+        for i in range(num_para):
+            branch_output = parallel_branches_output[i][instruction_len[i]:]
+            parallel_part.extend(branch_output)
+            parallel_part.append(para_token_ids['line_break_token_id'])
+            print(f"Branch {i} Length: {len(branch_output)}")
 
-    merged_ids = skeleton_part + parallel_part
-    merged_ids.append(para_token_ids['para_end_token_id'])
+        merged_ids = skeleton_part + parallel_part
+        merged_ids.append(para_token_ids['para_end_token_id'])
 
-    return torch.tensor([merged_ids], device=device)
+        return torch.tensor([merged_ids], device=device)
+    
+    # 默认模式: 直接拼接
+    else:
+        merged = skeleton_part.copy()
+        for i, (branch_tokens, instr_len) in enumerate(zip(parallel_branches_output, instruction_len)):
+            branch_content = branch_tokens[instr_len:]
+            merged.extend(branch_content)
+        
+        return torch.tensor([merged], dtype=torch.long, device=device)
 
 
 def set_random_seed(seed: int):
@@ -911,18 +989,18 @@ def prepare_skeleton_input(
         input_ids: 完整输入序列 [1, seq_len]
         task_input_ids: 任务输入部分 [1, task_len] (用于后续并行阶段的前缀复用)
     """
-    if model_type == 'qwen':
-        # Qwen 模型使用中文 prompt
-        base_prompt_template = base_prompt_zh
-        skeleton_trigger = skeleton_trigger_zh
-        print(f"Using Chinese prompts for {model_type} model")
+    # if model_type == 'qwen':
+    #     # Qwen 模型使用中文 prompt
+    #     base_prompt_template = base_prompt_zh
+    #     skeleton_trigger = skeleton_trigger_zh
+    #     print(f"Using Chinese prompts for {model_type} model")
         
-        task_input = base_prompt_template.format(user_inputs=task_prompt)
-        skeleton_input = skeleton_trigger.format(user_inputs=task_prompt)
-        task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
-        skeleton_input_ids = tokenizer([skeleton_input], return_tensors="pt").input_ids.to(device)
-        input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
-    elif model_type == 'vicuna':
+    #     task_input = base_prompt_template.format(user_inputs=task_prompt)
+    #     skeleton_input = skeleton_trigger.format(user_inputs=task_prompt)
+    #     task_input_ids = tokenizer([task_input], return_tensors="pt").input_ids.to(device)
+    #     skeleton_input_ids = tokenizer([skeleton_input], return_tensors="pt").input_ids.to(device)
+    #     input_ids = torch.cat([task_input_ids, skeleton_input_ids], dim=-1)
+    if model_type == 'vicuna':
         # Vicuna 模型使用特定的 chat template (从 prompts.py 导入)
         base_prompt_template = base_prompt_en
         skeleton_trigger = skeleton_trigger_en
@@ -986,7 +1064,7 @@ def parse_skeleton_output(
     解析骨架格式输出
     
     格式定义：
-    - 模式 A: [DIRECT] 直接回答
+    - 模式 A: [DIRECT]...[END] 直接回答
     - 模式 B: [PLAN]...[END] 规划模式
     
     行格式：ID. <Length> <Tool> [Deps] Title
@@ -1003,7 +1081,7 @@ def parse_skeleton_output(
             - error 模式: str (错误信息)
     
     Examples:
-        >>> parse_skeleton_output("[DIRECT]\\n这是直接回答")
+        >>> parse_skeleton_output("[DIRECT]\\n这是直接回答\\n[END]")
         ("direct", "这是直接回答")
         
         >>> parse_skeleton_output('''[PLAN]
@@ -1016,7 +1094,11 @@ def parse_skeleton_output(
     
     # 模式 A: 直接回答
     if text.startswith("[DIRECT]"):
+        # 提取 [DIRECT] 和 [END] 之间的内容
         content = text.replace("[DIRECT]", "", 1).strip()
+        # 移除结尾的 [END] 标记
+        if "[END]" in content:
+            content = content[:content.index("[END]")].strip()
         return "direct", content
     
     # 模式 B: 规划模式
@@ -1029,21 +1111,22 @@ def parse_skeleton_output(
             return "error", "Malformed tags: [PLAN] or [END] not found properly"
 
         tasks = []
-        # Regex (宽松版本，尖括号可选):
+        # Regex (支持紧凑格式和宽松格式):
         # Group 1: ID (数字)
-        # Group 2: Length (数字)
+        # Group 2: Length (数字，支持多位数)
         # Group 3: Tool (字符串)
         # Group 4: Deps (方括号内的字符串)
         # Group 5: Title (标题)
         # 
         # 支持的格式：
-        #   1. <200> <None> [-] Title     (带尖括号)
+        #   1.<200><None>[-]Title         (紧凑格式，无空格)
+        #   1. <200> <None> [-] Title     (带空格)
         #   1. 200 None [-] Title         (不带尖括号)
         #   1. （200） （None） 【-】 Title  (中文括号)
         pattern = re.compile(
-            r"(\d+)[.:、]\s*"                     # ID + 分隔符
-            r"[<（]?(\d+)[>）]?\s+"               # Length (尖括号可选)
-            r"[<（]?(\S+?)[>）]?\s+"              # Tool (尖括号可选，非空白字符)
+            r"(\d+)[.:、]\s*"                     # ID + 分隔符 (可选空格)
+            r"[<（]?(\d+)[>）]?\s*"               # Length (尖括号可选，空格可选)
+            r"[<（]?(\S+?)[>）]?\s*"              # Tool (尖括号可选，空格可选)
             r"[\[【](.*?)[\]】]\s*"               # [Deps]
             r"(.+)"                               # Title
         )
@@ -1108,11 +1191,11 @@ def prepare_parallel_branches(
         instruction_lengths: 每个分支的指令前缀长度
     """
     # 选择对应的 parallel trigger
-    if model_type == 'qwen':
-        parallel_trigger = parallel_trigger_zh
-    else:
-        parallel_trigger = parallel_trigger_en
-    
+    # if model_type == 'qwen':
+    #     parallel_trigger = parallel_trigger_zh
+    # else:
+    #     parallel_trigger = parallel_trigger_en
+    parallel_trigger = parallel_trigger_en
     clean_branches = []
     instruction_lengths = []
     
