@@ -232,32 +232,6 @@ def load_dataset(task: str, logger: logging.Logger = None) -> pd.DataFrame:
     return df
 
 
-def get_special_token_ids(tokenizer) -> dict:
-    """
-    获取骨架解析所需的特殊 token IDs
-    
-    骨架格式：
-    ####标题1:...
-    ####标题2:...
-    ####%%%%
-    
-    Args:
-        tokenizer: 分词器
-        
-    Returns:
-        dict: 特殊 token ID 映射
-    """
-    return {
-        "para_begin_token_id": tokenizer.encode("####")[0],
-        "para_end_token_id": tokenizer.encode("%%%%")[0],
-        "ellipsis_token_id": tokenizer.encode("......")[0],
-        "half_ellipsis_token_id": tokenizer.encode("...")[0],
-        "line_break_token_id": tokenizer.encode("\n\n")[0],
-        "colon_token_id": tokenizer.encode(":")[0],
-        "cn_colon_token_id": tokenizer.encode("：")[0],  # 中文冒号
-        "colon_new_line_token_id": tokenizer.encode(":\n")[0],
-    }
-
 # =============================================================================
 # Worker 逻辑 (执行实际的推理任务)
 # =============================================================================
@@ -339,12 +313,6 @@ def run_worker(args):
     
     tokenizer = model.get_tokenizer()
     tokenizer.padding_side = "left"
-    para_token_ids = get_special_token_ids(tokenizer)
-    
-    logger.debug("Special Token IDs:")
-    for key, value in para_token_ids.items():
-        token_str = tokenizer.decode([value])
-        logger.debug(f"  {key}: {value} -> '{token_str}'")
 
     # =========================================================================
     # 3. 加载数据集
@@ -364,8 +332,8 @@ def run_worker(args):
     for i in range(len(df)):
         # 获取任务prompt
         # task_prompt = df.loc[i, "task_prompt"]
-        # task_prompt = "请问打篮球时，如何提高投篮命中率？请给出详细的建议。"
-        task_prompt = "When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions."
+        # task_prompt = "请问打篮球时，如何提高投篮命中率？请从六个方面给出详细的建议。"
+        task_prompt = "When playing basketball, how can I improve my shooting percentage? Please give detailed suggestions from six aspects."
         
         logger.info(f"\n{'='*60}")
         logger.info(f"样本 {i+1}/{len(df)}: {task_prompt[:100]}...")
@@ -381,7 +349,6 @@ def run_worker(args):
                     max_new_tokens=args.max_new_tokens,
                     temperature=0.0,
                     enable_parallel=args.enable_parallel,
-                    para_token_ids=para_token_ids,
                 )
             
             total_time = time.time() - start_time
@@ -682,11 +649,11 @@ def main():
     # 模型配置
     # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B", help="Base Model 路径")
     # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
-    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
-    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
-    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3", help="Base Model 路径")
-    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
-    parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
+    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
+    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3", help="Base Model 路径")
+    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
+    parser.add_argument("--use_eagle3", type=str2bool, default=False, help="是否使用 Eagle3 模型")
     parser.add_argument("--enable_parallel", action="store_true", default=True, help="启用骨架并行模式")
     parser.add_argument("--max_new_tokens", type=int, default=3000,help="最大生成token数")
     

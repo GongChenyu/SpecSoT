@@ -33,11 +33,7 @@ from .utils import (
     evaluate_single,
     evaluate_parallel,
     stack_with_left_padding,
-    parse_skeleton,
-    parse_skeleton_str,  # 新增: 字符串解析方式
-    prepare_parallel_branches,
     prepare_skeleton_input,
-    create_skeleton_logits_processor,
     check_stop_conditions,
     check_stop_conditions_parallel,
     merge_outputs,

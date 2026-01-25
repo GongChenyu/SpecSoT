@@ -58,8 +58,6 @@ from .utils import (
     prepare_logits_processor,
     build_parallel_prefill_mask,
     stack_with_left_padding,
-    parse_skeleton,
-    prepare_parallel_branches,
     prepare_skeleton_input,
     create_skeleton_logits_processor,
     check_stop_conditions,
@@ -68,6 +66,8 @@ from .utils import (
     set_random_seed,
     evaluate_single,
     evaluate_parallel,
+    parse_skeleton_output,
+    prepare_parallel_branches,
 )
 
 
@@ -434,7 +434,6 @@ class SpecSoTModel(nn.Module):
         top_p: float = 0.0,
         top_k: int = 0,
         enable_parallel: bool = True,
-        para_token_ids: Optional[Dict[str, int]] = None,
     ) -> Tuple[torch.Tensor, float, int, float, float, float]:
         """
         主生成函数：支持普通模式和并行骨架模式
@@ -446,7 +445,6 @@ class SpecSoTModel(nn.Module):
             top_p: nucleus sampling 参数
             top_k: top-k sampling 参数
             enable_parallel: 是否启用骨架并行模式
-            para_token_ids: 特殊 token IDs (骨架解析用)
             
         Returns:
             output_ids: 生成的 token IDs
@@ -467,14 +465,10 @@ class SpecSoTModel(nn.Module):
 
         if not enable_parallel:
             # 普通投机解码模式
-            return self.generate_eagle(
-                task_prompt, max_new_tokens, logits_processor
-            )
-        
-        # 骨架并行模式
-        return self.generate_specsot(
-            task_prompt, max_new_tokens, logits_processor, para_token_ids
-        )
+            return self.generate_eagle(task_prompt, max_new_tokens, logits_processor)
+        else:
+            return self.generate_specsot(task_prompt, max_new_tokens, logits_processor)
+
 
     def generate_eagle(
         self,
@@ -506,7 +500,7 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         if self.is_distributed():
             # 分布式Prefill
-            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, first_token = \
+            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
                 self.distributed_prefill_manager.prefill_single_distributed(
                     input_ids, self.past_key_values, logits_processor
                 )
@@ -587,29 +581,29 @@ class SpecSoTModel(nn.Module):
         task_prompt: str,
         max_new_tokens: int,
         logits_processor: Optional[LogitsProcessorList] = None,
-        para_token_ids: Optional[Dict[str, int]] = None,
     ) -> Tuple[torch.Tensor, float, int, float, float, float]:
         """
         骨架并行生成模式
         
         三阶段流程：
-        1. Skeleton Generation - 生成回答骨架（单序列解码）
-        2. Skeleton Parsing - 解析骨架，提取分支
+        1. Skeleton Generation - 生成回答骨架
+        2. Skeleton Parsing - 使用 parser 解析骨架
         3. Parallel Decoding - 并行解码各分支
         """
         device = self.base_model.device
         model_type = self.get_model_type()
         
         # =====================================================================
-        # Stage 1: Skeleton Generation (骨架生成)
+        # Stage 1: Skeleton Generation
         # =====================================================================
-        # 准备 skeleton 阶段的 input_ids 和 logits_processor
-        input_ids, task_input_ids = prepare_skeleton_input(self.tokenizer, task_prompt, model_type, device)
+        input_ids, task_input_ids = prepare_skeleton_input(
+            self.tokenizer, task_prompt, model_type, device
+        )
         input_len = input_ids.shape[1]
         
-        skeleton_logits_processor = create_skeleton_logits_processor(
-            para_token_ids, input_len, logits_processor
-        )
+        # 使用 FSM 状态机约束或不使用约束（依赖模型本身能力）
+        # 对于大模型，通常不需要强制约束，直接使用采样 processor 即可
+        skeleton_logits_processor = logits_processor
         
         # 初始化 KV Cache
         max_kv_len = input_len + max_new_tokens + 100
@@ -620,33 +614,30 @@ class SpecSoTModel(nn.Module):
         # Stage 1.1: Prefill 阶段
         # ---------------------------------------------------------------------
         if self.is_distributed():
-            # 分布式Prefill
-            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, first_token = \
+            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
                 self.distributed_prefill_manager.prefill_single_distributed(
                     input_ids, self.past_key_values, skeleton_logits_processor
                 )
         else:
-            # 普通Prefill
             draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
                 self.prefill_single(input_ids, skeleton_logits_processor)
         set_random_seed(self.seed)
 
         # ---------------------------------------------------------------------
-        # Stage 1.2: Skeleton Decode 循环 (不保留统计，skeleton 阶段仅作为中间步骤)
+        # Stage 1.2: Skeleton Decode 循环
         # ---------------------------------------------------------------------
-        stop_token_id = para_token_ids['para_end_token_id']
+        # 骨架的停止条件：检测到 [END] 标记或 EOS
         eos_token_id = self.tokenizer.eos_token_id
-        max_steps = 150  # 骨架长度限制
+        max_steps = 200  # 骨架长度限制
         
         for step in range(max_steps):
-            # 执行单步 decode
             (
                 input_ids,
                 draft_tokens,
                 retrieve_indices,
                 tree_mask,
                 tree_position_ids,
-                _,  # accept_length - skeleton 阶段不需要统计
+                _,
             ) = self.decode_step_single(
                 input_ids=input_ids,
                 draft_tokens=draft_tokens,
@@ -656,39 +647,49 @@ class SpecSoTModel(nn.Module):
                 logits_processor=skeleton_logits_processor,
             )
             
-            # 停止条件检查
-            if check_stop_conditions(
-                input_ids, input_len, stop_token_id, eos_token_id,
-                self.current_length_data[0].item(), max_kv_len,
-                tokens_per_step=self.eagle_layer.total_tokens + 1
-            ):
+            # 骨架的停止条件：检测是否生成了 [END] 或遇到 EOS
+            generated_text = self.tokenizer.decode(input_ids[0, input_len:])
+            if "[END]" in generated_text or eos_token_id in input_ids[0, input_len:].tolist():
+                break
+            
+            # KV Cache 溢出检查
+            if self.current_length_data[0].item() + self.eagle_layer.total_tokens + 1 > max_kv_len:
+                self.logger.warning("KV cache limit reached during skeleton generation")
                 break
         
         skeleton_ids = input_ids[:, input_len:]
-        self.logger.info(f"Generated Skeleton: {self.tokenizer.decode(skeleton_ids[0])}")
+        skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
+        self.logger.info(f"Generated Skeleton: {skeleton_text}")
         self.skeleton_output = skeleton_ids.clone()
 
         # =====================================================================
         # Stage 2: Skeleton Parsing (骨架解析)
         # =====================================================================
-        # 2.1: 解析骨架，提取分支标题和预测长度
-        branch_headers, predicted_branch_lengths = parse_skeleton(
-            self.tokenizer, skeleton_ids, para_token_ids
-        )
+        mode, content = parse_skeleton_output(skeleton_text)
         
-        if not branch_headers:
-            self.logger.warning("Parsing failed or no branches found. Returning skeleton.")
+        if mode == "direct":
+            # 直接回答模式：不需要并行处理，直接返回骨架输出
+            self.logger.info("Direct answer mode detected, returning skeleton output")
             return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0
         
-        # 2.2: 准备并行分支输入（添加上下文指令前缀）
+        elif mode == "error":
+            self.logger.warning(f"Skeleton parsing error: {content}")
+            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0
+        
+        # mode == "plan": 规划模式
+        tasks = content
+        num_para = len(tasks)
+        self.logger.info(f"Detected {num_para} parallel tasks: {[t['title'] for t in tasks]}")
+        
+        # 准备并行分支输入
         clean_branches, instruction_len = prepare_parallel_branches(
-            self.tokenizer, branch_headers, model_type, task_prompt
+            self.tokenizer, tasks, skeleton_text, model_type, task_prompt
         )
-
-        num_para = len(clean_branches)
+        
         self.parallel_branches_output = [list(br) for br in clean_branches]
         self.instruction_len = instruction_len
-        self.logger.info(f"Detected {num_para} parallel branches with predicted lengths: {predicted_branch_lengths}")
+        predicted_branch_lengths = [t['length'] for t in tasks]
+        self.logger.info(f"Predicted lengths: {predicted_branch_lengths}")
 
         # =====================================================================
         # Stage 3: Parallel Decoding (并行分支解码)
@@ -717,7 +718,6 @@ class SpecSoTModel(nn.Module):
         total_update_time_parallel = 0.0
         total_draft_time_parallel = 0.0
         
-        # 获取 Eagle Layer 每步每分支的最大 token 数（用于峰值 KV cache 计算）
         tokens_per_branch = self.eagle_layer.total_tokens + 1
         
         evt_start_p = torch.cuda.Event(enable_timing=True)
@@ -726,7 +726,6 @@ class SpecSoTModel(nn.Module):
         evt_after_draft_p = torch.cuda.Event(enable_timing=True)
         
         for step_parallel in range(max_new_tokens):
-            # 峰值 KV cache 检查：确保下一步不会溢出
             if check_stop_conditions_parallel(
                 current_length=self.current_length_data[0].item(),
                 max_kv_len=max_kv_len,
@@ -741,7 +740,6 @@ class SpecSoTModel(nn.Module):
 
             evt_start_p.record()
             
-            # 执行单步并行 decode
             (
                 draft_tokens,
                 retrieve_indices,
@@ -760,21 +758,18 @@ class SpecSoTModel(nn.Module):
             )
             evt_after_draft_p.record()
             
-            # 统计
             total_accept_len_parallel += accept_length.sum()
             
-            # 计时统计
             torch.cuda.synchronize()
             total_verify_time_parallel += evt_start_p.elapsed_time(evt_after_verify_p) / 1000
             total_update_time_parallel += evt_after_verify_p.elapsed_time(evt_after_update_p) / 1000
             total_draft_time_parallel += evt_after_update_p.elapsed_time(evt_after_draft_p) / 1000
             
-            # 停止条件检查
             if all_finished:
                 self.logger.info("All branches finished generation.")
                 break
         
-        # 计算并行阶段统计
+        # 计算统计
         num_steps_parallel = max(step_parallel, 1)
         avg_accept_len = total_accept_len_parallel.item() / num_steps_parallel
         avg_draft_time = total_draft_time_parallel / num_steps_parallel
@@ -787,16 +782,48 @@ class SpecSoTModel(nn.Module):
                         f"Avg verify time: {avg_verify_time:.4f}s")
 
         # 合并结果
-        merged_ids = merge_outputs(
-            skeleton_output=self.skeleton_output,
+        merged_ids = self._merge_outputs(
+            skeleton_ids=self.skeleton_output,
+            tasks=tasks,
             parallel_branches_output=self.parallel_branches_output,
             instruction_len=self.instruction_len,
-            para_token_ids=para_token_ids,
-            num_para=num_para,
-            device=self.base_model.device,
+            device=device,
         )
         
         return merged_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
+
+    def _merge_outputs(
+        self,
+        skeleton_ids: torch.Tensor,
+        tasks: List[Dict],
+        parallel_branches_output: List[List[int]],
+        instruction_len: List[int],
+        device: torch.device,
+    ) -> torch.Tensor:
+        """
+        合并格式的骨架和分支输出
+        
+        不需要替换 "..." 占位符，而是直接拼接：
+        [skeleton header] + [branch 1 content] + [branch 2 content] + ...
+        """
+        # 简单合并：骨架 + 各分支内容
+        merged = skeleton_ids[0].tolist()
+        
+        for i, (branch_tokens, instr_len) in enumerate(zip(parallel_branches_output, instruction_len)):
+            # 跳过指令前缀，只取生成的内容
+            branch_content = branch_tokens[instr_len:]
+            
+            # 添加分支标题和内容
+            if i < len(tasks):
+                task = tasks[i]
+                # 可选：添加分支标题标记
+                title_text = f"\n\n## {task['id']}. {task['title']}\n"
+                title_tokens = self.tokenizer.encode(title_text, add_special_tokens=False)
+                merged.extend(title_tokens)
+            
+            merged.extend(branch_content)
+        
+        return torch.tensor([merged], dtype=torch.long, device=device)
 
     # =========================================================================
     # Prefill 和 Verify 方法 (Prefill & Verify Methods)

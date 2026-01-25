@@ -1,177 +1,129 @@
 # coding=utf-8
+"""
+SpecSoT Prompts - Topology-Aware Skeleton Protocol
+
+骨架协议定义：
+- 模式 A：直接回答 [DIRECT] - 用于简单、原子或无法拆分的任务
+- 模式 B：规划模式 [PLAN]...[END] - 用于复杂任务的并行拆解
+
+行格式：ID. <Length> <Tool> [Deps] Title
+- ID: 数字加点 (1. 2. ...)
+- Length: <数字> 预估 Token 数量
+- Tool: <工具名> 或 <None>
+- Deps: [依赖列表] 目前强制 [-] 表示纯并行
+- Title: 任务描述
+"""
 
 # =============================================================================
-# Chinese Prompts (中文提示词) - Optimized for Qwen
+# Chinese Prompts (中文提示词) - V2 Protocol
 # =============================================================================
 
-# 基础Prompt：确立专家人设，强调逻辑判断
+# 中文 Base Prompt
 base_prompt_zh = (
-    "【系统指令：思维骨架生成引擎】\n"
-    "你是一个擅长处理复杂任务的逻辑分析专家。你的核心能力是能够瞬间判断一个问题是应该“直接回答”还是需要“拆解规划”。\n"
-    # "其中“拆解规划”的工作流程严格分为两个独立步骤： 1. **步骤一（规划）**：判断任务类型并生成骨架。 2. **步骤二（执行）**：根据骨架并行填充内容。\n"
-    # "你只会收到执行**其中一个步骤**的指令。 **严禁越界**：如果你处于“步骤一”，绝对不要生成正文内容。如果你处于“步骤二”，绝对不要重复生成骨架。\n"
-    "【用户输入】内容：\n"
-    "<user_input>\n"
-    "{user_inputs}\n"
-    "</user_input>\n\n"
+    "【系统指令】你是一个精通复杂任务规划与执行的逻辑专家。\n"
+    "你的工作模式分为两个阶段：\n"
+    "1. **规划阶段 ([PLAN])**：将复杂问题拆解为多个独立的并行子任务。\n"
+    "2. **执行阶段 ([WORK])**：根据既定计划，执行其中某一个具体步骤。\n"
+    "你必须严格遵守指令给出的当前阶段要求，严禁越界。\n"
+    "【用户输入】：\n{user_inputs}\n\n"
 )
 
-# 阶段一：骨架生成触发器
-# 优化点：
-# 1. 增加了“判断标准”部分，教模型如何分类。
-# 2. 强化了格式的正则约束，确保小模型不乱加空格或换行。
+# 中文 Skeleton Trigger (骨架生成阶段)
 skeleton_trigger_zh = (
-    "【当前任务：输入分析与骨架生成】\n"
-    "请对 <user_input> 进行逻辑评估，并从以下两种方法中选择一条执行：\n\n"
-
-    "方法 A：直接回答（线性/简单任务）\n"
-    "判定标准：\n"
-    "1. 问题简单，一两句话能说清（如：常识问答、简单翻译）。\n"
-    "2. 具有强烈的**逻辑先后顺序**，步骤B必须等步骤A完成后才能进行，**无法并行处理**。\n"
-    "执行操作：直接输出答案，**禁止**生成骨架或“####”。\n\n"
-
-    "方法 B：思维骨架拆分（并行/复杂任务）\n"
-    "判定标准：回答需要多角度分析、多模块列举、长文写作，且各部分内容**相对独立**，可以同时撰写。\n"
-    "执行操作：请按严格格式输出骨架。\n\n"
-
-    "**骨架格式严格约束（机器读取专用）：**\n"
-    "1. 每一行代表一个独立的分支，格式必须为：`#### 标题【预估Token数】:...`\n"
-    "2. `####` 开头，紧跟标题。\n"
-    "3. `【数字】` 代表预估该段落需要的Token数量。\n"
-    "4. 必须以英文冒号 `:` 和省略号 `...` 结尾。**严禁**在此冒号后写任何正文内容！\n"
-    "5. 所有分支列举完后，skeleton生成结束，结束符是 `####%%%%`。\n\n"
-    
-    "<user_input>: prompt...\n"
-    "**标准骨架输出示例：**\n"
-    "#### 分支标题【342】:...\n"
-    "#### 分支标题【521】:...\n"
-    "####%%%%\n\n"
-
-    "<user_input>: 分析新能源汽车的发展前景\n"
-    "**具体骨架输出示例：**\n"
-    "#### 技术维度【329】:...\n"
-    "#### 市场维度【127】:...\n"
-    "#### 政策维度【663】:...\n"
-    "####%%%%\n\n"
-
-    "**警告**：\n"
-    "- 无论用户输入多短（例如仅有“写个大纲”），只要任务适合拆分，就必须执行方法B。\n"
-    "- 绝对不要输出任何分析过程、开场白或“好的”、“明白”等废话。\n"
-    "- 直接开始输出答案或骨架。\n\n"
-    "再次重复【用户输入】内容：\n"
-    "<user_input>\n"
-    "{user_inputs}\n"
-    "</user_input>\n\n"
-    "禁止输出开场白，【回答】：\n"
+    "【当前任务：生成骨架】\n"
+    "请判断用户输入适合「直接回答」还是「拆解规划」。请从以下两种格式中严格选择一种输出：\n\n"
+    "### 格式一：直接回答（适用于简单/原子/不可并行任务）\n"
+    "输出格式：\n"
+    "[DIRECT]\n"
+    "(在此处直接写出答案内容...)\n\n"
+    "### 格式二：拆解规划（适用于分支独立的可并行任务）\n"
+    "输出格式：\n"
+    "[PLAN]\n"
+    "1. <预估长度> <工具名> [-] 分支一标题\n"
+    "2. <预估长度> <工具名> [-] 分支二标题\n"
+    "...\n"
+    "[END]\n\n"
+    "**严格约束**：\n"
+    "1. **长度**：必须填写数字，如 <200>。\n"
+    "2. **工具**：如果不需要外部工具，请填写 <None>；如果需要，填写工具名如 <Search>。\n"
+    "3. **拓扑**：目前请强制使用 [-]，表示所有步骤并行执行，互不依赖。\n"
+    "4. 直接以 [DIRECT] 或 [PLAN] 开头，不要废话。\n"
+    "【开始输出】：\n"
 )
 
-# 阶段二：并行填充触发器
-# 优化点：
-# 1. 强调上下文的联系，防止子回答显得没头没尾。
-# 2. 明确结束符，防止小模型喋喋不休。
+# 中文 Parallel Trigger (并行扩展阶段)
 parallel_trigger_zh = (
-    "【系统指令：并行内容生成】\n"
-    "整体回答结构已规划如下：\n"
-    "<skeleton>\n"
-    "{skeleton_context}"
-    "</skeleton>\n"
-    "【当前具体任务】请撰写【当前分支】的详细正文内容。\n"
-    "【撰写要求】：\n"
-    "1. **格式**：直接输出正文。**禁止**包含 `####`、标题、序号或开场白（如“关于这一点...”）。\n"
-    "2. **长度**：参考规划中的Token预估值，不要在这一个分支上输出偏离预测值。\n"
-    "3. **逻辑**：内容必须完整，且能与上下文自然衔接。\n"
-    "4. **结束**：本部分内容写完后，请立即停止，禁止重复输出。结束符号为<|im_end|> \n\n"
-    "你只被允许针对【当前分支】回答，【当前分支】：\n"
-    "{current_point} "
-    "禁止回答其他分支，禁止输出开场白，【回答】：\n"
+    "【当前任务：分支扩展】\n"
+    "整体计划如下：\n"
+    "{skeleton_context}\n"
+    "--------------------\n"
+    "你的任务是执行步骤 **{current_id}**：\n"
+    "**{current_point}**\n\n"
+    "**撰写要求**：\n"
+    "1. 目标长度：约 **{target_length}** tokens。\n"
+    "2. 直接输出该步骤的正文内容，**不要**包含序号、标题或标签。\n"
+    "3. 确保内容能与上下文逻辑衔接。\n"
+    "【开始撰写】：\n"
 )
 
 
 # =============================================================================
-# English Prompts (英文提示词) - Optimized for Llama
+# English Prompts (英文提示词) - V2 Protocol
 # =============================================================================
 
-# Base Prompt: Establish expert persona, emphasize logical judgment and step isolation
+# English Base Prompt
 base_prompt_en = (
-    "[System Directive: Skeleton-of-Thought Generation Engine]\n"
-    "You are an expert logical analyst skilled in handling complex tasks. Your core capability is to instantly determine whether a problem requires a 'Direct Answer' or 'Decomposition Planning'.\n"
-    "The 'Decomposition Planning' workflow is strictly divided into two independent steps: 1. **Step 1 (Planning)**: Determine task type and generate the skeleton. 2. **Step 2 (Execution)**: Fill in content in parallel based on the skeleton.\n"
-    "You will receive instructions to execute **ONLY ONE** of these steps at a time. **STRICT ISOLATION**: If you are in 'Step 1', DO NOT generate body content. If you are in 'Step 2', DO NOT regenerate the skeleton.\n"
-    "[User Input] Content:\n"
-    "<user_input>\n"
-    "{user_inputs}\n"
-    "</user_input>\n\n"
+    "[System Directive] You are a logic expert specializing in complex task planning and execution.\n"
+    "Your workflow has two strictly separated phases:\n"
+    "1. **Planning Phase ([PLAN])**: Decompose complex queries into independent parallel sub-tasks.\n"
+    "2. **Execution Phase ([WORK])**: Execute a specific step based on the established plan.\n"
+    "You must strictly adhere to the instructions for the current phase.\n"
+    "[User Input]:\n{user_inputs}\n\n"
 )
 
+# English Skeleton Trigger (Skeleton Generation Phase)
 skeleton_trigger_en = (
-    "[Task: Input Analysis & Path Selection]\n"
-    "Evaluate the <user_input> and execute ONE of the following two paths:\n\n"
-
-    "### Path A: Direct Answer (Linear/Simple Task)\n"
-    "Criteria:\n"
-    "1. The query is simple (e.g., factual, short translation).\n"
-    "2. The task has strict **sequential dependency** (Step B requires Step A to be finished first). It CANNOT be processed in parallel.\n"
-    "Action: Output the answer directly. **DO NOT** generate a skeleton or use '####'.\n\n"
-
-    "### Path B: Skeleton Decomposition (Parallel/Complex Task)\n"
-    "Criteria: The answer requires multi-angle analysis, independent modules, or long-form writing where parts are **independent** and can be written simultaneously.\n"
-    "Action: Output a structural skeleton using the strict format below.\n\n"
-
-    "**Strict Skeleton Format (For Machine Parsing):**\n"
-    "1. Each branch is a separate line: `#### Title【TokenCount】:...`\n"
-    "2. Must start with `####` followed by a brief title.\n"
-    "3. `【Number】` indicates estimated tokens for that section.\n"
-    "4. Must end with a colon `:` and ellipsis `...`. **DO NOT** generate content after the colon.\n"
-    "5. After all branches, output the specific end token: `####%%%%`\n\n"
-    
-    "**Standard Example:**\n"
-    "prompt: xxx...\n"
-    "Skeleton:\n"
-    "#### branch【342】:...\n"
-    "#### branch【521】:...\n"
-    "####%%%%\n\n"
-
-    "**Example:**\n"
-    "prompt: Analyze the impact of remote work.\n"
-    "Skeleton:\n"
-    "#### Economic Impact【329】:...\n"
-    "#### Social Impact【127】:...\n"
-    "#### Mental Health【663】:...\n"
-    "####%%%%\n\n"
-
-    "**WARNING**:\n"
-    "- Even for short inputs (e.g., 'Plan a trip'), if the task is divisible, execute Path B.\n"
-    "- Do NOT output preambles, analysis thoughts, or conversational fillers like 'Sure' or 'Okay'.\n"
-    "- Start the output directly.\n\n"
-    "[Answer Directly]:\n"
+    "[Current Task: Skeleton Generation]\n"
+    "Analyze the input and output strictly in ONE of the following formats:\n\n"
+    "### Format 1: Direct Answer (For simple/atomic/non-parallelizable tasks)\n"
+    "Output:\n"
+    "[DIRECT]\n"
+    "(Write your answer content here...)\n\n"
+    "### Format 2: Decomposition Plan (For tasks with independent parallel branches)\n"
+    "Output:\n"
+    "[PLAN]\n"
+    "1. <Est_Tokens> <Tool_Name> [-] Branch 1 Title\n"
+    "2. <Est_Tokens> <Tool_Name> [-] Branch 2 Title\n"
+    "...\n"
+    "[END]\n\n"
+    "**Constraints**:\n"
+    "1. **Length**: Must be a number, e.g., <200>.\n"
+    "2. **Tool**: Use <None> if no tool is needed, otherwise <Search>, etc.\n"
+    "3. **Topology**: Strictly use [-] for now to indicate parallel execution.\n"
+    "4. Start immediately with [DIRECT] or [PLAN].\n"
+    "[Output]:\n"
 )
 
+# English Parallel Trigger (Parallel Execution Phase)
 parallel_trigger_en = (
-    "[System Directive: Parallel Content Generation]\n"
-    "Context: We are answering the query \"{user_inputs}\".\n"
-    "The overall structure has been planned as follows:\n"
-    "{skeleton_context}\n\n"
-    "--------------------------------------------------\n"
-    "[Current Micro-Task]\n"
-    "Write the detailed content for the branch: **[ {current_point} ]**\n\n"
-
-    "[Writing Constraints]:\n"
-    "1. **Format**: Output the body content directly. **FORBIDDEN** to use `####`, titles, or preambles.\n"
-    "2. **Length**: Adhere to the estimated token count in the plan.\n"
-    "3. **Logic**: Ensure the content is self-contained but flows well with the context.\n"
-    "4. **Stop**: Stop writing immediately after covering this specific point.\n\n"
-    "[Answer Directly]:\n"
+    "[Current Task: Execute Specific Step]\n"
+    "Overall Plan:\n"
+    "{skeleton_context}\n"
+    "--------------------\n"
+    "Your task is to execute Step **{current_id}**:\n"
+    "**{current_point}**\n\n"
+    "**Requirements**:\n"
+    "1. Target Length: Approx **{target_length}** tokens.\n"
+    "2. Output the body content directly. DO NOT include IDs, titles, or tags.\n"
+    "3. Ensure logical flow with the context.\n"
+    "[Start Writing]:\n"
 )
 
 
 # =============================================================================
-# Vicuna Chat Template
+# Vicuna Chat Template (保留兼容性)
 # =============================================================================
 
-# Vicuna 模型使用特定的对话格式
-# 格式: A chat between a curious user and an AI assistant.
-#       USER: {prompt}
-#       ASSISTANT:
 vicuna_chat_template = (
     "A chat between a curious user and an artificial intelligence assistant. "
     "The assistant gives helpful, detailed, and polite answers to the user's questions.\n\n"

@@ -96,38 +96,33 @@ def prepare_logits_processor(
 
 
 def create_skeleton_logits_processor(
-    para_token_ids: Dict[str, int],
+    tokenizer,
     prefix_len: int,
+    enforce_format: bool = True,
     sampling_processor: Optional[LogitsProcessorList] = None,
 ) -> LogitsProcessorList:
     """
-    创建 skeleton 生成阶段使用的 LogitsProcessor
+    创建 skeleton 生成阶段使用的 LogitsProcessor (FSM 状态机版本)
     
-    包含语义约束 processor 和可选的采样 processor
+    支持格式：ID. <Length> <Tool> [Deps] Title
     
     Args:
-        para_token_ids: 特殊 token IDs
+        tokenizer: 分词器（用于获取 token IDs）
         prefix_len: 输入前缀长度
+        enforce_format: 是否强制执行格式约束
         sampling_processor: 采样相关的 processor (温度、top_p、top_k)
         
     Returns:
         组合后的 LogitsProcessorList
     """
-    # 构造语义约束 Logits Processor
     sp_processor = SemanticLogitsProcessor(
-        para_end_token_id=para_token_ids['para_end_token_id'],
-        ellipsis_token_id=para_token_ids['ellipsis_token_id'],
-        line_break_token_id=para_token_ids['line_break_token_id'],
-        para_begin_token_id=para_token_ids['para_begin_token_id'],
-        colon_token_id=para_token_ids['colon_token_id'],
-        cn_colon_token_id=para_token_ids['cn_colon_token_id'],
-        colon_new_line_token_id=para_token_ids['colon_new_line_token_id'],
-        prefix_len=prefix_len
+        tokenizer=tokenizer,
+        prefix_len=prefix_len,
+        enforce_format=enforce_format,
     )
     
     logits_processor = LogitsProcessorList([sp_processor])
     
-    # 添加采样 processor (如果有)
     if sampling_processor is not None:
         logits_processor.extend(sampling_processor)
     
@@ -875,6 +870,7 @@ def merge_outputs(
 
     return torch.tensor([merged_ids], device=device)
 
+
 def set_random_seed(seed: int):
     """
     设置随机种子以确保结果可复现
@@ -889,8 +885,9 @@ def set_random_seed(seed: int):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+
 # =============================================================================
-# 8. Skeleton & Parallel Input Preparation (骨架和并行输入准备)
+# 7. Input Preparation & Skeleton Parser (骨架和并行输入准备)
 # =============================================================================
 
 def prepare_skeleton_input(
@@ -982,200 +979,129 @@ def prepare_skeleton_input(
     return input_ids, task_input_ids
 
 
-def parse_skeleton_str(
-    tokenizer,
-    skeleton_ids: torch.Tensor,
-) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
+def parse_skeleton_output(
+    text: str,
+) -> Tuple[str, object]:
     """
-    基于字符串的骨架解析（适用于所有模型）
+    解析骨架格式输出
     
-    将skeleton token IDs转换为字符串后进行解析，避免不同模型tokenizer
-    对于特殊标记（如####）分词不一致的问题。
+    格式定义：
+    - 模式 A: [DIRECT] 直接回答
+    - 模式 B: [PLAN]...[END] 规划模式
     
-    骨架格式示例：
-    ####标题1【100】:...
-    ####标题2【200】:...
-    ####%%%%
+    行格式：ID. <Length> <Tool> [Deps] Title
     
     Args:
-        tokenizer: 分词器
-        skeleton_ids: 骨架 token IDs
+        text: 模型生成的文本
         
     Returns:
-        branch_headers: 分支标题列表（token ID格式）
-        predicted_lengths: 每个分支的预测长度
-    """
-    # 将skeleton token IDs转换为字符串
-    skeleton_text = tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
+        Tuple[mode, content]:
+        - mode: "direct" | "plan" | "error"
+        - content: 
+            - direct 模式: str (回答内容)
+            - plan 模式: List[dict] (任务列表)
+            - error 模式: str (错误信息)
     
-    # 使用正则表达式查找所有分支
-    # 支持多种格式:
-    # - #### 标题【数字】:... (中文全角方括号)
-    # - #### 标题(数字):... (英文圆括号)
-    # - #### 标题（数字）:... (中文圆括号)
-    # - #### 标题（数字 tokens）:... (带 tokens 后缀)
-    branch_pattern = r'####\s*([^#\n]+?)[\[【\(（](\d+)(?:\s*tokens?)?[\]】\)）]:?\.{0,3}'
-    matches = list(re.finditer(branch_pattern, skeleton_text, re.IGNORECASE))
-    
-    if not matches:
-        # 尝试备用模式 (不带token数量预估)
-        branch_pattern_fallback = r'####\s*([^#\n:]+):\.{0,3}'
-        matches = list(re.finditer(branch_pattern_fallback, skeleton_text))
-        if not matches:
-            print(f"Warning: No branches found in skeleton text. Text preview: {skeleton_text[:500]}")
-            return None, None
-    
-    branch_headers = []
-    predicted_lengths = []
-    
-    for match in matches:
-        if len(match.groups()) >= 2:
-            # 有长度预估
-            title = match.group(1).strip()
-            length = int(match.group(2))
-        else:
-            # 没有长度预估
-            title = match.group(1).strip()
-            length = 200  # 默认长度
+    Examples:
+        >>> parse_skeleton_output("[DIRECT]\\n这是直接回答")
+        ("direct", "这是直接回答")
         
-        # 重新构建分支标题并转为token IDs
-        # 格式: #### 标题【长度】:
-        branch_text = f"#### {title}【{length}】:"
-        branch_tokens = tokenizer.encode(branch_text, add_special_tokens=False)
-        
-        branch_headers.append(branch_tokens)
-        predicted_lengths.append(length)
-    
-    if branch_headers:
-        print(f"[parse_skeleton_str] Found {len(branch_headers)} branches")
-        for i, (tokens, length) in enumerate(zip(branch_headers, predicted_lengths)):
-            preview = tokenizer.decode(tokens)[:50]
-            print(f"  Branch {i+1}: {preview}... (predicted length: {length})")
-    
-    return branch_headers, predicted_lengths
-
-
-def parse_skeleton(
-    tokenizer,
-    skeleton_ids: torch.Tensor,
-    para_token_ids: Dict[str, int],
-    use_str_parse: bool = True,  # 默认使用字符串解析
-) -> Tuple[Optional[List[List[int]]], Optional[List[int]]]:
+        >>> parse_skeleton_output('''[PLAN]
+        ... 1. <200> <None> [-] 分析问题
+        ... 2. <150> <Search> [-] 搜索资料
+        ... [END]''')
+        ("plan", [{"id": 1, "length": 200, "tool": None, ...}, ...])
     """
-    解析骨架，提取分支标题和预测长度
+    text = text.strip()
     
-    支持两种解析模式：
-    1. 字符串解析 (use_str_parse=True): 将token转为字符串后用正则匹配，适用于所有模型
-    2. Token解析 (use_str_parse=False): 直接用token ID匹配，依赖特定tokenizer
+    # 模式 A: 直接回答
+    if text.startswith("[DIRECT]"):
+        content = text.replace("[DIRECT]", "", 1).strip()
+        return "direct", content
     
-    骨架格式示例：
-    ####标题1【100】:...
-    ####标题2【200】:...
-    ####%%%%
-    
-    Args:
-        tokenizer: 分词器
-        skeleton_ids: 骨架 token IDs
-        para_token_ids: 特殊 token IDs 字典
-        use_str_parse: 是否使用字符串解析（默认True）
-        
-    Returns:
-        branch_headers: 分支标题列表（不含指令前缀）
-        predicted_lengths: 每个分支的预测长度（从括号中解析）
-    """
-    # 优先使用字符串解析模式
-    if use_str_parse:
-        result = parse_skeleton_str(tokenizer, skeleton_ids)
-        if result[0] is not None:
-            return result
-        # 如果字符串解析失败，回退到token解析
-        print("[parse_skeleton] String parsing failed, falling back to token-based parsing...")
-    
-    # Token-based parsing
-    seq_list = skeleton_ids[0].tolist()
-    para_begin_id = para_token_ids['para_begin_token_id']
-    para_end_id = para_token_ids['para_end_token_id']
-    
-    colon_ids = [
-        para_token_ids['colon_token_id'],
-        para_token_ids['cn_colon_token_id'],
-        para_token_ids['colon_new_line_token_id'],
-    ]
-
-    # 查找骨架边界
-    try:
-        para_begin_idx = seq_list.index(para_begin_id)
+    # 模式 B: 规划模式
+    elif "[PLAN]" in text:
         try:
-            para_end_idx = seq_list.index(para_end_id, para_begin_idx)
+            start = text.index("[PLAN]") + 6
+            end = text.index("[END]") if "[END]" in text else len(text)
+            plan_body = text[start:end].strip()
         except ValueError:
-            para_end_idx = len(seq_list)
-    except ValueError:
-        print("Warning: No '####' found in generated output (token-based parsing).")
-        return None, None
+            return "error", "Malformed tags: [PLAN] or [END] not found properly"
 
-    # 提取并行片段
-    para_segment = seq_list[para_begin_idx:para_end_idx - 1]
-
-    # 分割分支
-    raw_branches = []
-    current_branch = []
-    for token in para_segment:
-        if token == para_begin_id:
-            if current_branch:
-                raw_branches.append(current_branch)
-            current_branch = [token]
-        else:
-            current_branch.append(token)
-    if current_branch:
-        raw_branches.append(current_branch)
-
-    # 清洗分支（截取到冒号）并解析长度
-    branch_headers = []
-    predicted_lengths = []
-    
-    for br in raw_branches:
-        cut_idx = -1
-        for i, token in enumerate(br):
-            if token in colon_ids:
-                cut_idx = i
-                break
+        tasks = []
+        # Regex (宽松版本，尖括号可选):
+        # Group 1: ID (数字)
+        # Group 2: Length (数字)
+        # Group 3: Tool (字符串)
+        # Group 4: Deps (方括号内的字符串)
+        # Group 5: Title (标题)
+        # 
+        # 支持的格式：
+        #   1. <200> <None> [-] Title     (带尖括号)
+        #   1. 200 None [-] Title         (不带尖括号)
+        #   1. （200） （None） 【-】 Title  (中文括号)
+        pattern = re.compile(
+            r"(\d+)[.:、]\s*"                     # ID + 分隔符
+            r"[<（]?(\d+)[>）]?\s+"               # Length (尖括号可选)
+            r"[<（]?(\S+?)[>）]?\s+"              # Tool (尖括号可选，非空白字符)
+            r"[\[【](.*?)[\]】]\s*"               # [Deps]
+            r"(.+)"                               # Title
+        )
         
-        if cut_idx != -1:
-            branch_tokens = br[:cut_idx + 1]
-            branch_headers.append(branch_tokens)
+        for line in plan_body.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
             
-            # 解析长度：从 token 中提取括号内的数字
-            branch_text = tokenizer.decode(branch_tokens)
-            # 匹配格式：####标题(123):
-            length_match = re.search(r'\((\d+)\)', branch_text)
-            if length_match:
-                predicted_length = int(length_match.group(1))
-                predicted_lengths.append(predicted_length)
-            else:
-                # 如果没有找到长度，使用默认值
-                predicted_lengths.append(200)  # 默认 200 tokens
-        else:
-            branch_headers.append(br)
-            predicted_lengths.append(200)
-
-    return branch_headers, predicted_lengths
+            match = pattern.search(line)
+            if match:
+                t_id = int(match.group(1))
+                t_len = int(match.group(2))
+                t_tool = match.group(3).strip()
+                t_deps_str = match.group(4).strip()
+                t_title = match.group(5).strip()
+                
+                # 处理 None 工具
+                if t_tool.lower() == "none":
+                    t_tool = None
+                
+                tasks.append({
+                    "id": t_id,
+                    "length": t_len,
+                    "tool": t_tool,
+                    "deps": t_deps_str,  # 暂存为字符串，后续可扩展为解析列表
+                    "title": t_title,
+                    "raw_line": line,  # 保留原始行用于调试
+                })
+        
+        if not tasks:
+            return "error", f"No valid tasks parsed from plan body: {plan_body[:200]}"
+            
+        return "plan", tasks
+    
+    # 默认：当作直接回答处理
+    else:
+        return "direct", text
 
 
 def prepare_parallel_branches(
     tokenizer,
-    branch_headers: List[List[int]],
+    tasks: List[Dict],
+    skeleton_text: str,
     model_type: str = 'qwen',
     task_prompt: str = "",
 ) -> Tuple[List[List[int]], List[int]]:
     """
-    准备并行分支的输入（添加指令前缀）
+    准备格式的并行分支输入
     
-    为每个分支添加上下文指令，构建完整的并行分支输入
+    为每个任务添加指令前缀，构建完整的并行分支输入
     
     Args:
         tokenizer: 分词器
-        branch_headers: 分支标题列表（来自 parse_skeleton）
+        tasks: parse_skeleton_output 返回的任务列表
+        skeleton_text: 原始骨架文本（作为上下文）
         model_type: 模型类型 ('qwen', 'llama', 'vicuna', 'other')
+        task_prompt: 原始用户请求
         
     Returns:
         clean_branches: 完整的分支列表（含指令前缀）
@@ -1187,44 +1113,35 @@ def prepare_parallel_branches(
     else:
         parallel_trigger = parallel_trigger_en
     
-    # 构建骨架上下文
-    result_skeleton = []
-    for br in branch_headers:
-        result_skeleton.extend(br)
-    result_skeleton_str = tokenizer.decode(result_skeleton)
-
-    # 为每个分支添加指令前缀
     clean_branches = []
     instruction_lengths = []
     
-    for i, br in enumerate(branch_headers):
-        branch_str = tokenizer.decode(br)
+    for task in tasks:
+        # 使用新的 parallel_trigger 格式
         instruction = parallel_trigger.format(
-            user_inputs=task_prompt, 
-            skeleton_context=result_skeleton_str,
-            current_point=branch_str,
+            skeleton_context=skeleton_text,
+            current_id=task['id'],
+            current_point=task['title'],
+            target_length=task['length'],
         )
         
         if model_type == 'llama':
-            # LLaMA 3.1 Instruct 需要使用 chat template
             messages = [{"role": "user", "content": instruction}]
-            # 使用 tokenize=True 直接获取 token IDs
             instruction_ids = tokenizer.apply_chat_template(
                 messages, 
                 tokenize=True, 
                 add_generation_prompt=True
             )
         elif model_type == 'vicuna':
-            # Vicuna 使用特定的 chat template (从 prompts.py 导入)
             instruction_text = vicuna_chat_template.format(prompt=instruction)
             instruction_ids = tokenizer.encode(instruction_text, add_special_tokens=False)
         else:
             instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
         
-        full_branch = instruction_ids + br
-        clean_branches.append(full_branch)
+        # 不再拼接分支标题，因为新格式中标题已在指令中
+        clean_branches.append(instruction_ids)
         instruction_lengths.append(len(instruction_ids))
-
+    
     return clean_branches, instruction_lengths
 
 
