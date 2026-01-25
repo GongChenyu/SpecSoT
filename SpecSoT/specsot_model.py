@@ -603,10 +603,10 @@ class SpecSoTModel(nn.Module):
         input_len = input_ids.shape[1]
         
         # 使用 FSM 状态机约束或不使用约束（这里的的设计还有错误，因此先不使用）
-        # skeleton_logits_processor = logits_processor
-        skeleton_logits_processor = create_skeleton_logits_processor(
-            tokenizer=self.tokenizer, prefix_len=input_len, enforce_format=True, sampling_processor=logits_processor
-        )
+        skeleton_logits_processor = logits_processor
+        # skeleton_logits_processor = create_skeleton_logits_processor(
+        #     tokenizer=self.tokenizer, prefix_len=input_len, enforce_format=True, sampling_processor=logits_processor
+        # )
         
         # 初始化 KV Cache
         max_kv_len = input_len + max_new_tokens + 100

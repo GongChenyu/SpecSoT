@@ -24,6 +24,17 @@ from SpecSoT.logits_processor import SemanticLogitsProcessor, VocabScanner, FSMS
 from SpecSoT.utils import parse_skeleton_output
 
 
+def get_state_from_text(processor: SemanticLogitsProcessor, text: str) -> FSMState:
+    """
+    辅助函数：通过增量状态机获取给定文本的最终状态
+    
+    这是为了测试新的增量状态机架构，模拟从头到尾处理文本后的状态
+    """
+    processor.reset()
+    processor._update_state_incremental(text)
+    return processor._current_state
+
+
 def test_vocab_scanner(tokenizer, name: str):
     """测试词表扫描器"""
     print(f"\n{'='*60}")
@@ -79,11 +90,13 @@ def test_fsm_states(processor: SemanticLogitsProcessor):
         ("[P", FSMState.HEADER_KEYWORD),
         ("[PL", FSMState.HEADER_KEYWORD),
         ("[PLA", FSMState.HEADER_KEYWORD),
-        ("[PLAN", FSMState.HEADER_RBRACKET),
+        # 注意：在增量状态机中，[PLAN 仍然是 HEADER_KEYWORD，
+        # 直到遇到 ] 才转换。约束应用时会检查 buffer 是否完整并允许 ]
+        ("[PLAN", FSMState.HEADER_KEYWORD),
         ("[PLAN]", FSMState.HEADER_NEWLINE),
         ("[D", FSMState.HEADER_KEYWORD),
         ("[DIR", FSMState.HEADER_KEYWORD),
-        ("[DIRECT", FSMState.HEADER_RBRACKET),
+        ("[DIRECT", FSMState.HEADER_KEYWORD),
         ("[DIRECT]", FSMState.HEADER_NEWLINE),
         
         # PLAN 模式
@@ -107,7 +120,8 @@ def test_fsm_states(processor: SemanticLogitsProcessor):
         ("[PLAN]\n1.<200><None>[-]Hello\n[", FSMState.END_KEYWORD),
         ("[PLAN]\n1.<200><None>[-]Hello\n[E", FSMState.END_KEYWORD),
         ("[PLAN]\n1.<200><None>[-]Hello\n[EN", FSMState.END_KEYWORD),
-        ("[PLAN]\n1.<200><None>[-]Hello\n[END", FSMState.END_RBRACKET),
+        # [END 也保持 END_KEYWORD，直到遇到 ] 才完成
+        ("[PLAN]\n1.<200><None>[-]Hello\n[END", FSMState.END_KEYWORD),
         ("[PLAN]\n1.<200><None>[-]Hello\n[END]", FSMState.FINISHED),
         
         # 多位数长度测试
@@ -125,7 +139,7 @@ def test_fsm_states(processor: SemanticLogitsProcessor):
     
     for text, expected_state in test_cases:
         processor.reset()
-        actual_state = processor._get_state_from_text(text)
+        actual_state = get_state_from_text(processor, text)
         
         if actual_state == expected_state:
             passed += 1

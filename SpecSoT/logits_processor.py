@@ -1,20 +1,21 @@
 # coding=utf-8
 """
-Logits Processors for SpecSoT (词表扫描版本 v2)
+Logits Processors for SpecSoT (词表扫描版本 v3 - 增量优化)
 
 该模块定义了用于控制生成过程的 Logits Processors：
 
-SemanticLogitsProcessor: 骨架生成约束 (基于词表扫描的通用实现)
+SemanticLogitsProcessor: 骨架生成约束 (基于词表扫描 + 增量状态机)
    - 支持格式：
      - [DIRECT]...[END] 直接回答模式
      - [PLAN] 后接多个分支行，每行格式：ID.<Length><Tool>[-]Title
    - 通过词表扫描解决不同分词器的兼容性问题
-   - 使用增量字符串匹配，而非硬编码 Token ID
+   - 使用增量解码和状态持久化，避免 O(N²) 性能问题
 
-核心设计理念：
+核心设计理念 (v3 优化)：
    1. 初始化时扫描整个词表，建立"字符->Token集合"的映射
-   2. FSM 状态机只关心"下一个应该是什么字符"
-   3. 使用增量字符串匹配处理多 token 关键字
+   2. 增量解码：维护 generated_text 缓存，每次只解码新 token
+   3. 状态持久化：维护 current_state，根据新字符增量转换状态
+   4. 时间复杂度从 O(N²) 降低到 O(N)
 
 简化的骨架格式（去除不必要的空格）：
    [PLAN]
@@ -204,15 +205,34 @@ class VocabScanner:
     def decode_token(self, token_id: int) -> str:
         """解码单个 token（使用缓存）"""
         return self.token_to_text.get(token_id, "")
+    
+    def decode_tokens(self, token_ids: torch.Tensor) -> str:
+        """
+        解码多个 token（使用缓存，避免调用 tokenizer.decode）
+        
+        这是增量解码的核心方法，直接从缓存中拼接文本
+        比调用 tokenizer.decode 快得多
+        
+        Args:
+            token_ids: token ID 张量
+            
+        Returns:
+            解码后的文本
+        """
+        result = []
+        for token_id in token_ids.tolist():
+            text = self.token_to_text.get(token_id, "")
+            result.append(text)
+        return "".join(result)
 
 
 # =============================================================================
-# SemanticLogitsProcessor - 基于词表扫描的通用实现
+# SemanticLogitsProcessor - 增量状态机实现 (v3)
 # =============================================================================
 
 class SemanticLogitsProcessor(LogitsProcessor):
     """
-    骨架生成约束处理器 (词表扫描版本)
+    骨架生成约束处理器 (词表扫描 + 增量状态机版本)
     
     简化的骨架格式：
     
@@ -232,10 +252,10 @@ class SemanticLogitsProcessor(LogitsProcessor):
     [END]
     ```
     
-    特点：
-    - 使用词表扫描，一劳永逸解决分词器差异
-    - 简化格式，减少不必要的空格
-    - 支持多位数长度预测 (1-999+)
+    性能优化 (v3)：
+    - 增量解码：维护 generated_text 缓存，每次只解码新 token，O(1)
+    - 状态持久化：维护 current_state，增量转换，避免从头解析
+    - 总时间复杂度从 O(N²) 降低到 O(N)
     """
     
     def __init__(
@@ -257,14 +277,33 @@ class SemanticLogitsProcessor(LogitsProcessor):
         self.prefix_len = prefix_len
         self.enforce_format = enforce_format
         
-        # 记录模式：None, 'PLAN', 'DIRECT'
-        self.mode: Optional[str] = None
-        
         # 词表扫描器（核心组件）
         self.vocab_scanner = VocabScanner(tokenizer)
         
         # 预构建常用字符集合（加速推理）
         self._build_char_sets()
+        
+        # =====================================================================
+        # 增量状态机 (v3 优化核心)
+        # =====================================================================
+        
+        # 已生成文本缓存（增量解码）
+        self._generated_text: str = ""
+        
+        # 当前 FSM 状态
+        self._current_state: FSMState = FSMState.HEADER_LBRACKET
+        
+        # 模式：None, 'PLAN', 'DIRECT'
+        self.mode: Optional[str] = None
+        
+        # 上次处理的 token 数量（用于检测新 token）
+        self._last_token_count: int = 0
+        
+        # 当前行缓存（用于分支行解析）
+        self._current_line: str = ""
+        
+        # 关键字匹配缓冲区 (用于 PLAN/DIRECT/END)
+        self._keyword_buffer: str = ""
     
     def _build_char_sets(self):
         """预构建常用的字符集合"""
@@ -286,176 +325,248 @@ class SemanticLogitsProcessor(LogitsProcessor):
         # 字母 token（用于关键字匹配）
         self.letter_tokens = vs.letter_tokens.copy()
 
-    def _get_state_from_text(self, full_text: str) -> FSMState:
+    def _decode_new_tokens(self, input_ids: torch.LongTensor) -> str:
         """
-        根据完整生成文本确定当前 FSM 状态
+        增量解码：只解码新生成的 token
         
-        核心状态判定逻辑：通过分析已生成的文本来确定约束
+        这是 v3 优化的核心：避免每次都解码整个序列
+        时间复杂度从 O(N) 降低到 O(1)（假设每次只生成少量 token）
+        
+        Args:
+            input_ids: 当前完整的 input_ids
+            
+        Returns:
+            新增的文本
         """
-        if not full_text:
-            return FSMState.HEADER_LBRACKET
+        current_token_count = input_ids.shape[-1] - self.prefix_len
         
-        # =====================================================================
-        # Header 阶段检测
-        # =====================================================================
+        if current_token_count <= 0:
+            return ""
         
-        if full_text == "[":
-            return FSMState.HEADER_KEYWORD
+        if current_token_count <= self._last_token_count:
+            # 没有新 token（可能是重置或回退场景）
+            return ""
         
-        # 检查是否是部分关键字
-        if full_text.startswith("[") and not full_text.startswith("[PLAN]") and not full_text.startswith("[DIRECT]"):
-            content = full_text[1:]
+        # 计算新增的 token 数量
+        new_token_count = current_token_count - self._last_token_count
+        
+        # 只解码新增的 token
+        new_token_ids = input_ids[0][-new_token_count:]
+        new_text = self.vocab_scanner.decode_tokens(new_token_ids)
+        
+        # 更新缓存
+        self._generated_text += new_text
+        self._last_token_count = current_token_count
+        
+        return new_text
+
+    def _update_state_incremental(self, new_text: str) -> FSMState:
+        """
+        增量状态转换：根据新生成的字符更新状态
+        
+        这是 v3 优化的核心：不需要从头解析整个文本
+        只需要根据当前状态和新字符确定下一个状态
+        
+        Args:
+            new_text: 新增的文本
             
-            # 完整匹配检查
-            if content == "PLAN" or content == "DIRECT":
-                return FSMState.HEADER_RBRACKET
+        Returns:
+            更新后的状态
+        """
+        for char in new_text:
+            self._current_state = self._transition(self._current_state, char)
             
-            # 前缀匹配检查
-            if "PLAN".startswith(content) or "DIRECT".startswith(content):
+            # 如果已完成，提前退出
+            if self._current_state == FSMState.FINISHED:
+                break
+        
+        return self._current_state
+
+    def _transition(self, state: FSMState, char: str) -> FSMState:
+        """
+        状态转换函数：根据当前状态和输入字符确定下一个状态
+        
+        这是标准的 FSM 状态转换实现
+        
+        Args:
+            state: 当前状态
+            char: 输入字符
+            
+        Returns:
+            下一个状态
+        """
+        # =====================================================================
+        # Header 阶段
+        # =====================================================================
+        
+        if state == FSMState.HEADER_LBRACKET:
+            if char == '[':
+                self._keyword_buffer = ""
                 return FSMState.HEADER_KEYWORD
+            return state  # 忽略无效字符
         
-        # Header 完成但没换行
-        if full_text == "[PLAN]" or full_text == "[DIRECT]":
-            return FSMState.HEADER_NEWLINE
+        if state == FSMState.HEADER_KEYWORD:
+            if char == ']':
+                # 检查关键字
+                if self._keyword_buffer == "PLAN":
+                    self.mode = "PLAN"
+                    return FSMState.HEADER_NEWLINE
+                elif self._keyword_buffer == "DIRECT":
+                    self.mode = "DIRECT"
+                    return FSMState.HEADER_NEWLINE
+                return state
+            else:
+                self._keyword_buffer += char
+                return state
         
-        # =====================================================================
-        # 确定模式
-        # =====================================================================
+        if state == FSMState.HEADER_RBRACKET:
+            if char == ']':
+                return FSMState.HEADER_NEWLINE
+            return state
         
-        if full_text.startswith("[DIRECT]"):
-            self.mode = "DIRECT"
-        elif full_text.startswith("[PLAN]"):
-            self.mode = "PLAN"
+        if state == FSMState.HEADER_NEWLINE:
+            if char == '\n':
+                if self.mode == "DIRECT":
+                    return FSMState.DIRECT_CONTENT
+                elif self.mode == "PLAN":
+                    self._current_line = ""
+                    return FSMState.LINE_START
+            return state
         
         # =====================================================================
         # DIRECT 模式
         # =====================================================================
         
-        if self.mode == "DIRECT":
-            if "[END]" in full_text:
-                return FSMState.FINISHED
-            return FSMState.DIRECT_CONTENT
+        if state == FSMState.DIRECT_CONTENT:
+            # 检测 [END]
+            if char == '[':
+                self._keyword_buffer = ""
+                return FSMState.END_KEYWORD
+            return state
         
         # =====================================================================
-        # PLAN 模式
+        # PLAN 模式 - 分支行
         # =====================================================================
         
-        if self.mode == "PLAN":
-            if "[END]" in full_text:
-                return FSMState.FINISHED
-            
-            # 获取当前行
-            lines = full_text.split('\n')
-            current_line = lines[-1] if lines else ""
-            
-            if not current_line:
-                return FSMState.LINE_START
-            
-            # 检查是否正在输入 [END]
-            if current_line.startswith("["):
-                content = current_line[1:]
-                if not content:
-                    return FSMState.END_KEYWORD
-                if content == "END":
-                    return FSMState.END_RBRACKET
-                if "END".startswith(content):
-                    return FSMState.END_KEYWORD
-            
-            # 解析分支行
-            return self._parse_branch_line_state(current_line)
+        if state == FSMState.LINE_START:
+            self._current_line = char
+            if char == '[':
+                self._keyword_buffer = ""
+                return FSMState.END_KEYWORD
+            elif char.isdigit():
+                return FSMState.AFTER_ID
+            return state
         
-        return FSMState.HEADER_LBRACKET
-
-    def _parse_branch_line_state(self, line: str) -> FSMState:
-        """
-        解析分支行，确定当前状态
+        if state == FSMState.AFTER_ID:
+            self._current_line += char
+            if char.isdigit():
+                return state  # 多位数 ID
+            elif char == '.':
+                return FSMState.AFTER_DOT
+            return state
         
-        简化格式：ID.<Length><Tool>[-]Title
-        例如：1.<200><Search>[-]搜索内容
-        
-        支持多位数长度 (如 <127>, <1500>)
-        """
-        # 1. 检查 ID（支持多位数 ID）
-        id_match = re.match(r'^(\d+)', line)
-        if not id_match:
-            return FSMState.LINE_START
-        
-        pos = id_match.end()
-        remaining = line[pos:]
-        
-        # 2. 检查点号
-        if not remaining:
-            return FSMState.AFTER_ID
-        
-        if remaining[0] != '.':
-            return FSMState.AFTER_ID
-        
-        remaining = remaining[1:]
-        
-        # 3. 检查 <Length>
-        if not remaining:
-            return FSMState.AFTER_DOT
-        
-        if remaining[0] != '<':
-            return FSMState.AFTER_DOT
-        
-        # 找到第一个 >
-        gt_pos = remaining.find('>')
-        if gt_pos == -1:
-            # 还在 <...> 内部
-            content = remaining[1:]
-            if not content:
+        if state == FSMState.AFTER_DOT:
+            self._current_line += char
+            if char == '<':
                 return FSMState.LEN_OPEN
-            # 验证内容是否全为数字
-            if content.isdigit():
+            return state
+        
+        if state == FSMState.LEN_OPEN:
+            self._current_line += char
+            if char.isdigit():
                 return FSMState.LEN_VAL
-            return FSMState.LEN_VAL  # 继续期望数字或 >
+            return state
         
-        remaining = remaining[gt_pos + 1:]
+        if state == FSMState.LEN_VAL:
+            self._current_line += char
+            if char.isdigit():
+                return state  # 多位数长度
+            elif char == '>':
+                return FSMState.AFTER_LEN_CLOSE
+            return state
         
-        # 4. 检查 <Tool>
-        if not remaining:
-            return FSMState.AFTER_LEN_CLOSE
-        
-        if remaining[0] != '<':
-            return FSMState.AFTER_LEN_CLOSE
-        
-        gt_pos = remaining.find('>')
-        if gt_pos == -1:
-            content = remaining[1:]
-            if not content:
+        if state == FSMState.AFTER_LEN_CLOSE:
+            self._current_line += char
+            if char == '<':
                 return FSMState.TOOL_OPEN
-            return FSMState.TOOL_VAL
+            return state
         
-        remaining = remaining[gt_pos + 1:]
+        if state == FSMState.TOOL_OPEN:
+            self._current_line += char
+            if char.isalpha():
+                return FSMState.TOOL_VAL
+            return state
         
-        # 5. 检查 [Deps]
-        if not remaining:
-            return FSMState.AFTER_TOOL_CLOSE
+        if state == FSMState.TOOL_VAL:
+            self._current_line += char
+            if char == '>':
+                return FSMState.AFTER_TOOL_CLOSE
+            return state  # 继续工具名
         
-        if remaining[0] != '[':
-            return FSMState.AFTER_TOOL_CLOSE
-        
-        rb_pos = remaining.find(']')
-        if rb_pos == -1:
-            content = remaining[1:]
-            if not content:
+        if state == FSMState.AFTER_TOOL_CLOSE:
+            self._current_line += char
+            if char == '[':
                 return FSMState.DEPS_OPEN
-            return FSMState.DEPS_VAL
+            return state
         
-        remaining = remaining[rb_pos + 1:]
+        if state == FSMState.DEPS_OPEN:
+            self._current_line += char
+            if char == '-' or char.isdigit():
+                return FSMState.DEPS_VAL
+            return state
         
-        # 6. Title 部分
-        if not remaining:
-            return FSMState.AFTER_DEPS_CLOSE
+        if state == FSMState.DEPS_VAL:
+            self._current_line += char
+            if char == ']':
+                return FSMState.AFTER_DEPS_CLOSE
+            return state  # 继续依赖内容
         
-        return FSMState.CONTENT
+        if state == FSMState.AFTER_DEPS_CLOSE:
+            self._current_line += char
+            if char == '\n':
+                self._current_line = ""
+                return FSMState.LINE_START
+            return FSMState.CONTENT
+        
+        if state == FSMState.CONTENT:
+            self._current_line += char
+            if char == '\n':
+                self._current_line = ""
+                return FSMState.LINE_START
+            return state
+        
+        # =====================================================================
+        # END 检测
+        # =====================================================================
+        
+        if state == FSMState.END_KEYWORD:
+            if char == ']':
+                if self._keyword_buffer == "END":
+                    return FSMState.FINISHED
+                # 不是 END，回到对应模式
+                if self.mode == "DIRECT":
+                    return FSMState.DIRECT_CONTENT
+                else:
+                    # 可能是新分支行的开始（虽然不太可能）
+                    return FSMState.LINE_START
+            else:
+                self._keyword_buffer += char
+                return state
+        
+        if state == FSMState.END_RBRACKET:
+            if char == ']':
+                return FSMState.FINISHED
+            return state
+        
+        if state == FSMState.FINISHED:
+            return state
+        
+        return state
 
     def _apply_state_constraints(
         self, 
         state: FSMState, 
         scores: torch.FloatTensor,
-        full_text: str = "",
     ) -> torch.FloatTensor:
         """根据当前状态应用约束"""
         if not self.enforce_format:
@@ -474,28 +585,31 @@ class SemanticLogitsProcessor(LogitsProcessor):
         elif state == FSMState.HEADER_KEYWORD:
             # 获取能继续匹配 PLAN 或 DIRECT 的 token
             allowed = set()
-            
-            content = full_text[1:] if full_text.startswith("[") else ""
+            buffer = self._keyword_buffer
             
             # 检查 PLAN
-            if "PLAN".startswith(content):
-                next_char = "PLAN"[len(content)] if len(content) < 4 else ""
+            if "PLAN".startswith(buffer):
+                next_char = "PLAN"[len(buffer)] if len(buffer) < 4 else ""
                 if next_char:
                     allowed.update(vs.get_tokens_matching_char(next_char))
+                elif len(buffer) == 4:
+                    # 已经是 PLAN，允许 ]
+                    allowed.update(vs.rbracket_tokens)
             
             # 检查 DIRECT
-            if "DIRECT".startswith(content):
-                next_char = "DIRECT"[len(content)] if len(content) < 6 else ""
+            if "DIRECT".startswith(buffer):
+                next_char = "DIRECT"[len(buffer)] if len(buffer) < 6 else ""
                 if next_char:
                     allowed.update(vs.get_tokens_matching_char(next_char))
+                elif len(buffer) == 6:
+                    # 已经是 DIRECT，允许 ]
+                    allowed.update(vs.rbracket_tokens)
             
             if allowed:
                 self._mask_except(scores, allowed)
         
         elif state == FSMState.HEADER_RBRACKET:
-            # 允许 ] 及其组合（如 ]\n）
-            allowed = vs.rbracket_tokens.copy()
-            self._mask_except(scores, allowed)
+            self._mask_except(scores, vs.rbracket_tokens)
         
         elif state == FSMState.HEADER_NEWLINE:
             self._mask_except(scores, vs.newline_tokens)
@@ -518,7 +632,10 @@ class SemanticLogitsProcessor(LogitsProcessor):
             self._mask_except(scores, allowed)
         
         elif state == FSMState.AFTER_ID:
-            self._mask_except(scores, vs.dot_tokens)
+            # 允许继续数字或点号
+            allowed = vs.digit_tokens.copy()
+            allowed.update(vs.dot_tokens)
+            self._mask_except(scores, allowed)
         
         elif state == FSMState.AFTER_DOT:
             self._mask_except(scores, vs.lt_tokens)
@@ -572,16 +689,16 @@ class SemanticLogitsProcessor(LogitsProcessor):
         # =====================================================================
         
         elif state == FSMState.END_KEYWORD:
-            # 获取当前行
-            lines = full_text.split('\n')
-            current_line = lines[-1] if lines else ""
-            content = current_line[1:] if current_line.startswith("[") else ""
-            
+            buffer = self._keyword_buffer
             allowed = set()
-            if "END".startswith(content):
-                next_char = "END"[len(content)] if len(content) < 3 else ""
+            
+            if "END".startswith(buffer):
+                next_char = "END"[len(buffer)] if len(buffer) < 3 else ""
                 if next_char:
                     allowed.update(vs.get_tokens_matching_char(next_char))
+                elif len(buffer) == 3:
+                    # 已经是 END，允许 ]
+                    allowed.update(vs.rbracket_tokens)
             
             if allowed:
                 self._mask_except(scores, allowed)
@@ -610,7 +727,11 @@ class SemanticLogitsProcessor(LogitsProcessor):
         input_ids: torch.LongTensor, 
         scores: torch.FloatTensor
     ) -> torch.FloatTensor:
-        """处理 logits，应用语义约束"""
+        """
+        处理 logits，应用语义约束
+        
+        v3 优化：使用增量解码和状态持久化，避免 O(N²) 性能问题
+        """
         seq_length = input_ids.shape[-1]
         
         # 还没有生成任何 token
@@ -621,19 +742,24 @@ class SemanticLogitsProcessor(LogitsProcessor):
                 self._mask_except(scores, vs.lbracket_tokens)
             return scores
         
-        # 解码已生成的文本
-        generated_ids = input_ids[0][self.prefix_len:]
-        full_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+        # 增量解码新 token
+        new_text = self._decode_new_tokens(input_ids)
         
-        # 确定当前状态
-        state = self._get_state_from_text(full_text)
+        # 增量更新状态
+        if new_text:
+            self._update_state_incremental(new_text)
         
         # 应用状态约束
-        return self._apply_state_constraints(state, scores, full_text)
+        return self._apply_state_constraints(self._current_state, scores)
 
     def reset(self):
         """重置状态机"""
         self.mode = None
+        self._generated_text = ""
+        self._current_state = FSMState.HEADER_LBRACKET
+        self._last_token_count = 0
+        self._current_line = ""
+        self._keyword_buffer = ""
 
     def __repr__(self) -> str:
-        return f"SemanticLogitsProcessor(mode={self.mode}, prefix_len={self.prefix_len})"
+        return f"SemanticLogitsProcessor(mode={self.mode}, state={self._current_state.name}, prefix_len={self.prefix_len})"
