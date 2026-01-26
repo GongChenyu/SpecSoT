@@ -12,6 +12,7 @@ python run_specsot_unified.py \
   --layer_splits 14,28
 
 
+
 多机多卡分布式（待完善，希望可以通过shell控制）
 A（主节点）
 python run_specsot_unified.py \
@@ -23,7 +24,7 @@ python run_specsot_unified.py \
   --layer_splits 14 \
   --master_ip 192.168.1.10  # 关键：指定主节点 IP
   
-  
+
 B（工作节点）
 python run_specsot_unified.py \
   --role worker \
