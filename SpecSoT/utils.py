@@ -94,41 +94,6 @@ def prepare_logits_processor(
             
     return processor_list
 
-
-def create_skeleton_logits_processor(
-    tokenizer,
-    prefix_len: int,
-    enforce_format: bool = True,
-    sampling_processor: Optional[LogitsProcessorList] = None,
-) -> LogitsProcessorList:
-    """
-    创建 skeleton 生成阶段使用的 LogitsProcessor (FSM 状态机版本)
-    
-    支持格式：ID. <Length> <Tool> [Deps] Title
-    
-    Args:
-        tokenizer: 分词器（用于获取 token IDs）
-        prefix_len: 输入前缀长度
-        enforce_format: 是否强制执行格式约束
-        sampling_processor: 采样相关的 processor (温度、top_p、top_k)
-        
-    Returns:
-        组合后的 LogitsProcessorList
-    """
-    sp_processor = SemanticLogitsProcessor(
-        tokenizer=tokenizer,
-        prefix_len=prefix_len,
-        enforce_format=enforce_format,
-    )
-    
-    logits_processor = LogitsProcessorList([sp_processor])
-    
-    if sampling_processor is not None:
-        logits_processor.extend(sampling_processor)
-    
-    return logits_processor
-
-
 # =============================================================================
 # 2. Mask Building (掩码构建)
 # =============================================================================

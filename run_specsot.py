@@ -259,6 +259,7 @@ def run_worker(args):
     logger.info(f"Use Eagle3: {args.use_eagle3}")
     logger.info(f"Task: {args.task}")
     logger.info(f"Enable Parallel: {args.enable_parallel}")
+    logger.info(f"Use Semantic Constraint: {args.use_semantic_constraint}")
     logger.info(f"Max New Tokens: {args.max_new_tokens}")
     logger.info(f"Random Seed: {args.seed}")
     
@@ -327,7 +328,7 @@ def run_worker(args):
     results = []
     monitor_device = torch.cuda.current_device() if torch.cuda.is_available() else 0
     
-    total_inference_start = time.time()
+    all_samples_start = time.time()
 
     for i in range(len(df)):
         # 获取任务prompt
@@ -341,27 +342,28 @@ def run_worker(args):
         logger.info("=" * 60)
 
         with GPUMemoryMonitor(device_index=monitor_device) as monitor:
-            start_time = time.time()
-            
             # 调用 SpecSoT 生成
-            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time = \
+            # generate() 返回的 inference_time 是内部计时的推理时间
+            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, inference_time, skeleton_time, parallel_time = \
                 model.generate(
                     task_prompt=task_prompt,
                     max_new_tokens=args.max_new_tokens,
                     temperature=0.0,
                     enable_parallel=args.enable_parallel,
+                    use_semantic_constraint=args.use_semantic_constraint,
                 )
-            
-            total_time = time.time() - start_time
 
         # 解码响应
         response = tokenizer.decode(output_ids[0].tolist(), skip_special_tokens=True)
         output_length = len(output_ids[0])
-        throughput = output_length / total_time if total_time > 0 else 0
+        throughput = output_length / inference_time if inference_time > 0 else 0
 
         # 打印统计信息
         logger.info(f"\n[统计信息]")
-        logger.info(f"  总耗时: {total_time:.2f}s")
+        logger.info(f"  推理时间: {inference_time:.2f}s")
+        if args.enable_parallel:
+            logger.info(f"  Skeleton阶段时间: {skeleton_time:.2f}s")
+            logger.info(f"  Parallel阶段时间: {parallel_time:.2f}s")        
         logger.info(f"  峰值显存: {monitor.peak_usage:.2f} MB")
         logger.info(f"  输出长度: {output_length} tokens")
         logger.info(f"  吞吐量: {throughput:.1f} tokens/s")
@@ -378,7 +380,9 @@ def run_worker(args):
         results.append({
             "prompt": task_prompt,
             "response": response,
-            "time": total_time,
+            "inference_time": inference_time,
+            "skeleton_time": skeleton_time if args.enable_parallel else 0.0,
+            "parallel_time": parallel_time if args.enable_parallel else 0.0,
             "memory": monitor.peak_usage,
             "length": output_length,
             "throughput": throughput,
@@ -389,7 +393,7 @@ def run_worker(args):
             "avg_update_time": avg_update_time,
         })
     
-    total_inference_time = time.time() - total_inference_start
+    all_samples_time = time.time() - all_samples_start
 
     # =========================================================================
     # 5. 保存结果 (仅 Rank 0 或单机模式)
@@ -410,15 +414,22 @@ def run_worker(args):
         logger.info("汇总统计")
         logger.info("=" * 60)
         
-        avg_time = sum(r['time'] for r in results) / len(results)
+        avg_inference_time = sum(r['inference_time'] for r in results) / len(results)
         avg_length = sum(r['length'] for r in results) / len(results)
         avg_memory = sum(r['memory'] for r in results) / len(results)
         avg_throughput = sum(r['throughput'] for r in results) / len(results)
         avg_accept = sum(r['avg_accept_len'] for r in results) / len(results)
         
         logger.info(f"  总样本数: {len(results)}")
-        logger.info(f"  总推理时间: {total_inference_time:.2f}s")
-        logger.info(f"  平均单样本时间: {avg_time:.2f}s")
+        logger.info(f"  全部样本总耗时: {all_samples_time:.2f}s")
+        logger.info(f"  平均单样本推理时间: {avg_inference_time:.2f}s")
+        
+        if args.enable_parallel:
+            avg_skeleton_time = sum(r['skeleton_time'] for r in results) / len(results)
+            avg_parallel_time = sum(r['parallel_time'] for r in results) / len(results)
+            logger.info(f"  平均Skeleton阶段时间: {avg_skeleton_time:.2f}s")
+            logger.info(f"  平均Parallel阶段时间: {avg_parallel_time:.2f}s")
+            
         logger.info(f"  平均输出长度: {avg_length:.1f} tokens")
         logger.info(f"  平均峰值显存: {avg_memory:.2f} MB")
         logger.info(f"  平均吞吐量: {avg_throughput:.1f} tokens/s")
@@ -648,14 +659,15 @@ def main():
     parser.add_argument("--role", type=str, default="launcher", choices=["launcher", "worker"], help="运行角色: launcher(调度器) 或 worker(计算节点)")
     
     # 模型配置
-    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B", help="Base Model 路径")
-    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
-    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
-    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
+    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B", help="Base Model 路径")
+    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
+    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
     # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3", help="Base Model 路径")
     # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
     parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
     parser.add_argument("--enable_parallel", action="store_true", default=True, help="启用骨架并行模式")
+    parser.add_argument("--use_semantic_constraint", type=str2bool, default=True, help="是否使用 FSM 语义约束（骨架生成阶段）")
     parser.add_argument("--max_new_tokens", type=int, default=3000,help="最大生成token数")
     
     # 任务配置
@@ -663,7 +675,7 @@ def main():
     parser.add_argument("--num_samples", type=int, default=1,help="测试样本数量")
     
     # 分布式配置
-    parser.add_argument("--distributed", type=str2bool, default=False, help="是否启用分布式模式（单机单卡设为False）")
+    parser.add_argument("--distributed", type=str2bool, default=True, help="是否启用分布式模式（单机单卡设为False）")
     parser.add_argument("--world_size", type=int, default=3, help="总进程数（设备数）")
     parser.add_argument("--rank", type=int, default=0, help="当前进程的rank")
     parser.add_argument("--layer_splits", type=str, default="14,28", help="层拆分策略，如 '14,28' 表示3台设备拆分36层模型")

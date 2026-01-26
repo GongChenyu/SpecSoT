@@ -46,7 +46,7 @@ from .eagle_layer3 import EagleLayer3
 from .eagle_layer2 import EagleLayer2  # EAGLE2 支持
 from .kv_cache import initialize_past_key_values
 from .configs import EConfig
-from .logits_processor import SemanticLogitsProcessor
+from .logits_processor import SemanticLogitsProcessor, VocabScanner
 
 # 分布式推理支持
 from .distributed import DistributedConfig, DistributedPrefillManager
@@ -59,7 +59,6 @@ from .utils import (
     build_parallel_prefill_mask,
     stack_with_left_padding,
     prepare_skeleton_input,
-    create_skeleton_logits_processor,
     check_stop_conditions,
     check_stop_conditions_parallel,
     check_skeleton_stop,
@@ -164,7 +163,20 @@ class SpecSoTModel(nn.Module):
             self._init_distributed()
         
         # =====================================================================
-        # 5. 推理状态初始化
+        # 5. Semantic Logits Processor 预初始化
+        # =====================================================================        
+        self.logger.info("预初始化 VocabScanner 和 SemanticLogitsProcessor...")
+        self._vocab_scanner = VocabScanner(self.tokenizer)
+        self._semantic_processor = SemanticLogitsProcessor(
+            tokenizer=self.tokenizer,
+            prefix_len=0,  # 将在推理时通过 configure() 设置
+            enforce_format=True,
+            vocab_scanner=self._vocab_scanner,  # 复用预初始化的 VocabScanner
+        )
+        self.logger.info("SemanticLogitsProcessor 预初始化完成")
+        
+        # =====================================================================
+        # 6. 推理状态初始化
         # =====================================================================
         set_random_seed(self.seed)
         self.reset_state()
@@ -435,7 +447,8 @@ class SpecSoTModel(nn.Module):
         top_p: float = 0.0,
         top_k: int = 0,
         enable_parallel: bool = True,
-    ) -> Tuple[torch.Tensor, float, int, float, float, float]:
+        use_semantic_constraint: bool = False,
+    ) -> Tuple[torch.Tensor, float, int, float, float, float, float, float, float]:
         """
         主生成函数：支持普通模式和并行骨架模式
         
@@ -446,6 +459,7 @@ class SpecSoTModel(nn.Module):
             top_p: nucleus sampling 参数
             top_k: top-k sampling 参数
             enable_parallel: 是否启用骨架并行模式
+            use_semantic_constraint: 是否使用语义约束 (FSM 状态机)
             
         Returns:
             output_ids: 生成的 token IDs
@@ -454,6 +468,9 @@ class SpecSoTModel(nn.Module):
             avg_draft_time: 平均 draft 时间
             avg_update_time: 平均 update 时间
             avg_verify_time: 平均 verify 时间
+            total_time: 推理总时间
+            skeleton_time: Skeleton阶段时间 (仅并行模式有效，否则为0)
+            parallel_time: Parallel阶段时间 (仅并行模式有效，否则为0)
         """
         # 公共初始化
         self.reset_state()
@@ -463,14 +480,25 @@ class SpecSoTModel(nn.Module):
         logits_processor = None
         if temperature > 1e-5:
             logits_processor = prepare_logits_processor(temperature, top_p, top_k)
+        
+        # 记录总开始时间
+        total_start_time = time.time()
 
         if not enable_parallel:
             # 普通投机解码模式
-            return self.generate_eagle(task_prompt, max_new_tokens, logits_processor)
+            result = self.generate_eagle(task_prompt, max_new_tokens, logits_processor)
+            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time = result
+            skeleton_time = 0.0
+            parallel_time = 0.0
         else:
-            return self.generate_specsot(task_prompt, max_new_tokens, logits_processor)
-
-
+            result = self.generate_specsot(task_prompt, max_new_tokens, logits_processor, use_semantic_constraint)
+            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, skeleton_time, parallel_time = result
+            
+        # 计算总时间
+        total_time = time.time() - total_start_time
+        
+        return output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, total_time, skeleton_time, parallel_time
+        
     def generate_eagle(
         self,
         task_prompt: str,
@@ -582,7 +610,8 @@ class SpecSoTModel(nn.Module):
         task_prompt: str,
         max_new_tokens: int,
         logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Tuple[torch.Tensor, float, int, float, float, float]:
+        use_semantic_constraint: bool = False,
+    ) -> Tuple[torch.Tensor, float, int, float, float, float, float, float]:
         """
         骨架并行生成模式
         
@@ -590,23 +619,49 @@ class SpecSoTModel(nn.Module):
         1. Skeleton Generation - 生成回答骨架
         2. Skeleton Parsing - 使用 parser 解析骨架
         3. Parallel Decoding - 并行解码各分支
+        
+        Args:
+            task_prompt: 用户输入的任务描述
+            max_new_tokens: 最大生成 token 数
+            logits_processor: 采样相关的 logits processor
+            use_semantic_constraint: 是否使用语义约束 (FSM 状态机)
+        
+        Returns:
+            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, skeleton_time, parallel_time
         """
         device = self.base_model.device
         model_type = self.get_model_type()
         
+        # 阶段时间统计
+        skeleton_time = 0.0
+        parallel_time = 0.0
+        evt_start_skeleton = torch.cuda.Event(enable_timing=True) # 骨架开始
+        evt_end_skeleton = torch.cuda.Event(enable_timing=True)   # 骨架结束
+        evt_start_parallel = torch.cuda.Event(enable_timing=True) # 并行开始 
+        evt_end_parallel = torch.cuda.Event(enable_timing=True)   # 并行结束 
+        
         # =====================================================================
         # Stage 1: Skeleton Generation
         # =====================================================================
+        # 记录Skeleton阶段开始时间
+        evt_start_skeleton.record()
+
         input_ids, task_input_ids = prepare_skeleton_input(
             self.tokenizer, task_prompt, model_type, device
         )
         input_len = input_ids.shape[1]
         
-        # 使用 FSM 状态机约束或不使用约束（这里的的设计还有错误，因此先不使用）
-        skeleton_logits_processor = logits_processor
-        # skeleton_logits_processor = create_skeleton_logits_processor(
-        #     tokenizer=self.tokenizer, prefix_len=input_len, enforce_format=True, sampling_processor=logits_processor
-        # )
+        # 根据参数决定是否使用 FSM 状态机约束
+        if use_semantic_constraint:
+            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
+            skeleton_logits_processor = LogitsProcessorList([self._semantic_processor])
+            if logits_processor is not None:
+                for p in logits_processor:
+                    skeleton_logits_processor.append(p)
+            self.logger.info("使用 FSM 语义约束进行骨架生成")
+        else:
+            skeleton_logits_processor = logits_processor
+            self.logger.info("不使用 FSM 语义约束，直接生成骨架")
         
         # 初始化 KV Cache
         max_kv_len = input_len + max_new_tokens + 100
@@ -663,6 +718,12 @@ class SpecSoTModel(nn.Module):
         skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
         self.logger.info(f"Generated Skeleton: {skeleton_text}")
         self.skeleton_output = skeleton_ids.clone()
+        
+        # 记录Skeleton阶段时间
+        evt_end_skeleton.record()
+        torch.cuda.synchronize()
+        skeleton_time = evt_start_skeleton.elapsed_time(evt_end_skeleton) / 1000.0  # 转换为秒
+        self.logger.info(f"Skeleton generation completed in {skeleton_time:.3f}s")
 
         # =====================================================================
         # Stage 2: Skeleton Parsing (骨架解析)
@@ -672,11 +733,11 @@ class SpecSoTModel(nn.Module):
         if mode == "direct":
             # 直接回答模式：不需要并行处理，直接返回骨架输出
             self.logger.info("Direct answer mode detected, returning skeleton output")
-            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0
+            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0, skeleton_time, 0.0
         
         elif mode == "error":
             self.logger.warning(f"Skeleton parsing error: {content}")
-            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0
+            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0, skeleton_time, 0.0
         
         # mode == "plan": 规划模式
         tasks = content
@@ -696,6 +757,7 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # Stage 3: Parallel Decoding (并行分支解码)
         # =====================================================================
+        evt_start_parallel.record()
         # ---------------------------------------------------------------------
         # Stage 3.1: 前缀复用 - 复用 Skeleton KV Cache + 初始化并行状态
         # ---------------------------------------------------------------------
@@ -782,6 +844,12 @@ class SpecSoTModel(nn.Module):
                         f"Avg draft time: {avg_draft_time:.4f}s, "
                         f"Avg update time: {avg_update_time:.4f}s, "
                         f"Avg verify time: {avg_verify_time:.4f}s")
+        
+        # 记录Parallel阶段时间
+        evt_end_parallel.record()
+        torch.cuda.synchronize()
+        parallel_time = evt_start_parallel.elapsed_time(evt_end_parallel) / 1000.0  # 转换为秒
+        self.logger.info(f"Parallel decoding completed in {parallel_time:.3f}s")
 
         # 合并结果
         merged_ids = merge_outputs(
@@ -793,7 +861,7 @@ class SpecSoTModel(nn.Module):
             tokenizer=self.tokenizer,
         )
         
-        return merged_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time
+        return merged_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, skeleton_time, parallel_time
 
     # =========================================================================
     # Prefill 和 Verify 方法 (Prefill & Verify Methods)

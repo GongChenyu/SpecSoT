@@ -24,7 +24,7 @@ from .eagle_layer3 import EagleLayer3
 from .eagle_layer2 import EagleLayer2  # EAGLE2 支持 (用于 Vicuna 等模型)
 
 # Logits Processors
-from .logits_processor import SemanticLogitsProcessor
+from .logits_processor import SemanticLogitsProcessor, VocabScanner
 
 # 工具函数
 from .utils import (
@@ -85,6 +85,7 @@ __all__ = [
     
     # Processors
     "SemanticLogitsProcessor",
+    "VocabScanner",
     
     # Utils
     "prepare_logits_processor",
