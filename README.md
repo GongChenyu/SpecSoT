@@ -22,8 +22,8 @@ python run_specsot_unified.py \
   --gpu_ids 0 \
   --layer_splits 14 \
   --master_ip 192.168.1.10  # 关键：指定主节点 IP
-
-
+  
+  
 B（工作节点）
 python run_specsot_unified.py \
   --role worker \
