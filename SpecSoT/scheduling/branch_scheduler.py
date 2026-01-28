@@ -230,3 +230,111 @@ class HeuristicScheduler(BranchScheduler):
             batches.append(batch)
 
         return batches
+
+
+# =============================================================================
+# 简单均分调度器 (用于 naive 分布式模式)
+# =============================================================================
+
+class SimpleDistributedScheduler(BranchScheduler):
+    """
+    简单均分调度器：将分支均分到各设备
+
+    策略：
+    1. 按分支 ID 顺序分配
+    2. 轮询方式均分到各设备
+    3. 每个设备上的所有分支一次性并行执行（无批次划分）
+
+    适用场景：
+    - 分布式模式 (distributed=True)
+    - 无调度 (use_scheduling=False)
+    - 简单的贪心任务分配
+    """
+
+    def __init__(self, all_parallel: bool = True):
+        """
+        Args:
+            all_parallel: 是否每设备所有分支一次性并行执行
+                          True: 所有分支放入一个批次
+                          False: 按 max_parallel 分批
+        """
+        self.all_parallel = all_parallel
+
+    def schedule(
+        self,
+        branches: List[BranchInfo],
+        devices: List[DeviceProfile],
+    ) -> SchedulePlan:
+        """
+        执行简单均分调度
+
+        Args:
+            branches: 分支信息列表
+            devices: 设备能力列表
+
+        Returns:
+            SchedulePlan: 调度计划
+        """
+        if not branches:
+            return SchedulePlan(
+                num_branches=0,
+                num_devices=len(devices),
+                scheduler_type="simple_distributed",
+            )
+
+        if not devices:
+            devices = [DeviceProfile.default_single_device()]
+
+        num_devices = len(devices)
+        num_branches = len(branches)
+
+        # 简单均分：轮询分配
+        branch_to_device = {}
+        device_branches: Dict[int, List[int]] = {d.device_id: [] for d in devices}
+
+        for i, branch in enumerate(branches):
+            device_id = devices[i % num_devices].device_id
+            branch_to_device[branch.branch_id] = device_id
+            device_branches[device_id].append(branch.branch_id)
+
+        # 生成执行计划
+        device_plans = {}
+        for device in devices:
+            branch_ids = device_branches[device.device_id]
+            if self.all_parallel:
+                # 所有分支放入一个批次，一次性并行执行
+                batches = [branch_ids] if branch_ids else []
+                max_parallel = len(branch_ids) if branch_ids else device.max_parallel
+            else:
+                # 按 max_parallel 分批
+                batches = self._generate_batches(branch_ids, device.max_parallel)
+                max_parallel = device.max_parallel
+
+            device_plans[device.device_id] = DeviceExecutionPlan(
+                device_id=device.device_id,
+                execution_batches=batches,
+                assigned_branches=branch_ids,
+                max_parallel=max_parallel,
+            )
+
+        return SchedulePlan(
+            num_branches=num_branches,
+            num_devices=num_devices,
+            branch_to_device=branch_to_device,
+            device_plans=device_plans,
+            global_branch_info=branches,
+            scheduler_type="simple_distributed",
+        )
+
+    def _generate_batches(
+        self,
+        branch_ids: List[int],
+        max_parallel: int,
+    ) -> List[List[int]]:
+        """生成执行批次"""
+        if not branch_ids:
+            return []
+        batches = []
+        for i in range(0, len(branch_ids), max_parallel):
+            batches.append(branch_ids[i:i + max_parallel])
+        return batches

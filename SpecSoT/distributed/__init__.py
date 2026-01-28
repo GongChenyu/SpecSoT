@@ -64,6 +64,7 @@ from ..scheduling import (
     BranchRuntimeState,
     BranchScheduler,
     HeuristicScheduler,
+    SimpleDistributedScheduler,
     BranchExecutionManager,
 )
 
@@ -113,6 +114,7 @@ __all__ = [
     "BranchRuntimeState",
     "BranchScheduler",
     "HeuristicScheduler",
+    "SimpleDistributedScheduler",
     "BranchMessageType",
     "BranchMessage",
     "BranchCommManager",

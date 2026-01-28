@@ -49,10 +49,10 @@ def create_parser():
     # 推理配置
     parser.add_argument("--enable_parallel", type=str2bool, default=True, help="启用骨架并行模式")
     parser.add_argument("--use_semantic_constraint", type=str2bool, default=True, help="是否使用 FSM 语义约束")
-    parser.add_argument("--max_new_tokens", type=int, default=1000, help="最大生成token数")
+    parser.add_argument("--max_new_tokens", type=int, default=3000, help="最大生成token数")
     
     # 分布式配置
-    parser.add_argument("--distributed", type=str2bool, default=False, help="是否启用分布式模式")
+    parser.add_argument("--distributed", type=str2bool, default=True, help="是否启用分布式模式")
     parser.add_argument("--world_size", type=int, default=3, help="分布式总进程数")
     parser.add_argument("--devices", type=str, default="127.0.0.1#1,127.0.0.1#2,127.0.0.1#3", help="设备列表，格式: ip#gpu_id,ip#gpu_id,...")
     parser.add_argument("--layer_splits", type=str, default="14,28", help="层分割策略")
@@ -65,7 +65,7 @@ def create_parser():
     parser.add_argument("--rank", type=int, default=0, help="当前进程的rank（内部使用）")
 
     # 调度配置
-    parser.add_argument("--use_scheduling", type=str2bool, default=True, help="是否启用分支调度")
+    parser.add_argument("--use_scheduling", type=str2bool, default=False, help="是否启用分支调度")
     parser.add_argument("--max_parallel", type=int, default=2, help="每设备最大并行分支数")
 
     # 任务配置

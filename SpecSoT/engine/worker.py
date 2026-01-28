@@ -275,7 +275,7 @@ class WorkerEngine:
         for i in range(len(df)):
             # task_prompt = df.loc[i, "task_prompt"]
             # task_prompt = "Please provide a concise description of how to improve shooting accuracy in basketball, offering five suggestions, each approximately 200 words."
-            task_prompt = "Please explain the benefits of playing basketball from three aspects (each aspect limited to 100 words)."
+            task_prompt = "Please explain the benefits of playing basketball from six aspects (each aspect limited to 100 words)."
             self.logger.info(f"\n[样本 {i+1}/{len(df)}] {task_prompt[:60]}...")
             
             result = self._run_single_inference(task_prompt, monitor_device)
@@ -291,14 +291,37 @@ class WorkerEngine:
         执行模式说明：
         - 单机 + 无调度: 直接调用 generate()，使用 enable_parallel 控制是否启用骨架并行
         - 单机 + 有调度: 调用 generate_with_scheduling()，parallel 阶段使用 continuous batching
-        - 分布式 + 无调度: 调用 generate()，使用分布式 prefill + 贪心任务分配（TODO）
-        - 分布式 + 有调度: 调用 generate_with_scheduling()，分布式 prefill + 分布式调度（TODO）
+        - 分布式 + 无调度: 调用 generate_distributed()，分布式 prefill + 简单均分分支
+        - 分布式 + 有调度: 调用 generate_distributed_with_scheduling()，分布式 prefill + 分布式调度
         """
         args = self.args
         
         with GPUMemoryMonitor(device_index=device) as monitor:
-            # 调度模式：使用 continuous batching 优化 parallel 阶段
-            if args.use_scheduling and args.enable_parallel:
+            # 分布式模式
+            if args.distributed and args.enable_parallel:
+                if args.use_scheduling:
+                    # 分布式 + 调度模式
+                    output_ids, stats = self.model.generate_distributed_with_scheduling(
+                        task_prompt=task_prompt,
+                        max_new_tokens=args.max_new_tokens,
+                        max_parallel=args.max_parallel,
+                        use_semantic_constraint=args.use_semantic_constraint,
+                    )
+                else:
+                    # 分布式 + 无调度（naive 模式）
+                    output_ids, stats = self.model.generate_distributed(
+                        task_prompt=task_prompt,
+                        max_new_tokens=args.max_new_tokens,
+                        max_parallel=args.max_parallel,
+                        use_semantic_constraint=args.use_semantic_constraint,
+                    )
+                inference_time = stats.get('skeleton_time', 0) + stats.get('parallel_time', 0)
+                skeleton_time = stats.get('skeleton_time', 0)
+                parallel_time = stats.get('parallel_time', 0)
+                num_para = stats.get('num_branches', 0)
+                avg_accept_len = avg_draft_time = avg_update_time = avg_verify_time = 0.0
+            # 单机调度模式：使用 continuous batching 优化 parallel 阶段
+            elif args.use_scheduling and args.enable_parallel:
                 output_ids, stats = self.model.generate_with_scheduling(
                     task_prompt=task_prompt,
                     max_new_tokens=args.max_new_tokens,

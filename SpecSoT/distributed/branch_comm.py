@@ -162,6 +162,9 @@ class BranchCommManager:
         # 结果收集缓存
         self._branch_outputs: Dict[int, List[int]] = {}
         self._completed_branches: set = set()
+        
+        # 消息缓冲区（用于存储类型不匹配的消息）
+        self._message_buffer: List[BranchMessage] = []
 
         self.logger.info(
             f"BranchCommManager 初始化完成: rank={rank}, world_size={world_size}"
@@ -472,7 +475,7 @@ class BranchCommManager:
         if self.base_comm_manager is not None:
             # 使用现有通信管理器
             data = msg.serialize()
-            self.base_comm_manager.send_raw(data, dst_rank)
+            self._send_raw_to_rank(data, dst_rank)
         else:
             # 单机模式：直接存储（用于测试）
             self.logger.warning("无底层通信管理器，消息未发送")
@@ -493,12 +496,103 @@ class BranchCommManager:
             消息，超时返回 None
         """
         if self.base_comm_manager is not None:
-            data = self.base_comm_manager.recv_raw(timeout=timeout)
+            data = self._recv_raw(timeout=timeout)
             if data is not None:
                 msg = BranchMessage.deserialize(data)
                 if msg.msg_type == msg_type:
                     return msg
+                else:
+                    # 消息类型不匹配，存入缓冲区
+                    self._message_buffer.append(msg)
         return None
+
+    def _send_raw_to_rank(self, data: bytes, dst_rank: int) -> None:
+        """
+        发送原始字节数据到指定 rank
+
+        Args:
+            data: 原始字节数据
+            dst_rank: 目标 rank
+        """
+        if self.base_comm_manager is None:
+            self.logger.warning("无底层通信管理器，无法发送数据")
+            return
+
+        # 使用底层通信管理器的发送功能
+        # 通过 send_queue 发送，复用现有的异步发送机制
+        from .comm_utils import Message, MessageType
+        msg = Message(
+            msg_type=MessageType.DRAFT_TOKENS,  # 复用 DRAFT_TOKENS 信道
+            src_rank=self.rank,
+            dst_rank=dst_rank,
+            data=data,
+            layer_idx=-1,
+            chunk_idx=-1,
+        )
+        self.base_comm_manager.send_queue.put(msg)
+
+    def _recv_raw(self, timeout: float = 30.0) -> Optional[bytes]:
+        """
+        接收原始字节数据
+
+        Args:
+            timeout: 超时时间
+
+        Returns:
+            原始字节数据，超时返回 None
+        """
+        if self.base_comm_manager is None:
+            return None
+
+        # 从底层通信管理器接收数据
+        # 尝试从 draft_tokens 队列获取
+        from .comm_utils import MessageType
+        msg = self.base_comm_manager.recv_queue.get_by_type(
+            MessageType.DRAFT_TOKENS,
+            timeout=timeout
+        )
+        if msg is not None and isinstance(msg.data, bytes):
+            return msg.data
+        elif msg is not None:
+            # 数据不是 bytes 类型，可能是其他格式
+            self.logger.debug(f"收到非 bytes 类型数据: {type(msg.data)}")
+        return None
+
+    # =========================================================================
+    # 分支 Prompt 发送（支持单独发送）
+    # =========================================================================
+
+    def send_branch_info_to_device(
+        self,
+        branch_info: BranchInfo,
+        dst_rank: int,
+    ) -> None:
+        """
+        发送单个分支信息到指定设备
+
+        Args:
+            branch_info: 分支信息
+            dst_rank: 目标设备 rank
+        """
+        if dst_rank == self.rank:
+            return  # 不需要发送给自己
+
+        prompt_data = {
+            'branch_id': branch_info.branch_id,
+            'title': branch_info.title,
+            'predicted_length': branch_info.predicted_length,
+            'prompt_tokens': branch_info.prompt_tokens,
+        }
+
+        msg = BranchMessage(
+            msg_type=BranchMessageType.BRANCH_PROMPT,
+            src_rank=self.rank,
+            dst_rank=dst_rank,
+            data=[prompt_data],  # 使用列表格式保持兼容
+            branch_id=branch_info.branch_id,
+        )
+        self._send_message(msg, dst_rank)
+        self.logger.debug(f"发送分支 {branch_info.branch_id} 到设备 {dst_rank}")
 
     # =========================================================================
     # 清理方法
@@ -508,6 +602,7 @@ class BranchCommManager:
         """重置状态（每次推理前调用）"""
         self._branch_outputs.clear()
         self._completed_branches.clear()
+        self._message_buffer.clear()
 
     def cleanup(self) -> None:
         """清理资源"""

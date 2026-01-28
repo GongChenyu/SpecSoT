@@ -32,6 +32,7 @@ from .branch_config import (
 from .branch_scheduler import (
     BranchScheduler,
     HeuristicScheduler,
+    SimpleDistributedScheduler,
 )
 from .branch_manager import BranchExecutionManager
 
@@ -46,6 +47,7 @@ __all__ = [
     # 调度器
     "BranchScheduler",
     "HeuristicScheduler",
+    "SimpleDistributedScheduler",
     # 执行管理器
     "BranchExecutionManager",
 ]
