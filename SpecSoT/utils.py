@@ -451,13 +451,7 @@ def logits_sampling(
     
     # Greedy Mode: 无温度等 processor，或仅有 semantic processor
     if not use_sampling:   
-        if not has_semantic:  # 没有任何约束
-            # for b in range(batch_size):
-            #     bc, al, sl = greedy_sampling_parallel(logits[b], candidates[b])
-            #     best_candidates.append(bc)
-            #     accept_lengths.append(al)
-            #     sample_logits_list.append(sl)
-        
+        if not has_semantic:  # 没有任何约束       
             target_ids = torch.argmax(logits[:, :, :-1, :], dim=-1)
             draft_ids = candidates[:, :, 1:].to(device)
             posterior_mask = (draft_ids == target_ids).int()
@@ -539,7 +533,7 @@ def evaluate_single(
     Returns:
         best_candidate: 最佳候选索引 [batch] 或 scalar
         accept_length: 接受长度 [batch] 或 scalar
-        sample_p: 采样概率分布 [batch, vocab] 或 [vocab]（softmax 后）
+        sample_token: 采样的 Bonus Token [batch, 1] 或 [1]
     """
     # 处理维度：如果没有 batch 维度，添加一个
     squeeze_output = False
@@ -553,13 +547,19 @@ def evaluate_single(
         input_ids, logits, candidates, logits_processor
     )
     
+    # 采样 Bonus Token
+    if logits_processor is not None:
+        sample_token = torch.multinomial(sample_logits, 1)
+    else:
+        sample_token = torch.argmax(sample_logits, dim=-1, keepdim=True)
+    
     # 如果输入没有 batch 维度，输出也去掉 batch 维度
     if squeeze_output:
         best_candidate = best_candidate.squeeze(0)
         accept_length = accept_length.squeeze(0)
-        sample_logits = sample_logits.squeeze(0)
+        sample_token = sample_token.squeeze(0)
     
-    return best_candidate, accept_length, sample_logits
+    return best_candidate, accept_length, sample_token
 
 
 def evaluate_parallel(
@@ -582,7 +582,7 @@ def evaluate_parallel(
     Returns:
         best_candidate: 最佳候选索引 [num_para]
         accept_length: 接受长度 [num_para]
-        sample_p: 采样概率分布 [num_para, vocab]（softmax 后）
+        sample_token: 采样的 Bonus Token [num_para, 1]
     """
     num_para = logits.shape[0]
     device = logits.device
@@ -613,7 +613,15 @@ def evaluate_parallel(
     # 调用核心评估逻辑
     # candidate_logits: [num_para, num_leaves, depth, vocab]
     # candidates: [num_para, num_leaves, depth]
-    return logits_sampling(None, candidate_logits, candidates, logits_processor)
+    best_candidate, accept_length, sample_logits = logits_sampling(None, candidate_logits, candidates, logits_processor)
+    
+    # 采样 Bonus Token
+    if logits_processor is not None:
+        sample_token = torch.multinomial(sample_logits, 1)
+    else:
+        sample_token = torch.argmax(sample_logits, dim=-1, keepdim=True)
+    
+    return best_candidate, accept_length, sample_token
 
 
 # =============================================================================
@@ -1163,11 +1171,26 @@ def prepare_parallel_branches(
     parallel_trigger = parallel_trigger_en
     clean_branches = []
     instruction_lengths = []
+
+    # 从 skeleton_text 中提取 plan_body（不包含 [PLAN] 和 [END] 标记）
+    # 避免在分支输入中出现 [END] 导致模型过早结束
+    skeleton_context = skeleton_text  # 默认使用原始文本
+    if "[PLAN]" in skeleton_text:
+        try:
+            start = skeleton_text.index("[PLAN]") + 6
+            end = skeleton_text.index("[END]") if "[END]" in skeleton_text else len(skeleton_text)
+            skeleton_context = skeleton_text[start:end].strip()
+        except ValueError:
+            # 如果解析失败，使用原始文本
+            pass
+    elif "[DIRECT]" in skeleton_text:
+        # 对于 DIRECT 模式，移除标记
+        skeleton_context = skeleton_text.replace("[DIRECT]", "").replace("[END]", "").strip()
     
     for task in tasks:
         # 使用新的 parallel_trigger 格式
         instruction = parallel_trigger.format(
-            skeleton_context=skeleton_text,
+            skeleton_context=skeleton_context,
             current_id=task['id'],
             current_point=task['title'],
             target_length=task['length'],

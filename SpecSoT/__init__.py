@@ -19,9 +19,12 @@ SpecSoT Module
 # 主模型
 from .specsot_model import SpecSoTModel
 
-# Eagle Layer
-from .eagle_layer3 import EagleLayer3
-from .eagle_layer2 import EagleLayer2  # EAGLE2 支持 (用于 Vicuna 等模型)
+# Eagle Layer (新版重构模块)
+from .modeling_draft import Eagle3, Eagle2, Drafter
+
+# 兼容旧版别名
+EagleLayer3 = Eagle3
+EagleLayer2 = Eagle2
 
 # Logits Processors
 from .logits_processor import SemanticLogitsProcessor, VocabScanner
@@ -44,7 +47,7 @@ from .utils import (
 from .kv_cache import initialize_past_key_values
 
 # Configurations
-from .configs import EConfig
+from .modeling_draft import EConfig
 
 # Distributed Support
 from .distributed import (
@@ -79,9 +82,13 @@ __all__ = [
     # 主模型
     "SpecSoTModel",
     
-    # Eagle Layer
+    # Eagle Layer (新版模块)
+    "Eagle3",
+    "Eagle2",
+    "Drafter",
+    # 兼容旧版别名
     "EagleLayer3",
-    "EagleLayer2",  # EAGLE2 支持
+    "EagleLayer2",
     
     # Processors
     "SemanticLogitsProcessor",

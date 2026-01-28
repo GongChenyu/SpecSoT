@@ -54,6 +54,26 @@ from .comm_utils import (
 )
 from .distributed_prefill import DistributedPrefillManager
 
+# 分支调度模块 (从 scheduling 模块导入)
+from ..scheduling import (
+    DeviceProfile,
+    BranchInfo,
+    DeviceExecutionPlan,
+    SchedulePlan,
+    BranchStatus,
+    BranchRuntimeState,
+    BranchScheduler,
+    HeuristicScheduler,
+    BranchExecutionManager,
+)
+
+# 分支级分布式通信 (保留在 distributed 模块)
+from .branch_comm import (
+    BranchMessageType,
+    BranchMessage,
+    BranchCommManager,
+)
+
 # 日志工具从父模块导入
 from ..logging_utils import (
     FlushingStreamHandler,
@@ -70,7 +90,7 @@ from ..logging_utils import (
 __all__ = [
     # 配置
     "DistributedConfig",
-    
+
     # 通信管理器
     "ZMQCommManagerBase",
     "P2PCommManager",
@@ -80,10 +100,24 @@ __all__ = [
     "MessageType",
     "MessagePriority",
     "Message",
-    
+
     # 推理管理器
     "DistributedPrefillManager",
-    
+
+    # 分支调度模块
+    "DeviceProfile",
+    "BranchInfo",
+    "DeviceExecutionPlan",
+    "SchedulePlan",
+    "BranchStatus",
+    "BranchRuntimeState",
+    "BranchScheduler",
+    "HeuristicScheduler",
+    "BranchMessageType",
+    "BranchMessage",
+    "BranchCommManager",
+    "BranchExecutionManager",
+
     # 日志工具
     "FlushingStreamHandler",
     "FlushingFileHandler",

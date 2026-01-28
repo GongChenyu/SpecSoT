@@ -453,7 +453,7 @@ class DistributedPrefillManager:
                 # 对于最后一个chunk: total_seq_length + 1 (因为添加了采样的token)
                 # 与单机版 generate_draft_tree 中的 len_posi = input_ids.shape[1] 对齐
                 original_len = total_seq_length + 1 if is_last_chunk else end_idx
-                tree_result, incremental_kv = eagle_layer.generate_draft_tree_dist_prefill(
+                tree_result, incremental_kv = self.model.drafter.generate_draft_tree_dist_prefill(
                     hidden_states_for_eagle, 
                     input_ids_this_chunk,  # 使用当前chunk的input_ids
                     is_last_chunk=is_last_chunk,
