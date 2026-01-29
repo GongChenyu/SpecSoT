@@ -47,12 +47,13 @@ from .utils import (
 from .kv_cache import initialize_past_key_values
 
 # Configurations
+# Configurations
 from .modeling_draft import EConfig
 
 # Distributed Support
-from .distributed import (
-    DistributedConfig,
-    DistributedPrefillManager,
+from .distributed_config import DistributedConfig
+from .distributed_prefill import DistributedPrefillManager
+from .communication import (
     create_zmq_comm_manager,
     ZMQCommManagerBase,
 )

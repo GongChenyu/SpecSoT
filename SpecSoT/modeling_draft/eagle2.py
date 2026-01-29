@@ -118,18 +118,38 @@ class Eagle2Attention(nn.Module):
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
 
+        # 检测 past_key_value 的类型（KVCache 类 or tuple）
+        use_kv_cache_class = False
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
-            kv_seq_len += past_key_value[0].shape[-2]
+            # 检查是否是 KVCache 类（有 shape 属性返回包含 current_length 的 tuple）
+            if hasattr(past_key_value[0], 'shape') and hasattr(past_key_value[0], 'cat'):
+                use_kv_cache_class = True
+                kv_seq_len += past_key_value[0].shape[2]  # KVCache.shape[2] 是 current_length
+            else:
+                kv_seq_len += past_key_value[0].shape[-2]
         
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
         if past_key_value is not None:
-            key_states = torch.cat([past_key_value[0], key_states], dim=2)
-            value_states = torch.cat([past_key_value[1], value_states], dim=2)
+            if use_kv_cache_class:
+                # 使用 KVCache 类的 cat 方法
+                key_states = past_key_value[0].cat(key_states, dim=2)
+                value_states = past_key_value[1].cat(value_states, dim=2)
+                # 注意: cat 方法会更新 current_length 并返回完整的 data[:current_length]
+            else:
+                # 原始方式：torch.cat
+                key_states = torch.cat([past_key_value[0], key_states], dim=2)
+                value_states = torch.cat([past_key_value[1], value_states], dim=2)
 
-        past_key_value = (key_states, value_states) if use_cache else None
+        # 返回的 past_key_value 保持与输入相同的格式
+        # 如果使用 KVCache 类，不需要返回新的 tuple，因为 cat 已经原地更新了
+        if use_kv_cache_class:
+            # 传递 KVCache 引用，后续调用会继续使用同一个 cache
+            past_key_value = past_key_value if use_cache else None
+        else:
+            past_key_value = (key_states, value_states) if use_cache else None
 
         # GQA: 重复 KV heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -262,7 +282,7 @@ class Eagle2(EagleBase):
         threshold: 接受阈值
         
         # KV Cache
-        stable_kv: 稳定的 KV Cache (已接受的 tokens)
+        draft_past_key_values: 稳定的 KV Cache (已接受的 tokens)
     """
 
     def __init__(
@@ -315,6 +335,11 @@ class Eagle2(EagleBase):
         self.head = None
         self.diff_device = False
         self.headweight = None
+        
+        # KV Cache 配置（Eagle2 是多层）
+        self._num_layers = config.num_hidden_layers
+        self._num_key_value_heads = config.num_key_value_heads
+        self._head_dim = self.hidden_size // config.num_attention_heads
         
         self.reset_state()
 

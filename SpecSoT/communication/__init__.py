@@ -1,18 +1,14 @@
 # coding=utf-8
 """
-SpecSoT 分布式推理模块
+SpecSoT 通信模块
 
-该模块提供 SpecSoT 模型的分布式推理支持，包括：
-- 分布式配置管理
-- ZMQ 通信管理器
-- 分布式 Prefill 管理器
-- 分布式推理流程
+该模块提供 SpecSoT 模型的通信支持，包括：
+- ZMQ 通信管理器（P2P 和 Ring 模式）
+- 消息类型和序列化
 
 主要组件：
-- DistributedConfig: 分布式配置类，管理层拆分策略、通信配置等
 - CommManager: ZMQ 通信管理器（P2P 和 Ring 模式）
-- DistributedPrefillManager: 分布式 Prefill 阶段管理器
-- DistributedInference: 完整的分布式推理流程
+- MessageType: 消息类型枚举
 
 通信优先级设计：
 1. DRAFT_TOKENS: 最高优先级，decoding阶段运行的基础（打包传输）
@@ -22,21 +18,10 @@ SpecSoT 分布式推理模块
 5. EAGLE_CACHE: 第五优先级，eagle layer kv cache
 
 使用示例：
-    >>> from SpecSoT.distributed import DistributedConfig
-    >>> config = DistributedConfig.from_layer_splits_str(
-    ...     layer_splits_str="14,28",
-    ...     rank=0,
-    ...     world_size=3
-    ... )
-    >>> # 在 SpecSoT 模型中使用
-    >>> model = SpecSoTModel.from_pretrained(
-    ...     base_model_path="...",
-    ...     ea_model_path="...",
-    ...     distributed_config=config
-    ... )
+    >>> from SpecSoT.communication import create_zmq_comm_manager
+    >>> comm = create_zmq_comm_manager(config, rank)
 """
 
-from .distributed_config import DistributedConfig
 from .comm_manager import (
     ZMQCommManagerBase,
     P2PCommManager,
@@ -52,7 +37,6 @@ from .comm_utils import (
     ThreadSafeQueue,
     AggregatedMessage,
 )
-from .distributed_prefill import DistributedPrefillManager
 
 # 分支调度模块 (从 scheduling 模块导入)
 from ..scheduling import (
@@ -66,17 +50,6 @@ from ..scheduling import (
     HeuristicScheduler,
     SimpleDistributedScheduler,
     BranchExecutionManager,
-)
-
-# 分支级分布式通信消息类型 (保留消息类型定义，但弃用 BranchCommManager)
-from .branch_comm import (
-    BranchMessageType,
-    BranchMessage,
-    # BranchCommManager 已弃用，请使用 base_comm_manager 的方法:
-    # - send_schedule_plan_async / recv_schedule_plan
-    # - send_branch_prompt_async / recv_branch_prompts
-    # - send_branch_output_async / collect_all_branch_outputs
-    # - send_branch_complete_async / recv_complete_signal
 )
 
 # 日志工具从父模块导入
@@ -93,9 +66,6 @@ from ..logging_utils import (
 )
 
 __all__ = [
-    # 配置
-    "DistributedConfig",
-
     # 通信管理器
     "ZMQCommManagerBase",
     "P2PCommManager",
@@ -105,9 +75,6 @@ __all__ = [
     "MessageType",
     "MessagePriority",
     "Message",
-
-    # 推理管理器
-    "DistributedPrefillManager",
 
     # 分支调度模块
     "DeviceProfile",
@@ -119,9 +86,6 @@ __all__ = [
     "BranchScheduler",
     "HeuristicScheduler",
     "SimpleDistributedScheduler",
-    "BranchMessageType",
-    "BranchMessage",
-    # "BranchCommManager",  # 已弃用，使用 base_comm_manager 方法
     "BranchExecutionManager",
 
     # 日志工具

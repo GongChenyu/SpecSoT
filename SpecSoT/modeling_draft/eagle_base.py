@@ -6,7 +6,8 @@ Eagle Base - Eagle Layer 基类
 - forward(): 前向传播（抽象方法）
 - get_head_output(): 获取 lm_head 输出（抽象方法）
 - reset_state(): 重置状态
-- set_stable_kv_sync_callback(): 设置同步回调
+- init_kv_cache(): 初始化 KV Cache
+- set_draft_past_key_values_sync_callback(): 设置同步回调
 - _prepare_decoder_attention_mask(): 构建注意力掩码
 
 Eagle2 与 Eagle3 的主要区别：
@@ -14,6 +15,12 @@ Eagle2 与 Eagle3 的主要区别：
 2. Attention 输入维度：Eagle2 用 hidden_size，Eagle3 用 hidden_size * 2
 3. fc 层输入维度：Eagle2 用 hidden_size * 2，Eagle3 用 hidden_size * 3
 4. lm_head：Eagle2 用外部传入，Eagle3 用内置
+
+KV Cache 管理：
+- 使用预分配内存的 KVCache 类管理（与 Base Model 一致）
+- draft_past_key_values: List[List[KVCache]] 结构
+- draft_past_key_values_data: 底层 tensor 数据
+- draft_current_length_data: 当前长度追踪
 """
 
 from abc import ABC, abstractmethod
@@ -199,18 +206,29 @@ class EagleBase(nn.Module, ABC):
 
     定义 Eagle2 和 Eagle3 的公共接口和共享实现。
     子类需要实现 forward() 和 get_head_output() 方法。
+    
+    KV Cache 管理：
+    - 使用 KVCache 类管理（与 Base Model 一致）
+    - draft_past_key_values: List[List[KVCache]] - 每层的 [key_cache, value_cache]
+    - draft_past_key_values_data: torch.Tensor - 底层数据存储
+    - draft_current_length_data: torch.Tensor - 当前长度追踪
+    - kv_cache_initialized: bool - 是否已初始化
     """
 
     def __init__(self):
         super().__init__()
         # 状态变量（子类初始化具体值）
-        self.stable_kv = None
+        self.draft_past_key_values = None
+        self.draft_past_key_values_data = None
+        self.draft_current_length_data = None
+        self.kv_cache_initialized = False
+        
         self.cache_padding_mask = None
         self.full_position_ids = None
         self.tree_mask = None
         self.tree_mask_init = None
         self.position_ids = None
-        self._stable_kv_sync_callback = None
+        self._draft_kv_sync_callback = None
 
         # 子类需要设置的属性
         self.config = None
@@ -219,6 +237,11 @@ class EagleBase(nn.Module, ABC):
         self.depth = None
         self.hidden_size = None
         self.embed_tokens = None
+        
+        # KV Cache 配置（子类设置）
+        self._num_layers = 1  # 默认单层，Eagle2 会覆盖
+        self._num_key_value_heads = None
+        self._head_dim = None
 
     
     def _load_embeddings(self, path: str):
@@ -305,8 +328,15 @@ class EagleBase(nn.Module, ABC):
     # =========================================================================
 
     def reset_state(self):
-        """重置状态"""
-        self.stable_kv = None
+        """重置状态（不释放 KV Cache 内存，只重置长度）"""
+        # 重置 KV Cache 长度为 0（保留预分配的内存）
+        if self.kv_cache_initialized and self.draft_past_key_values is not None:
+            for layer_kv in self.draft_past_key_values:
+                for kv_cache in layer_kv:
+                    kv_cache.current_length.fill_(0)
+        else:
+            self.draft_past_key_values = None
+            
         self.cache_padding_mask = None
         self.full_position_ids = None
         self.tree_mask = None
@@ -314,18 +344,92 @@ class EagleBase(nn.Module, ABC):
         device = self.embed_tokens.weight.device
         self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
-        self._stable_kv_sync_callback = None
+        self._draft_kv_sync_callback = None
 
-    def set_stable_kv_sync_callback(self, callback):
+    def init_kv_cache(self, max_length: int, batch_size: int = 1):
         """
-        设置 stable_kv 同步回调函数
+        初始化 KV Cache（预分配内存）
+        
+        Args:
+            max_length: 最大序列长度
+                       注意：应该是 prefill_len + max_draft_steps * (top_k * depth)
+                       但实际上只需要保留 expand_root 的 cache，所以可以更小
+            batch_size: 批次大小
+        """
+        # 延迟导入避免循环依赖
+        from ..kv_cache import KVCache
+        
+        device = self.embed_tokens.weight.device
+        dtype = self.embed_tokens.weight.dtype
+        
+        # 获取 KV cache 配置
+        num_layers = self._num_layers
+        num_key_value_heads = self._num_key_value_heads or self.config.num_key_value_heads
+        head_dim = self._head_dim or getattr(
+            self.config, 'head_dim', 
+            self.config.hidden_size // self.config.num_attention_heads
+        )
+        
+        # 分配底层数据存储
+        # shape: [num_layers * 2, batch_size, num_kv_heads, max_length, head_dim]
+        self.draft_past_key_values_data = torch.zeros(
+            num_layers * 2,
+            batch_size,
+            num_key_value_heads,
+            max_length,
+            head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        
+        # 长度追踪 tensor
+        self.draft_current_length_data = torch.zeros(
+            num_layers * 2, dtype=torch.long, device="cpu"
+        )
+        
+        # 为每层创建 KVCache 对象
+        self.draft_past_key_values = []
+        for i in range(num_layers):
+            self.draft_past_key_values.append([
+                KVCache(self.draft_past_key_values_data[2 * i], self.draft_current_length_data[2 * i]),
+                KVCache(self.draft_past_key_values_data[2 * i + 1], self.draft_current_length_data[2 * i + 1])
+            ])
+        
+        self.kv_cache_initialized = True
+        
+    def get_kv_cache_length(self) -> int:
+        """获取当前 KV Cache 的有效长度"""
+        if not self.kv_cache_initialized or self.draft_past_key_values is None:
+            return 0
+        # 所有层的长度应该一致，取第一层的
+        return self.draft_past_key_values[0][0].current_length.item()
+    
+    def set_kv_cache_length(self, length: int):
+        """
+        设置 KV Cache 的有效长度
+        
+        用于在 draft tree 生成完成后，丢弃 tree_grow 阶段的临时数据，
+        只保留 expand_root 阶段的 cache。
+        
+        Args:
+            length: 目标长度
+        """
+        if not self.kv_cache_initialized or self.draft_past_key_values is None:
+            return
+        for layer_kv in self.draft_past_key_values:
+            for kv_cache in layer_kv:
+                kv_cache.current_length.fill_(length)
 
-        在分布式模式下，当 stable_kv 更新后立即调用此回调以同步到其他 rank
+    def set_draft_kv_sync_callback(self, callback):
+        """
+        设置 draft_past_key_values 同步回调函数
+
+        在分布式模式下，当 draft_past_key_values 更新后立即调用此回调以同步到其他 rank
 
         Args:
-            callback: 回调函数，接受 stable_kv 作为参数
+            callback: 回调函数，接受 draft_past_key_values 作为参数
         """
-        self._stable_kv_sync_callback = callback
+        self._draft_kv_sync_callback = callback
 
     def _prepare_decoder_attention_mask(
         self,

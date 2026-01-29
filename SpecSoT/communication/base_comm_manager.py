@@ -131,6 +131,15 @@ class ZMQCommManagerBase(ABC):
             'eagle_cache_recv': 0,
             'aggregated_sends': 0,  # ring模式下聚合发送次数
             'forwarded_messages': 0,  # ring模式下转发消息数
+            # 分支调度相关统计
+            'schedule_plan_sent': 0,
+            'schedule_plan_recv': 0,
+            'branch_prompt_sent': 0,
+            'branch_prompt_recv': 0,
+            'branch_output_sent': 0,
+            'branch_output_recv': 0,
+            'branch_complete_sent': 0,
+            'branch_complete_recv': 0,
         }
         
         # 初始化socket连接（由子类决定具体连接方式）
@@ -281,6 +290,38 @@ class ZMQCommManagerBase(ABC):
                 self.logger.debug(
                     f"[RECV] EAGLE_CACHE from rank {src} | chunk={msg.chunk_idx}, incremental={is_incremental}"
                 )
+        
+        # 分支调度相关消息
+        elif msg.msg_type == MessageType.SCHEDULE_PLAN:
+            self.stats['schedule_plan_recv'] += 1
+            self.logger.debug(
+                f"[RECV] SCHEDULE_PLAN from rank {src} | "
+                f"seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+            )
+            
+        elif msg.msg_type == MessageType.BRANCH_PROMPT:
+            self.stats['branch_prompt_recv'] += 1
+            num_branches = len(msg.data) if isinstance(msg.data, list) else 1
+            self.logger.debug(
+                f"[RECV] BRANCH_PROMPT from rank {src} | "
+                f"num_branches={num_branches}, seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+            )
+            
+        elif msg.msg_type == MessageType.BRANCH_OUTPUT:
+            self.stats['branch_output_recv'] += 1
+            num_tokens = len(msg.data) if msg.data else 0
+            self.logger.debug(
+                f"[RECV] BRANCH_OUTPUT from rank {src} | "
+                f"branch_id={msg.branch_id}, num_tokens={num_tokens}, "
+                f"seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+            )
+            
+        elif msg.msg_type == MessageType.BRANCH_COMPLETE:
+            self.stats['branch_complete_recv'] += 1
+            self.logger.debug(
+                f"[RECV] BRANCH_COMPLETE from rank {src} | "
+                f"seq_id={msg.seq_id}, latency={latency*1000:.2f}ms"
+            )
     
     def start(self):
         """启动通信管理器"""
@@ -702,15 +743,15 @@ class ZMQCommManagerBase(ABC):
     # ==================== Eagle Stable KV 广播方法 ====================
     
     @abstractmethod
-    def broadcast_eagle_stable_kv(
+    def broadcast_eagle_draft_past_key_values(
         self,
         incremental_kv: Tuple[torch.Tensor, torch.Tensor],
         chunk_idx: int,
     ) -> None:
         """
-        广播Eagle Layer的增量stable_kv给所有其他rank
+        广播Eagle Layer的增量draft_past_key_values给所有其他rank
         
-        这是分布式Prefill中用于同步eagle stable_kv的核心方法。
+        这是分布式Prefill中用于同步eagle draft_past_key_values的核心方法。
         只有最后一个rank需要调用此方法，将增量KV发送给其他rank。
         
         Args:
@@ -741,7 +782,7 @@ class ZMQCommManagerBase(ABC):
         
         Args:
             past_key_values: Base Model的KV Cache列表
-            eagle_layer: Eagle Layer模型（用于设置stable_kv）
+            eagle_layer: Eagle Layer模型（用于设置draft_past_key_values）
             num_layers: 模型层数
             num_chunks: chunk数量
             cache_received_indicator: base cache接收状态 [num_chunks, num_layers]
@@ -818,17 +859,33 @@ class ZMQCommManagerBase(ABC):
                 
                 # 处理eagle cache
                 if chunk_idx >= 0 and eagle_cache_received_indicator[chunk_idx] == 0:
-                    # 设置Eagle Layer的stable_kv
-                    if eagle_layer.stable_kv is None:
-                        eagle_layer.stable_kv = ((key, value),)
+                    # 设置Eagle Layer的draft_past_key_values
+                    # 检查是否使用 KVCache 类（统一使用 KVCache 类管理）
+                    if eagle_layer.kv_cache_initialized and eagle_layer.draft_past_key_values is not None:
+                        # 使用 KVCache 类的 cat 方法追加数据
+                        key_cache, value_cache = eagle_layer.draft_past_key_values[0]
+                        key_cache.cat(key, dim=2)
+                        value_cache.cat(value, dim=2)
+                        current_kv_length = key_cache.current_length.item()
                     else:
-                        # 增量追加（需要concat）
-                        old_key, old_value = eagle_layer.stable_kv[0]
-                        new_key = torch.cat([old_key, key], dim=2)
-                        new_value = torch.cat([old_value, value], dim=2)
-                        eagle_layer.stable_kv = ((new_key, new_value),)
+                        # 未初始化时直接设置（不应该发生，因为 prefill 时会初始化）
+                        self.logger.warning("Eagle KV Cache 未初始化，使用普通 tensor 格式")
+                        if eagle_layer.draft_past_key_values is None:
+                            eagle_layer.draft_past_key_values = ((key, value),)
+                        else:
+                            old_key, old_value = eagle_layer.draft_past_key_values[0]
+                            # 兼容 KVCache 类和普通 tensor
+                            if hasattr(old_key, 'data'):
+                                old_key_tensor = old_key.data[:, :, :old_key.current_length.item(), :]
+                                old_value_tensor = old_value.data[:, :, :old_value.current_length.item(), :]
+                            else:
+                                old_key_tensor = old_key
+                                old_value_tensor = old_value
+                            new_key = torch.cat([old_key_tensor, key], dim=2)
+                            new_value = torch.cat([old_value_tensor, value], dim=2)
+                            eagle_layer.draft_past_key_values = ((new_key, new_value),)
+                        current_kv_length = eagle_layer.draft_past_key_values[0][0].shape[2]
                     
-                    current_kv_length = eagle_layer.stable_kv[0][0].shape[2]
                     eagle_cache_received_indicator[chunk_idx] = 1
                     expected_eagle_caches -= 1
                     eagle_cache_received += 1
@@ -862,6 +919,231 @@ class ZMQCommManagerBase(ABC):
             )
         
         return (expected_base_caches, expected_eagle_caches)
+    
+    # ==================== 分支调度通信 (最高优先级，异步) ====================
+    
+    @abstractmethod
+    def send_schedule_plan_async(
+        self,
+        schedule_plan_data: Dict[str, Any],
+        dst_rank: int = -1,
+    ) -> None:
+        """
+        异步广播调度计划
+        
+        Args:
+            schedule_plan_data: 序列化的调度计划数据
+            dst_rank: 目标rank，-1表示广播到所有其他rank
+        """
+        pass
+    
+    def recv_schedule_plan(
+        self,
+        timeout: float = 30.0,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        接收调度计划（非阻塞轮询）
+        
+        Args:
+            timeout: 超时时间
+            
+        Returns:
+            调度计划数据或None
+        """
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            msg = self.recv_queue.get_by_type(MessageType.SCHEDULE_PLAN, timeout=0.1)
+            if msg is not None:
+                self.logger.debug(
+                    f"[RECV_OK] SCHEDULE_PLAN | from rank {msg.get_effective_src()}"
+                )
+                return msg.data
+        
+        self.logger.warning(f"[TIMEOUT] 接收 SCHEDULE_PLAN 超时")
+        return None
+    
+    @abstractmethod
+    def send_branch_prompt_async(
+        self,
+        branch_data: Dict[str, Any],
+        dst_rank: int,
+        branch_id: int = -1,
+    ) -> None:
+        """
+        异步发送分支Prompt
+        
+        Args:
+            branch_data: 分支数据（包含branch_id, title, predicted_length, prompt_tokens）
+            dst_rank: 目标rank
+            branch_id: 分支ID
+        """
+        pass
+    
+    def recv_branch_prompts(
+        self,
+        timeout: float = 30.0,
+    ) -> List[Dict[str, Any]]:
+        """
+        接收分支Prompts（收集所有已到达的）
+        
+        Args:
+            timeout: 超时时间
+            
+        Returns:
+            分支数据列表
+        """
+        result = []
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            msg = self.recv_queue.get_by_type(MessageType.BRANCH_PROMPT, timeout=0.1)
+            if msg is not None:
+                # msg.data 可能是单个分支或分支列表
+                if isinstance(msg.data, list):
+                    result.extend(msg.data)
+                else:
+                    result.append(msg.data)
+                self.logger.debug(
+                    f"[RECV_OK] BRANCH_PROMPT | {len(result)} branches received"
+                )
+                # 继续尝试接收更多（非阻塞检查）
+                while True:
+                    msg2 = self.recv_queue.get_by_type(MessageType.BRANCH_PROMPT, timeout=0.01)
+                    if msg2 is None:
+                        break
+                    if isinstance(msg2.data, list):
+                        result.extend(msg2.data)
+                    else:
+                        result.append(msg2.data)
+                break  # 收到第一批后退出
+        
+        return result
+    
+    @abstractmethod
+    def send_branch_output_async(
+        self,
+        branch_id: int,
+        output_tokens: List[int],
+        dst_rank: int = 0,
+    ) -> None:
+        """
+        异步发送分支输出（完成后立即发送）
+        
+        Args:
+            branch_id: 分支ID
+            output_tokens: 生成的token列表
+            dst_rank: 目标rank（默认发送到master rank 0）
+        """
+        pass
+    
+    def recv_branch_output(
+        self,
+        timeout: float = 0.1,
+    ) -> Optional[Tuple[int, List[int]]]:
+        """
+        接收单个分支输出（非阻塞）
+        
+        Args:
+            timeout: 超时时间
+            
+        Returns:
+            (branch_id, output_tokens) 或 None
+        """
+        msg = self.recv_queue.get_by_type(MessageType.BRANCH_OUTPUT, timeout=timeout)
+        if msg is not None:
+            self.logger.debug(
+                f"[RECV_OK] BRANCH_OUTPUT | branch_id={msg.branch_id}, "
+                f"tokens={len(msg.data) if msg.data else 0}"
+            )
+            return (msg.branch_id, msg.data)
+        return None
+    
+    def collect_all_branch_outputs(
+        self,
+        num_branches: int,
+        timeout: float = 300.0,
+    ) -> Dict[int, List[int]]:
+        """
+        收集所有分支输出
+        
+        Args:
+            num_branches: 预期分支数量
+            timeout: 超时时间
+            
+        Returns:
+            {branch_id: output_tokens} 字典
+        """
+        result = {}
+        start_time = time.time()
+        
+        while len(result) < num_branches and (time.time() - start_time) < timeout:
+            output = self.recv_branch_output(timeout=0.1)
+            if output is not None:
+                branch_id, tokens = output
+                result[branch_id] = tokens
+                self.logger.debug(
+                    f"[COLLECT] BRANCH_OUTPUT | branch_id={branch_id}, "
+                    f"collected={len(result)}/{num_branches}"
+                )
+        
+        if len(result) < num_branches:
+            self.logger.warning(
+                f"[TIMEOUT] 收集分支输出不完整 | "
+                f"collected={len(result)}/{num_branches}"
+            )
+        else:
+            self.logger.info(
+                f"[COLLECT_OK] 所有分支输出收集完成 | count={len(result)}"
+            )
+        
+        return result
+    
+    @abstractmethod
+    def send_branch_complete_async(
+        self,
+        dst_rank: int = -1,
+    ) -> None:
+        """
+        异步广播完成信号
+        
+        Args:
+            dst_rank: 目标rank，-1表示广播
+        """
+        pass
+    
+    def recv_complete_signal(
+        self,
+        timeout: float = 300.0,
+    ) -> bool:
+        """
+        等待接收完成信号
+        
+        Args:
+            timeout: 超时时间
+            
+        Returns:
+            是否收到完成信号
+        """
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            msg = self.recv_queue.get_by_type(MessageType.BRANCH_COMPLETE, timeout=0.1)
+            if msg is not None:
+                self.logger.debug(f"[RECV_OK] BRANCH_COMPLETE signal")
+                return True
+        
+        self.logger.warning(f"[TIMEOUT] 等待完成信号超时")
+        return False
+    
+    def broadcast_parallel_complete_signal(self) -> None:
+        """
+        广播并行阶段完成信号
+        
+        当 skeleton 解析为 direct/error 模式时调用此方法，
+        通知所有 worker 不需要执行并行任务。
+        """
+        self.send_branch_complete_async(dst_rank=-1)
     
     # ==================== 辅助方法 ====================
     

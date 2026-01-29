@@ -116,16 +116,28 @@ class MessagePriority(IntEnum):
     消息优先级（数值越小优先级越高）
     
     优先级设计说明：
-    1. DRAFT_TOKENS (0): 最高优先级，decoding阶段运行的基础
+    1. 最高优先级 (0): DRAFT_TOKENS 和分支调度相关消息
+       - DRAFT_TOKENS: decoding阶段运行的基础
+       - SCHEDULE_PLAN: 分支调度计划
+       - BRANCH_PROMPT: 分支Prompt
+       - BRANCH_OUTPUT: 分支输出
+       - BRANCH_COMPLETE: 完成信号
     2. HIDDEN (1): 第二优先级，会阻塞推理流程
     3. EAGLE_INPUT_HIDDEN (2): 第三优先级，eagle layer输入
     4. BASE_CACHE (3): 第四优先级，base model的kv cache
     5. EAGLE_CACHE (4): 第五优先级，eagle layer的kv cache
     """
-    DRAFT_TOKENS = 0         # 最高优先级：draft tree结果
-    HIDDEN = 1               # 第二优先级：层间hidden states
-    EAGLE_INPUT_HIDDEN = 2   # 第三优先级：eagle layer输入hidden states
-    BASE_CACHE = 3           # 第四优先级：base model kv cache
+    # 最高优先级：draft tokens 和分支调度相关
+    DRAFT_TOKENS = 0         # draft tree结果
+    SCHEDULE_PLAN = 0        # 分支调度计划
+    BRANCH_PROMPT = 0        # 分支Prompt
+    BRANCH_OUTPUT = 0        # 分支输出
+    BRANCH_COMPLETE = 0      # 完成信号
+    
+    # 次优先级
+    HIDDEN = 1               # 层间hidden states
+    EAGLE_INPUT_HIDDEN = 2   # eagle layer输入hidden states
+    BASE_CACHE = 3           # base model kv cache
     EAGLE_CACHE = 4          # 第五优先级：eagle layer kv cache
 
 
@@ -133,13 +145,21 @@ class MessageType(IntEnum):
     """
     消息类型
     
-    与优先级一一对应，用于区分不同类型的消息
+    用于区分不同类型的消息。
+    分支调度相关消息使用 10-19 范围，与原有类型区分。
     """
+    # 原有类型 (0-9)
     DRAFT_TOKENS = 0         # draft tree打包数据
     HIDDEN = 1               # 层间hidden states
     EAGLE_INPUT_HIDDEN = 2   # eagle layer输入hidden states
     BASE_CACHE = 3           # base model kv cache
     EAGLE_CACHE = 4          # eagle layer kv cache
+    
+    # 分支调度类型 (10-19)
+    SCHEDULE_PLAN = 10       # 调度计划广播
+    BRANCH_PROMPT = 11       # 分支Prompt (token IDs)
+    BRANCH_OUTPUT = 12       # 分支输出 (token IDs)
+    BRANCH_COMPLETE = 13     # 完成信号 (单分支或全部)
 
 
 @dataclass
@@ -154,10 +174,15 @@ class Message:
     seq_id: int = 0                 # 序列ID（用于排序和追踪）
     timestamp: float = field(default_factory=time.time)  # 时间戳
     original_src: int = -1          # 原始来源（用于ring模式转发追踪）
+    branch_id: int = -1             # 分支ID（用于分支调度）
     
     @property
     def priority(self) -> int:
         """获取消息优先级"""
+        # 分支调度消息使用最高优先级
+        if self.msg_type in (MessageType.SCHEDULE_PLAN, MessageType.BRANCH_PROMPT, 
+                             MessageType.BRANCH_OUTPUT, MessageType.BRANCH_COMPLETE):
+            return 0  # 最高优先级
         return MessagePriority(self.msg_type).value
     
     def get_effective_src(self) -> int:
@@ -195,11 +220,17 @@ class ThreadSafeQueue:
     
     def __init__(self, rank: int = -1):
         self._queues: Dict[MessageType, queue.Queue] = {
+            # 原有类型
             MessageType.DRAFT_TOKENS: queue.Queue(),
             MessageType.HIDDEN: queue.Queue(),
             MessageType.EAGLE_INPUT_HIDDEN: queue.Queue(),
             MessageType.BASE_CACHE: queue.Queue(),
             MessageType.EAGLE_CACHE: queue.Queue(),
+            # 分支调度类型
+            MessageType.SCHEDULE_PLAN: queue.Queue(),
+            MessageType.BRANCH_PROMPT: queue.Queue(),
+            MessageType.BRANCH_OUTPUT: queue.Queue(),
+            MessageType.BRANCH_COMPLETE: queue.Queue(),
         }
         self._lock = threading.Lock()
         self._not_empty = threading.Condition(self._lock)
@@ -413,6 +444,7 @@ class MessageSerializer:
             'seq_id': msg.seq_id,
             'timestamp': msg.timestamp,
             'original_src': msg.original_src,
+            'branch_id': msg.branch_id,
         }
         result = pickle.dumps(msg_dict)
         
@@ -462,6 +494,7 @@ class MessageSerializer:
             seq_id=msg_dict['seq_id'],
             timestamp=msg_dict['timestamp'],
             original_src=msg_dict.get('original_src', -1),
+            branch_id=msg_dict.get('branch_id', -1),
         )
         
         deserialize_time = (time.time() - deserialize_start) * 1000

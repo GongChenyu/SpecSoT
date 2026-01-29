@@ -17,7 +17,7 @@ P2P通信管理器
 import zmq
 import torch
 import time
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List, Any
 
 from .base_comm_manager import ZMQCommManagerBase
 from ..logging_utils import get_tensor_info
@@ -182,6 +182,15 @@ class P2PCommManager(ZMQCommManagerBase):
             self.stats['base_cache_sent'] += 1
         elif msg_type == MessageType.EAGLE_CACHE:
             self.stats['eagle_cache_sent'] += 1
+        # 分支调度相关
+        elif msg_type == MessageType.SCHEDULE_PLAN:
+            self.stats['schedule_plan_sent'] += 1
+        elif msg_type == MessageType.BRANCH_PROMPT:
+            self.stats['branch_prompt_sent'] += 1
+        elif msg_type == MessageType.BRANCH_OUTPUT:
+            self.stats['branch_output_sent'] += 1
+        elif msg_type == MessageType.BRANCH_COMPLETE:
+            self.stats['branch_complete_sent'] += 1
     
     # ==================== Draft Tokens 实现 ====================
     
@@ -328,13 +337,13 @@ class P2PCommManager(ZMQCommManagerBase):
     
     # ==================== Eagle Stable KV 广播 ====================
     
-    def broadcast_eagle_stable_kv(
+    def broadcast_eagle_draft_past_key_values(
         self,
         incremental_kv: Tuple[torch.Tensor, torch.Tensor],
         chunk_idx: int,
     ) -> None:
         """
-        P2P模式：广播Eagle Layer的增量stable_kv给所有其他rank
+        P2P模式：广播Eagle Layer的增量draft_past_key_values给所有其他rank
         
         直接向所有其他rank发送增量KV cache
         
@@ -357,4 +366,116 @@ class P2PCommManager(ZMQCommManagerBase):
                 dst_rank=dst_rank,
                 is_incremental=True,
                 chunk_idx=chunk_idx,
+            )    
+    # ==================== 分支调度通信 (最高优先级) ====================
+    
+    def send_schedule_plan_async(
+        self,
+        schedule_plan_data: Dict[str, Any],
+        dst_rank: int = -1,
+    ) -> None:
+        """
+        P2P模式：异步广播调度计划
+        
+        Args:
+            schedule_plan_data: 序列化的调度计划数据
+            dst_rank: 目标rank，-1表示广播
+        """
+        targets = [r for r in range(self.world_size) if r != self.rank] if dst_rank == -1 else [dst_rank]
+        
+        self.logger.debug(
+            f"[BROADCAST] SCHEDULE_PLAN -> targets={targets}"
+        )
+        
+        for target in targets:
+            msg = Message(
+                msg_type=MessageType.SCHEDULE_PLAN,
+                src_rank=self.rank,
+                dst_rank=target,
+                data=schedule_plan_data,
+                seq_id=self._get_next_seq_id(),
             )
+            self.send_queue.put(msg)
+    
+    def send_branch_prompt_async(
+        self,
+        branch_data: Dict[str, Any],
+        dst_rank: int,
+        branch_id: int = -1,
+    ) -> None:
+        """
+        P2P模式：异步发送分支Prompt
+        
+        Args:
+            branch_data: 分支数据
+            dst_rank: 目标rank
+            branch_id: 分支ID
+        """
+        self.logger.debug(
+            f"[SEND] BRANCH_PROMPT -> rank {dst_rank} | branch_id={branch_id}"
+        )
+        
+        msg = Message(
+            msg_type=MessageType.BRANCH_PROMPT,
+            src_rank=self.rank,
+            dst_rank=dst_rank,
+            data=branch_data,
+            branch_id=branch_id,
+            seq_id=self._get_next_seq_id(),
+        )
+        self.send_queue.put(msg)
+    
+    def send_branch_output_async(
+        self,
+        branch_id: int,
+        output_tokens: List[int],
+        dst_rank: int = 0,
+    ) -> None:
+        """
+        P2P模式：异步发送分支输出（完成后立即发送）
+        
+        Args:
+            branch_id: 分支ID
+            output_tokens: 生成的token列表
+            dst_rank: 目标rank
+        """
+        self.logger.debug(
+            f"[SEND] BRANCH_OUTPUT -> rank {dst_rank} | "
+            f"branch_id={branch_id}, num_tokens={len(output_tokens)}"
+        )
+        
+        msg = Message(
+            msg_type=MessageType.BRANCH_OUTPUT,
+            src_rank=self.rank,
+            dst_rank=dst_rank,
+            data=output_tokens,
+            branch_id=branch_id,
+            seq_id=self._get_next_seq_id(),
+        )
+        self.send_queue.put(msg)
+    
+    def send_branch_complete_async(
+        self,
+        dst_rank: int = -1,
+    ) -> None:
+        """
+        P2P模式：异步广播完成信号
+        
+        Args:
+            dst_rank: 目标rank，-1表示广播
+        """
+        targets = [r for r in range(self.world_size) if r != self.rank] if dst_rank == -1 else [dst_rank]
+        
+        self.logger.debug(
+            f"[BROADCAST] BRANCH_COMPLETE -> targets={targets}"
+        )
+        
+        for target in targets:
+            msg = Message(
+                msg_type=MessageType.BRANCH_COMPLETE,
+                src_rank=self.rank,
+                dst_rank=target,
+                data=True,  # 简单的完成标志
+                seq_id=self._get_next_seq_id(),
+            )
+            self.send_queue.put(msg)

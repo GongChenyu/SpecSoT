@@ -41,11 +41,11 @@ import torch.nn as nn
 from transformers.generation.logits_process import LogitsProcessorList
 
 from .distributed_config import DistributedConfig
-from .comm_manager import create_zmq_comm_manager, ZMQCommManagerBase, MessageType, Message
-from ..kv_cache import KVCache
+from .communication import create_zmq_comm_manager, ZMQCommManagerBase, MessageType, Message
+from .kv_cache import KVCache
 
 # 使用统一的日志模块
-from ..logging_utils import (
+from .logging_utils import (
     FlushingStreamHandler,
     FlushingFileHandler,
     get_unified_logger,
@@ -113,7 +113,7 @@ class DistributedPrefillManager:
         # Eagle Cache接收状态 [num_chunks] - 每个chunk同步一次
         self.eagle_cache_received_indicator = None
         
-        # Eagle Layer stable_kv 同步状态
+        # Eagle Layer draft_past_key_values 同步状态
         self.eagle_kv_received = False
         
         # Draft Tree 接收状态
@@ -443,7 +443,7 @@ class DistributedPrefillManager:
                     self.logger.debug(f"  [PHASE 3] First Token 采样: {token.item()}")
 
                 # Eagle Layer生成Draft Tree（使用分布式Prefill专用函数）
-                # 非最后chunk只更新stable_kv，最后chunk才生成完整的draft tree
+                # 非最后chunk只更新draft_past_key_values，最后chunk才生成完整的draft tree
                 start_idx = chunk_idx * self.config.chunk_size + 1
                 end_idx = total_seq_length + 1 if is_last_chunk else start_idx + chunk_seq_length
                 input_ids_this_chunk = input_ids[:, start_idx:end_idx]
@@ -466,7 +466,7 @@ class DistributedPrefillManager:
                     key, value = incremental_kv
                     kv_size_mb = (key.numel() + value.numel()) * key.element_size() / 1024 / 1024
                     self.logger.debug(f"  [PHASE 3][BROADCAST] Eagle Stable KV | chunk={chunk_idx}, size={kv_size_mb:.2f}MB")
-                    self.comm.broadcast_eagle_stable_kv(
+                    self.comm.broadcast_eagle_draft_past_key_values(
                         incremental_kv=incremental_kv, 
                         chunk_idx=chunk_idx,
                     )

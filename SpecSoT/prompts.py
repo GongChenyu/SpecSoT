@@ -148,7 +148,7 @@ parallel_trigger_en = (
     "**Requirements**:\n"
     "1. Target Length: Approx **{target_length}** tokens.\n"
     "2. The output must start with [ANSWER] and please output the body content directly. DO NOT include IDs, titles.\n"
-    "3. If you finished the answer of this branch, the answer must end with [END].\n"
+    "3. If you finished the answer of this branch, the answer must end with [END]. Do not output [END] at the beginning.\n"
     "4. Ensure logical flow with the [User Input].\n"
     "[ANSWER]"
 )

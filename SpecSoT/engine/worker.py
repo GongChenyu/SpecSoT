@@ -221,7 +221,7 @@ class WorkerEngine:
         if not self.args.distributed:
             return None
         
-        from ..distributed.distributed_config import DistributedConfig
+        from ..distributed_config import DistributedConfig
         
         config = DistributedConfig.from_layer_splits_str(
             layer_splits_str=self.args.layer_splits,
@@ -288,67 +288,47 @@ class WorkerEngine:
         """
         执行单个样本的推理
         
-        执行模式说明：
-        - 单机 + 无调度: 直接调用 generate()，使用 enable_parallel 控制是否启用骨架并行
-        - 单机 + 有调度: 调用 generate_with_scheduling()，parallel 阶段使用 continuous batching
-        - 分布式 + 无调度: 调用 generate_distributed()，分布式 prefill + 简单均分分支
-        - 分布式 + 有调度: 调用 generate_distributed_with_scheduling()，分布式 prefill + 分布式调度
+        使用统一的 generate() 接口，通过参数控制执行模式：
+        - enable_parallel: 是否启用骨架并行 (SpecSoT)
+        - use_scheduling: 是否使用 Continuous Batching 调度
+        - 分布式模式由模型内部自动判断
+        
+        对于分布式Worker (rank != 0), generate() 返回空tensor，
+        Worker 已将结果通过通信发送给 Master，无需本地处理。
         """
         args = self.args
+        is_distributed_worker = args.distributed and args.rank != 0
         
         with GPUMemoryMonitor(device_index=device) as monitor:
-            # 分布式模式
-            if args.distributed and args.enable_parallel:
-                if args.use_scheduling:
-                    # 分布式 + 调度模式
-                    output_ids, stats = self.model.generate_distributed_with_scheduling(
-                        task_prompt=task_prompt,
-                        max_new_tokens=args.max_new_tokens,
-                        max_parallel=args.max_parallel,
-                        use_semantic_constraint=args.use_semantic_constraint,
-                    )
-                else:
-                    # 分布式 + 无调度（naive 模式）
-                    output_ids, stats = self.model.generate_distributed(
-                        task_prompt=task_prompt,
-                        max_new_tokens=args.max_new_tokens,
-                        max_parallel=args.max_parallel,
-                        use_semantic_constraint=args.use_semantic_constraint,
-                    )
-                inference_time = stats.get('skeleton_time', 0) + stats.get('parallel_time', 0)
-                skeleton_time = stats.get('skeleton_time', 0)
-                parallel_time = stats.get('parallel_time', 0)
-                num_para = stats.get('num_branches', 0)
-                avg_accept_len = avg_draft_time = avg_update_time = avg_verify_time = 0.0
-            # 单机调度模式：使用 continuous batching 优化 parallel 阶段
-            elif args.use_scheduling and args.enable_parallel:
-                output_ids, stats = self.model.generate_with_scheduling(
-                    task_prompt=task_prompt,
-                    max_new_tokens=args.max_new_tokens,
-                    max_parallel=args.max_parallel,
-                    use_semantic_constraint=args.use_semantic_constraint,
-                )
-                inference_time = stats['skeleton_time'] + stats['parallel_time']
-                skeleton_time = stats['skeleton_time']
-                parallel_time = stats['parallel_time']
-                num_para = stats['num_branches']
-                avg_accept_len = avg_draft_time = avg_update_time = avg_verify_time = 0.0
-            # 标准模式：直接调用 generate
-            else:
-                result = self.model.generate(
-                    task_prompt=task_prompt,
-                    max_new_tokens=args.max_new_tokens,
-                    temperature=0.0,
-                    enable_parallel=args.enable_parallel,
-                    use_semantic_constraint=args.use_semantic_constraint,
-                )
-                (output_ids, avg_accept_len, num_para, avg_draft_time,
-                 avg_update_time, avg_verify_time, inference_time,
-                 skeleton_time, parallel_time) = result
+            # 统一调用 generate()，由模型内部根据配置选择执行路径
+            output_ids, stats = self.model.generate(
+                task_prompt=task_prompt,
+                max_new_tokens=args.max_new_tokens,
+                temperature=0.0,
+                enable_parallel=args.enable_parallel,
+                use_scheduling=args.use_scheduling,
+                max_parallel=args.max_parallel,
+                use_semantic_constraint=args.use_semantic_constraint,
+            )
+            
+            # 从统一的 stats 字典中提取统计信息
+            inference_time = stats.get('total_time', stats.get('skeleton_time', 0) + stats.get('parallel_time', 0))
+            skeleton_time = stats.get('skeleton_time', 0)
+            parallel_time = stats.get('parallel_time', 0)
+            num_para = stats.get('num_branches', 0)
+            avg_accept_len = stats.get('avg_accept_len', 0.0)
+            avg_draft_time = stats.get('avg_draft_time', 0.0)
+            avg_update_time = stats.get('avg_update_time', 0.0)
+            avg_verify_time = stats.get('avg_verify_time', 0.0)
         
-        response = self.tokenizer.decode(output_ids[0].tolist(), skip_special_tokens=True)
-        self.logger.info(f"  响应: {response[:]}...")
-        length = len(output_ids[0])
+        # 分布式 Worker 返回空 tensor，跳过解码
+        if is_distributed_worker or output_ids.numel() == 0:
+            response = ""
+            length = 0
+        else:
+            response = self.tokenizer.decode(output_ids[0].tolist(), skip_special_tokens=True)
+            self.logger.info(f"  响应: {response[:]}...")
+            length = len(output_ids[0])
         throughput = length / inference_time if inference_time > 0 else 0
         
         return {
@@ -365,6 +345,7 @@ class WorkerEngine:
             "avg_draft_time": avg_draft_time,
             "avg_verify_time": avg_verify_time,
             "avg_update_time": avg_update_time,
+            "mode": stats.get('mode', 'unknown'),
         }
 
     def _log_sample_result(self, result: Dict[str, Any]):

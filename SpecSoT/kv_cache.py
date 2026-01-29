@@ -50,6 +50,22 @@ class KVCache:
         dst.copy_(tgt, non_blocking=True)
         self.current_length.fill_(prev_length + tgt.shape[dim])
 
+    def restore_from_tensor(self, tensor: torch.Tensor, dim: int = 2):
+        """
+        从普通 tensor 恢复 KV cache 数据
+        
+        将 tensor 的数据复制到 cache 的开头，并设置正确的长度。
+        常用于恢复之前保存的 cache 状态。
+        
+        Args:
+            tensor (torch.Tensor): 要恢复的数据
+            dim (int, optional): 数据维度，默认为 2 (seq_len 维度)
+        """
+        length = tensor.shape[dim]
+        dst = self.data.narrow(dim, 0, length)
+        dst.copy_(tensor, non_blocking=True)
+        self.current_length.fill_(length)
+
     def cat(self, tensor: torch.Tensor, dim: int = 2):
         """
         Concatenate the given tensor with the current data.
@@ -172,4 +188,19 @@ def reset_past_key_values(passed_key_values: List[torch.Tensor]) -> List[torch.T
         for j in range(2):
             passed_key_values[i][j].current_length.fill_(0)
     return passed_key_values
+
+
+def initialize_draft_past_key_values(eagle_layer, max_length: int, batch_size: int = 1):
+    """
+    初始化 Draft Model (Eagle Layer) 的 KV Cache
+    
+    与 Base Model 的 KV Cache 类似，使用预分配的内存和 KVCache 类管理。
+    
+    Args:
+        eagle_layer: Eagle Layer 模型实例
+        max_length: 最大序列长度
+        batch_size: 批次大小，默认为 1
+    """
+    # 调用 eagle_layer 的 init_kv_cache 方法
+    eagle_layer.init_kv_cache(max_length=max_length, batch_size=batch_size)
 

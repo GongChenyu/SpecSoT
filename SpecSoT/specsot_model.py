@@ -44,16 +44,13 @@ from .modeling.modeling_qwen3_kv import Qwen3ForCausalLM as KVQwen3ForCausalLM
 
 # Eagle Layer (新版重构模块)
 from .modeling_draft import Eagle3, Eagle2, Drafter
-# 兼容旧版别名
-EagleLayer3 = Eagle3
-EagleLayer2 = Eagle2
 
-from .kv_cache import initialize_past_key_values
-from .modeling_draft import EConfig
+from .kv_cache import initialize_past_key_values, initialize_draft_past_key_values
 from .logits_processor import SemanticLogitsProcessor, VocabScanner
 
 # 分布式推理支持
-from .distributed import DistributedConfig, DistributedPrefillManager
+from .distributed_config import DistributedConfig
+from .distributed_prefill import DistributedPrefillManager
 
 # 分支调度支持 (独立于分布式模块)
 from .scheduling import (
@@ -84,6 +81,73 @@ from .utils import (
     parse_skeleton_output,
     prepare_parallel_branches,
 )
+
+from dataclasses import dataclass, field
+
+
+# =============================================================================
+# 流水线数据结构定义 (Pipeline Data Structures)
+# =============================================================================
+
+@dataclass
+class SkeletonPrefillResult:
+    """骨架Prefill阶段结果"""
+    draft_tokens: torch.Tensor
+    retrieve_indices: torch.Tensor
+    tree_mask: torch.Tensor
+    tree_position_ids: torch.Tensor
+    input_ids: torch.Tensor
+    task_input_ids: torch.Tensor
+    input_len: int
+    base_prompt_len: int
+    max_kv_len: int
+    saved_eagle_kv: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
+
+
+@dataclass
+class SkeletonDecodeResult:
+    """骨架解码阶段结果"""
+    skeleton_ids: torch.Tensor
+    skeleton_text: str
+    decode_time: float
+
+
+@dataclass
+class SkeletonParseResult:
+    """骨架解析阶段结果"""
+    mode: str  # 'plan', 'direct', 'error'
+    tasks: Optional[List[Dict]] = None
+    clean_branches: Optional[List[List[int]]] = None
+    instruction_len: Optional[Dict[int, int]] = None
+    error_msg: Optional[str] = None
+
+
+@dataclass
+class ScheduleResult:
+    """调度阶段结果"""
+    schedule_plan: Optional[SchedulePlan] = None
+    my_branch_ids: List[int] = field(default_factory=list)
+    branch_infos: List[BranchInfo] = field(default_factory=list)
+
+
+@dataclass
+class ParallelPrefillResult:
+    """并行Prefill阶段结果"""
+    input_ids: torch.Tensor
+    draft_tokens: torch.Tensor
+    retrieve_indices: torch.Tensor
+    tree_mask: torch.Tensor
+    tree_position_ids: torch.Tensor
+    tips_indices: torch.Tensor
+    branch_begins: List[int]
+    branch_lengths: List[int]
+
+
+@dataclass
+class ParallelDecodeResult:
+    """并行解码阶段结果"""
+    branch_outputs: Dict[int, List[int]]
+    stats: Dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -198,6 +262,10 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # 6. 推理状态初始化
         # =====================================================================
+        # 设置模型为评估模式（禁用 dropout 等训练时特性）
+        self.base_model.eval()
+        self.eagle_layer.eval()
+        
         set_random_seed(self.seed)
         self.reset_state()
         self.eagle_layer.reset_state()
@@ -284,7 +352,7 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         if use_eagle3:
             # EAGLE3: 单层 Decoder，用于 LLaMA 3.1, Qwen3 等新模型
-            eagle_layer = EagleLayer3.from_pretrained(
+            eagle_layer = Eagle3.from_pretrained(
                 ea_model_path=ea_model_path,
                 base_model=base_model,
                 base_model_name_or_path=base_model_path,
@@ -296,7 +364,7 @@ class SpecSoTModel(nn.Module):
             )
         else:
             # EAGLE2: 多层 Decoder Stack，用于 Vicuna 等旧模型
-            eagle_layer = EagleLayer2.from_pretrained(
+            eagle_layer = Eagle2.from_pretrained(
                 ea_model_path=ea_model_path,
                 base_model=base_model,
                 base_model_name_or_path=base_model_path,
@@ -464,6 +532,1163 @@ class SpecSoTModel(nn.Module):
             return outputs, hidden_states
 
     # =========================================================================
+    # Phase 1: Skeleton Prefill (骨架Prefill阶段)
+    # =========================================================================
+
+    @torch.no_grad()
+    def _skeleton_prefill(
+        self,
+        task_prompt: str,
+        max_new_tokens: int,
+        logits_processor: Optional[LogitsProcessorList] = None,
+        use_semantic_constraint: bool = False,
+        distributed: bool = False,
+    ) -> SkeletonPrefillResult:
+        """
+        骨架Prefill阶段
+        
+        初始化KV Cache，执行首次前向传播，准备骨架解码所需的状态。
+        
+        Args:
+            task_prompt: 用户输入的任务描述
+            max_new_tokens: 最大生成token数
+            logits_processor: 采样相关的logits processor
+            use_semantic_constraint: 是否使用FSM语义约束
+            distributed: 是否使用分布式Prefill
+            
+        Returns:
+            SkeletonPrefillResult: 包含draft_tokens, tree_mask等
+        """
+        device = self.base_model.device
+        model_type = self.get_model_type()
+        
+        # 准备输入
+        input_ids, task_input_ids = prepare_skeleton_input(
+            self.tokenizer, task_prompt, model_type, device
+        )
+        input_len = input_ids.shape[1]
+        base_prompt_len = task_input_ids.shape[1]
+        
+        # 准备logits processor
+        skeleton_logits_processor = logits_processor
+        if use_semantic_constraint:
+            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
+            skeleton_logits_processor = LogitsProcessorList([self._semantic_processor])
+            if logits_processor is not None:
+                for p in logits_processor:
+                    skeleton_logits_processor.append(p)
+            self.logger.info("使用 FSM 语义约束进行骨架生成")
+        
+        # 缓存logits processor供后续阶段使用
+        self._skeleton_logits_processor = skeleton_logits_processor
+        
+        # 初始化 KV Cache
+        max_kv_len = input_len + max_new_tokens + 100
+        self.past_key_values, self.past_key_values_data, self.current_length_data = \
+            initialize_past_key_values(self.base_model, max_length=max_kv_len)
+        
+        # 初始化 Eagle Layer 的 KV Cache
+        eagle_max_len = input_len + max_new_tokens + self.eagle_layer.total_tokens + 100
+        initialize_draft_past_key_values(self.eagle_layer, max_length=eagle_max_len)
+        
+        # Prefill
+        if distributed:
+            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
+                self.distributed_prefill_manager.prefill_single_distributed(
+                    input_ids, self.past_key_values, skeleton_logits_processor
+                )
+        else:
+            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
+                self.prefill_single(input_ids, skeleton_logits_processor)
+        set_random_seed(self.seed)
+        
+        # 保存 base prompt 的 Eagle KV 状态（用于后续 parallel 阶段恢复）
+        saved_eagle_kv = None
+        if self.eagle_layer.draft_past_key_values is not None:
+            key_cache, value_cache = self.eagle_layer.draft_past_key_values[0]
+            if hasattr(key_cache, 'data'):
+                k_draft = key_cache.data[:, :, :base_prompt_len, :].clone()
+                v_draft = value_cache.data[:, :, :base_prompt_len, :].clone()
+            else:
+                k_draft = key_cache[..., :base_prompt_len, :].clone()
+                v_draft = value_cache[..., :base_prompt_len, :].clone()
+            saved_eagle_kv = (k_draft, v_draft)
+        
+        return SkeletonPrefillResult(
+            draft_tokens=draft_tokens,
+            retrieve_indices=retrieve_indices,
+            tree_mask=tree_mask,
+            tree_position_ids=tree_position_ids,
+            input_ids=input_ids,
+            task_input_ids=task_input_ids,
+            input_len=input_len,
+            base_prompt_len=base_prompt_len,
+            max_kv_len=max_kv_len,
+            saved_eagle_kv=saved_eagle_kv,
+        )
+
+    # =========================================================================
+    # Phase 2: Skeleton Decode (骨架解码阶段)
+    # =========================================================================
+
+    @torch.no_grad()
+    def _skeleton_decode(
+        self,
+        prefill_result: SkeletonPrefillResult,
+        max_steps: int = 200,
+    ) -> SkeletonDecodeResult:
+        """
+        骨架解码阶段
+        
+        执行骨架解码循环，生成回答骨架。
+        
+        Args:
+            prefill_result: Prefill阶段的结果
+            max_steps: 最大解码步数
+            
+        Returns:
+            SkeletonDecodeResult: 包含skeleton_ids, skeleton_text
+        """
+        decode_start = time.time()
+        
+        input_ids = prefill_result.input_ids
+        input_len = prefill_result.input_len
+        max_kv_len = prefill_result.max_kv_len
+        
+        draft_tokens = prefill_result.draft_tokens
+        retrieve_indices = prefill_result.retrieve_indices
+        tree_mask = prefill_result.tree_mask
+        tree_position_ids = prefill_result.tree_position_ids
+        
+        logits_processor = getattr(self, '_skeleton_logits_processor', None)
+        eos_token_id = self.tokenizer.eos_token_id
+        
+        for step in range(max_steps):
+            (
+                input_ids, draft_tokens, retrieve_indices,
+                tree_mask, tree_position_ids, _,
+            ) = self.decode_step_single(
+                input_ids=input_ids,
+                draft_tokens=draft_tokens,
+                retrieve_indices=retrieve_indices,
+                tree_mask=tree_mask,
+                tree_position_ids=tree_position_ids,
+                logits_processor=logits_processor,
+            )
+            
+            generated_text = self.tokenizer.decode(input_ids[0, input_len:])
+            if check_skeleton_stop(
+                generated_text, eos_token_id, input_ids, input_len,
+                self.current_length_data[0].item(), max_kv_len,
+                self.eagle_layer.total_tokens + 1
+            ):
+                break
+        
+        # 提取骨架
+        skeleton_ids = input_ids[:, input_len:]
+        skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
+        self.skeleton_output = skeleton_ids.clone()
+        
+        decode_time = time.time() - decode_start
+        self.logger.info(f"Skeleton 解码完成: {decode_time:.3f}s")
+        self.logger.info(f"Generated Skeleton: {skeleton_text}")
+        
+        return SkeletonDecodeResult(
+            skeleton_ids=skeleton_ids,
+            skeleton_text=skeleton_text,
+            decode_time=decode_time,
+        )
+
+    # =========================================================================
+    # Phase 3: Skeleton Parse (骨架解析阶段)
+    # =========================================================================
+
+    def _skeleton_parse(
+        self,
+        skeleton_text: str,
+        task_prompt: str,
+    ) -> SkeletonParseResult:
+        """
+        骨架解析阶段
+        
+        解析骨架输出，提取分支任务信息。
+        
+        Args:
+            skeleton_text: 骨架文本
+            task_prompt: 原始任务描述
+            
+        Returns:
+            SkeletonParseResult: 包含mode, tasks, clean_branches等
+        """
+        model_type = self.get_model_type()
+        
+        mode, content = parse_skeleton_output(skeleton_text)
+        
+        if mode == "direct":
+            self.logger.info("直接回答模式，跳过并行阶段")
+            return SkeletonParseResult(mode="direct")
+        
+        if mode == "error":
+            self.logger.warning(f"骨架解析错误: {content}")
+            return SkeletonParseResult(mode="error", error_msg=str(content))
+        
+        # mode == "plan": 规划模式
+        tasks = content
+        self.logger.info(f"检测到 {len(tasks)} 个并行分支: {[t['title'] for t in tasks]}")
+        
+        # 准备分支prompt tokens
+        clean_branches, instruction_len = prepare_parallel_branches(
+            self.tokenizer, tasks, skeleton_text, model_type, task_prompt
+        )
+        
+        # 初始化输出存储
+        self.parallel_branches_output = [list(br) for br in clean_branches]
+        self.instruction_len = instruction_len
+        
+        return SkeletonParseResult(
+            mode="plan",
+            tasks=tasks,
+            clean_branches=clean_branches,
+            instruction_len=instruction_len,
+        )
+
+    # =========================================================================
+    # Phase 4: Schedule (调度阶段)
+    # =========================================================================
+
+    def _schedule_branches(
+        self,
+        parse_result: SkeletonParseResult,
+        use_scheduling: bool,
+        distributed: bool,
+        max_parallel: int,
+    ) -> ScheduleResult:
+        """
+        分支调度阶段
+        
+        根据分支信息生成调度计划。
+        
+        Args:
+            parse_result: 骨架解析结果
+            use_scheduling: 是否使用启发式调度
+            distributed: 是否是分布式模式
+            max_parallel: 最大并行数
+            
+        Returns:
+            ScheduleResult: 包含schedule_plan, my_branch_ids
+        """
+        if parse_result.mode != "plan":
+            return ScheduleResult()
+        
+        tasks = parse_result.tasks
+        clean_branches = parse_result.clean_branches
+        
+        # 构建 BranchInfo
+        branch_infos = [
+            BranchInfo(
+                branch_id=i,
+                title=task['title'],
+                predicted_length=task['length'],
+                prompt_tokens=clean_branches[i],
+            )
+            for i, task in enumerate(tasks)
+        ]
+        
+        # 确定设备数量
+        if distributed:
+            world_size = self.distributed_config.world_size
+        else:
+            world_size = 1
+        
+        # 选择调度器
+        if use_scheduling:
+            device_profiles = [
+                DeviceProfile(device_id=r, max_parallel=max_parallel)
+                for r in range(world_size)
+            ]
+            scheduler = HeuristicScheduler(use_compute_weight=True)
+        else:
+            device_profiles = [
+                DeviceProfile.default_single_device() if world_size == 1 
+                else DeviceProfile(device_id=r)
+                for r in range(world_size)
+            ]
+            if distributed:
+                scheduler = SimpleDistributedScheduler(all_parallel=True)
+            else:
+                # 单机朴素模式：所有分支分配给设备0
+                scheduler = SimpleDistributedScheduler(all_parallel=True)
+        
+        schedule_plan = scheduler.schedule(branch_infos, device_profiles)
+        self.logger.info(schedule_plan.summary())
+        
+        # 获取当前设备的分支
+        my_rank = self.distributed_config.rank if distributed else 0
+        my_plan = schedule_plan.get_plan_for_device(my_rank)
+        my_branch_ids = my_plan.assigned_branches if my_plan else []
+        
+        return ScheduleResult(
+            schedule_plan=schedule_plan,
+            my_branch_ids=my_branch_ids,
+            branch_infos=branch_infos,
+        )
+
+    # =========================================================================
+    # Phase 5: Parallel Prefill (并行Prefill阶段)
+    # =========================================================================
+
+    @torch.no_grad()
+    def _parallel_prefill(
+        self,
+        prefix_ids: torch.Tensor,
+        branch_prompts: List[List[int]],
+        branch_ids: List[int],
+        max_new_tokens: int,
+        logits_processor: Optional[LogitsProcessorList] = None,
+    ) -> ParallelPrefillResult:
+        """
+        并行Prefill阶段
+        
+        为指定分支执行Prefill。
+        
+        Args:
+            prefix_ids: 前缀token IDs
+            branch_prompts: 分支prompt列表
+            branch_ids: 分支ID列表
+            max_new_tokens: 最大生成token数
+            logits_processor: logits处理器
+            
+        Returns:
+            ParallelPrefillResult: 包含draft_tokens等
+        """
+        prefix_len = prefix_ids.shape[1]
+        
+        # 准备批次数据
+        input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
+            self._prepare_parallel_batch(prefix_ids, branch_prompts, max_new_tokens, branch_ids)
+        
+        # 执行Prefill
+        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _ = \
+            self.prefill_parallel(
+                prefix_len, input_ids, tips_indices,
+                branch_begins, branch_lengths, draft_input_ids, logits_processor
+            )
+        
+        return ParallelPrefillResult(
+            input_ids=input_ids,
+            draft_tokens=draft_tokens,
+            retrieve_indices=retrieve_indices,
+            tree_mask=tree_mask,
+            tree_position_ids=tree_position_ids,
+            tips_indices=tips_indices,
+            branch_begins=branch_begins,
+            branch_lengths=branch_lengths,
+        )
+
+    # =========================================================================
+    # Phase 6: Parallel Decode (并行解码阶段)
+    # =========================================================================
+
+    @torch.no_grad()
+    def _parallel_decode(
+        self,
+        prefill_result: ParallelPrefillResult,
+        schedule_result: ScheduleResult,
+        clean_branches: List[List[int]],
+        max_new_tokens: int,
+        max_kv_len: int,
+        prefix_len: int,
+        use_scheduling: bool,
+        logits_processor: Optional[LogitsProcessorList] = None,
+    ) -> ParallelDecodeResult:
+        """
+        并行解码阶段
+        
+        执行并行分支解码，支持朴素模式和连续批处理模式。
+        
+        Args:
+            prefill_result: Prefill阶段结果
+            schedule_result: 调度阶段结果
+            clean_branches: 所有分支的prompt tokens
+            max_new_tokens: 最大生成token数
+            max_kv_len: KV Cache最大长度
+            prefix_len: 前缀长度
+            use_scheduling: 是否使用连续批处理
+            logits_processor: logits处理器
+            
+        Returns:
+            ParallelDecodeResult: 包含branch_outputs, stats
+        """
+        device = self.base_model.device
+        tokens_per_branch = self.eagle_layer.total_tokens + 1
+        
+        draft_tokens = prefill_result.draft_tokens
+        retrieve_indices = prefill_result.retrieve_indices
+        tree_mask = prefill_result.tree_mask
+        tree_position_ids = prefill_result.tree_position_ids
+        
+        stats = {}
+        
+        if use_scheduling and schedule_result.schedule_plan is not None:
+            # ========== 连续批处理模式 ==========
+            branch_info_dict = {info.branch_id: info for info in schedule_result.branch_infos}
+            my_plan = schedule_result.schedule_plan.get_plan_for_device(0)
+            
+            if my_plan is None:
+                return ParallelDecodeResult(branch_outputs={}, stats={})
+            
+            exec_manager = BranchExecutionManager(
+                execution_plan=my_plan,
+                branch_infos=branch_info_dict,
+                rank=0,
+            )
+            exec_manager.activate_branches(schedule_result.my_branch_ids)
+            
+            for step in range(max_new_tokens):
+                if check_stop_conditions_parallel(
+                    current_length=self.current_length_data[0].item(),
+                    max_kv_len=max_kv_len,
+                    num_active_branches=len(self.active_branches),
+                    tokens_per_branch=tokens_per_branch,
+                ):
+                    break
+                
+                if exec_manager.is_all_completed():
+                    self.logger.info("所有分支执行完成")
+                    break
+                
+                # 解码
+                if self.prefilling_branches:
+                    (
+                        draft_tokens, retrieve_indices, tree_mask,
+                        tree_position_ids, accept_length, all_finished,
+                    ) = self.decode_step_parallel_with_prefill(
+                        draft_tokens=draft_tokens,
+                        retrieve_indices=retrieve_indices,
+                        tree_mask=tree_mask,
+                        tree_position_ids=tree_position_ids,
+                        prefix_len=prefix_len,
+                        logits_processor=logits_processor,
+                    )
+                else:
+                    (
+                        draft_tokens, retrieve_indices, tree_mask,
+                        tree_position_ids, accept_length, all_finished,
+                    ) = self.decode_step_parallel(
+                        draft_tokens=draft_tokens,
+                        retrieve_indices=retrieve_indices,
+                        tree_mask=tree_mask,
+                        tree_position_ids=tree_position_ids,
+                        logits_processor=logits_processor,
+                    )
+                
+                exec_manager.step()
+                
+                # 处理完成的分支，动态加入新分支
+                if self.recently_completed_branches:
+                    completed = self.recently_completed_branches
+                    branch_outputs = {
+                        bid: self.parallel_branches_output[bid]
+                        for bid in completed
+                    }
+                    exec_manager.handle_completed_branches(completed, branch_outputs)
+                    
+                    new_branches = exec_manager.get_branches_to_add()
+                    if new_branches:
+                        self.logger.info(f"Continuous Batching: 加入新分支 {new_branches}")
+                        self._add_branches_to_active(
+                            new_branches, clean_branches, prefix_len, logits_processor
+                        )
+                        exec_manager.activate_branches(new_branches)
+                
+                if all_finished:
+                    break
+            
+            stats['execution_stats'] = exec_manager.get_stats()
+            
+        else:
+            # ========== 朴素模式：所有分支同时解码 ==========
+            total_accept_len = torch.zeros(1, dtype=torch.long, device=device)
+            total_draft_time = 0.0
+            total_update_time = 0.0
+            total_verify_time = 0.0
+            
+            evt_start = torch.cuda.Event(enable_timing=True)
+            evt_after_verify = torch.cuda.Event(enable_timing=True)
+            evt_after_update = torch.cuda.Event(enable_timing=True)
+            evt_after_draft = torch.cuda.Event(enable_timing=True)
+            step_parallel = 0
+            
+            for step_parallel in range(max_new_tokens):
+                if check_stop_conditions_parallel(
+                    current_length=self.current_length_data[0].item(),
+                    max_kv_len=max_kv_len,
+                    num_active_branches=len(self.active_branches),
+                    tokens_per_branch=tokens_per_branch,
+                ):
+                    self.logger.warning(f"KV cache 限制，未完成分支: {self.active_branches}")
+                    break
+                
+                evt_start.record()
+                
+                (
+                    draft_tokens, retrieve_indices, tree_mask,
+                    tree_position_ids, accept_length, all_finished,
+                ) = self.decode_step_parallel(
+                    draft_tokens=draft_tokens,
+                    retrieve_indices=retrieve_indices,
+                    tree_mask=tree_mask,
+                    tree_position_ids=tree_position_ids,
+                    logits_processor=logits_processor,
+                    evt_after_verify=evt_after_verify,
+                    evt_after_update=evt_after_update,
+                )
+                evt_after_draft.record()
+                
+                total_accept_len += accept_length.sum()
+                
+                torch.cuda.synchronize()
+                total_verify_time += evt_start.elapsed_time(evt_after_verify) / 1000
+                total_update_time += evt_after_verify.elapsed_time(evt_after_update) / 1000
+                total_draft_time += evt_after_update.elapsed_time(evt_after_draft) / 1000
+                
+                if all_finished:
+                    self.logger.info("所有分支解码完成")
+                    break
+            
+            num_steps = max(step_parallel, 1)
+            stats = {
+                'avg_accept_len': total_accept_len.item() / num_steps,
+                'avg_draft_time': total_draft_time / num_steps,
+                'avg_update_time': total_update_time / num_steps,
+                'avg_verify_time': total_verify_time / num_steps,
+            }
+        
+        # 收集输出
+        branch_outputs = {}
+        for bid in schedule_result.my_branch_ids:
+            branch_outputs[bid] = self.parallel_branches_output[bid]
+        
+        return ParallelDecodeResult(branch_outputs=branch_outputs, stats=stats)
+
+    # =========================================================================
+    # Phase 7: Result Merge (结果合并阶段)
+    # =========================================================================
+
+    def _merge_results(
+        self,
+        skeleton_ids: torch.Tensor,
+        tasks: List[Dict],
+    ) -> torch.Tensor:
+        """
+        结果合并阶段
+        
+        合并骨架和分支输出。
+        
+        Args:
+            skeleton_ids: 骨架token IDs
+            tasks: 分支任务列表
+            
+        Returns:
+            merged_ids: 合并后的token IDs
+        """
+        device = self.base_model.device
+        
+        merged_ids = merge_outputs(
+            skeleton_output=self.skeleton_output,
+            parallel_branches_output=self.parallel_branches_output,
+            instruction_len=self.instruction_len,
+            device=device,
+            tasks=tasks,
+            tokenizer=self.tokenizer,
+        )
+        
+        return merged_ids
+
+    # =========================================================================
+    # 流水线控制器 (Pipeline Controllers)
+    # =========================================================================
+
+    @torch.no_grad()
+    def _run_specsot_pipeline(
+        self,
+        task_prompt: str,
+        max_new_tokens: int,
+        max_parallel: int,
+        logits_processor: Optional[LogitsProcessorList],
+        use_semantic_constraint: bool,
+        use_scheduling: bool,
+    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
+        """
+        SpecSoT 主流水线控制器
+        
+        协调执行所有阶段的流水线。单机和分布式Master都使用此方法。
+        
+        Args:
+            task_prompt: 任务描述
+            max_new_tokens: 最大生成token数
+            max_parallel: 最大并行数
+            logits_processor: logits处理器
+            use_semantic_constraint: 是否使用语义约束
+            use_scheduling: 是否使用调度
+            
+        Returns:
+            output_ids, stats
+        """
+        device = self.base_model.device
+        distributed = self.is_distributed()
+        is_master = not distributed or self.distributed_config.rank == 0
+        
+        mode_name = f"{'distributed' if distributed else 'local'}_{'scheduling' if use_scheduling else 'naive'}"
+        stats = {
+            'skeleton_time': 0.0,
+            'scheduling_time': 0.0,
+            'parallel_time': 0.0,
+            'num_branches': 0,
+            'mode': mode_name,
+            'avg_accept_len': 0.0,
+            'avg_draft_time': 0.0,
+            'avg_update_time': 0.0,
+            'avg_verify_time': 0.0,
+        }
+        
+        self.logger.info(f"开始 SpecSoT 流水线: distributed={distributed}, use_scheduling={use_scheduling}")
+        
+        # =====================================================================
+        # Phase 1: Skeleton Prefill
+        # =====================================================================
+        skeleton_start = time.time()
+        prefill_result = self._skeleton_prefill(
+            task_prompt=task_prompt,
+            max_new_tokens=max_new_tokens,
+            logits_processor=logits_processor,
+            use_semantic_constraint=use_semantic_constraint,
+            distributed=distributed,
+        )
+        
+        # 分布式Worker在Prefill后进入独立流程
+        if distributed and not is_master:
+            return self._worker_pipeline(
+                prefill_result=prefill_result,
+                max_new_tokens=max_new_tokens,
+                max_parallel=max_parallel,
+                use_scheduling=use_scheduling,
+                logits_processor=logits_processor,
+            )
+        
+        # =====================================================================
+        # Phase 2: Skeleton Decode (仅Master)
+        # =====================================================================
+        decode_result = self._skeleton_decode(prefill_result)
+        
+        stats['skeleton_time'] = time.time() - skeleton_start
+        
+        # =====================================================================
+        # Phase 3: Skeleton Parse
+        # =====================================================================
+        parse_result = self._skeleton_parse(
+            skeleton_text=decode_result.skeleton_text,
+            task_prompt=task_prompt,
+        )
+        
+        # 处理 direct/error 模式
+        if parse_result.mode != "plan":
+            if distributed:
+                self._notify_workers_complete()
+            return decode_result.skeleton_ids, stats
+        
+        stats['num_branches'] = len(parse_result.tasks)
+        
+        # =====================================================================
+        # Phase 4: Schedule
+        # =====================================================================
+        scheduling_start = time.time()
+        schedule_result = self._schedule_branches(
+            parse_result=parse_result,
+            use_scheduling=use_scheduling,
+            distributed=distributed,
+            max_parallel=max_parallel,
+        )
+        stats['scheduling_time'] = time.time() - scheduling_start
+        
+        # =====================================================================
+        # 分布式: 分发任务给Worker
+        # =====================================================================
+        if distributed:
+            self._distribute_tasks_to_workers(schedule_result, parse_result)
+        
+        # =====================================================================
+        # Phase 5: Parallel Prefill
+        # =====================================================================
+        parallel_start = time.time()
+        
+        # 恢复Eagle KV到base prompt状态
+        self._restore_eagle_kv(prefill_result.saved_eagle_kv)
+        
+        # 获取当前设备要执行的分支
+        my_branch_ids = schedule_result.my_branch_ids
+        if not my_branch_ids:
+            self.logger.warning("当前设备没有分配分支")
+            if distributed:
+                # 收集Worker结果
+                all_outputs = self._collect_worker_results(
+                    schedule_result, len(parse_result.tasks) - len(my_branch_ids)
+                )
+                for bid, tokens in all_outputs.items():
+                    self.parallel_branches_output[bid] = tokens
+            stats['parallel_time'] = time.time() - parallel_start
+            merged_ids = self._merge_results(decode_result.skeleton_ids, parse_result.tasks)
+            return merged_ids, stats
+        
+        my_prompts = [parse_result.clean_branches[bid] for bid in my_branch_ids]
+        
+        parallel_prefill_result = self._parallel_prefill(
+            prefix_ids=prefill_result.task_input_ids,
+            branch_prompts=my_prompts,
+            branch_ids=my_branch_ids,
+            max_new_tokens=max_new_tokens,
+            logits_processor=logits_processor,
+        )
+        
+        # =====================================================================
+        # Phase 6: Parallel Decode
+        # =====================================================================
+        parallel_decode_result = self._parallel_decode(
+            prefill_result=parallel_prefill_result,
+            schedule_result=schedule_result,
+            clean_branches=parse_result.clean_branches,
+            max_new_tokens=max_new_tokens,
+            max_kv_len=prefill_result.max_kv_len,
+            prefix_len=prefill_result.task_input_ids.shape[1],
+            use_scheduling=use_scheduling,
+            logits_processor=logits_processor,
+        )
+        
+        # 更新本地输出
+        for bid, tokens in parallel_decode_result.branch_outputs.items():
+            self.parallel_branches_output[bid] = tokens
+        
+        stats.update(parallel_decode_result.stats)
+        
+        # =====================================================================
+        # 分布式: 收集Worker结果
+        # =====================================================================
+        if distributed:
+            num_other = len(parse_result.tasks) - len(my_branch_ids)
+            if num_other > 0:
+                other_outputs = self._collect_worker_results(schedule_result, num_other)
+                for bid, tokens in other_outputs.items():
+                    self.parallel_branches_output[bid] = tokens
+            
+            # 通知Worker完成
+            self._notify_workers_complete()
+        
+        stats['parallel_time'] = time.time() - parallel_start
+        self.logger.info(f"并行解码完成: {stats['parallel_time']:.3f}s")
+        
+        # =====================================================================
+        # Phase 7: Result Merge
+        # =====================================================================
+        merged_ids = self._merge_results(decode_result.skeleton_ids, parse_result.tasks)
+        
+        return merged_ids, stats
+
+    @torch.no_grad()
+    def _worker_pipeline(
+        self,
+        prefill_result: SkeletonPrefillResult,
+        max_new_tokens: int,
+        max_parallel: int,
+        use_scheduling: bool,
+        logits_processor: Optional[LogitsProcessorList],
+    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
+        """
+        分布式Worker流水线
+        
+        Worker在Skeleton Prefill后进入此流程，等待Master分发任务。
+        
+        Args:
+            prefill_result: Prefill阶段结果
+            max_new_tokens: 最大生成token数
+            max_parallel: 最大并行数
+            use_scheduling: 是否使用调度
+            logits_processor: logits处理器
+            
+        Returns:
+            空tensor和统计信息（Worker不返回最终结果）
+        """
+        device = self.base_model.device
+        rank = self.distributed_config.rank
+        
+        stats = {
+            'parallel_time': 0.0,
+            'num_branches': 0,
+            'mode': f'worker_{"scheduling" if use_scheduling else "naive"}',
+        }
+        
+        self.logger.info(f"Worker {rank} 等待接收任务...")
+        
+        # 接收任务
+        task_data = self._receive_tasks_from_master()
+        if task_data is None:
+            self.logger.info(f"Worker {rank} 收到完成信号，退出")
+            return torch.tensor([], device=device), stats
+        
+        schedule_plan, branch_infos = task_data
+        branch_ids = [info.branch_id for info in branch_infos]
+        branch_prompts = [info.prompt_tokens for info in branch_infos]
+        
+        stats['num_branches'] = len(branch_ids)
+        self.logger.info(f"Worker {rank} 收到 {len(branch_ids)} 个分支任务")
+        
+        # 初始化输出存储
+        max_branch_id = max(branch_ids) + 1
+        self.parallel_branches_output = [[] for _ in range(max_branch_id)]
+        for info in branch_infos:
+            self.parallel_branches_output[info.branch_id] = list(info.prompt_tokens)
+        self.instruction_len = {info.branch_id: len(info.prompt_tokens) for info in branch_infos}
+        
+        # 准备执行
+        parallel_start = time.time()
+        prefix_len = prefill_result.base_prompt_len
+        max_kv_len = prefix_len + max_new_tokens + 500
+        
+        # 扩展KV Cache如果需要
+        if self.past_key_values_data[0].shape[3] < max_kv_len:
+            old_cache = [d[..., :prefix_len, :].clone() for d in self.past_key_values_data]
+            self.past_key_values, self.past_key_values_data, self.current_length_data = \
+                initialize_past_key_values(self.base_model, max_length=max_kv_len)
+            for i, d in enumerate(old_cache):
+                self.past_key_values_data[i][..., :prefix_len, :].copy_(d)
+            self.current_length_data.fill_(prefix_len)
+        
+        # 创建虚拟prefix_ids
+        prefix_ids = torch.zeros((1, prefix_len), dtype=torch.long, device=device)
+        
+        # Phase 5: Parallel Prefill
+        parallel_prefill_result = self._parallel_prefill(
+            prefix_ids=prefix_ids,
+            branch_prompts=branch_prompts,
+            branch_ids=branch_ids,
+            max_new_tokens=max_new_tokens,
+            logits_processor=logits_processor,
+        )
+        
+        # 构建调度结果
+        my_plan = schedule_plan.get_plan_for_device(rank)
+        schedule_result = ScheduleResult(
+            schedule_plan=schedule_plan,
+            my_branch_ids=branch_ids,
+            branch_infos=branch_infos,
+        )
+        
+        # Phase 6: Parallel Decode
+        parallel_decode_result = self._parallel_decode(
+            prefill_result=parallel_prefill_result,
+            schedule_result=schedule_result,
+            clean_branches={info.branch_id: info.prompt_tokens for info in branch_infos},
+            max_new_tokens=max_new_tokens,
+            max_kv_len=max_kv_len,
+            prefix_len=prefix_len,
+            use_scheduling=use_scheduling,
+            logits_processor=logits_processor,
+        )
+        
+        stats['parallel_time'] = time.time() - parallel_start
+        
+        # 发送结果给Master
+        self._send_results_to_master(parallel_decode_result.branch_outputs)
+        
+        self.logger.info(f"Worker {rank} 完成，等待完成信号...")
+        
+        # 等待完成信号
+        comm = self.distributed_prefill_manager.comm
+        comm.recv_complete_signal(timeout=300.0)
+        
+        return torch.tensor([], device=device), stats
+
+    # =========================================================================
+    # 分布式通信辅助方法 (Distributed Communication Helpers)
+    # =========================================================================
+
+    def _notify_workers_complete(self) -> None:
+        """通知所有Worker完成"""
+        if not self.is_distributed():
+            return
+        comm = self.distributed_prefill_manager.comm
+        comm.broadcast_parallel_complete_signal()
+
+    def _distribute_tasks_to_workers(
+        self,
+        schedule_result: ScheduleResult,
+        parse_result: SkeletonParseResult,
+    ) -> None:
+        """分发任务给Worker"""
+        if not self.is_distributed():
+            return
+        
+        comm = self.distributed_prefill_manager.comm
+        schedule_plan = schedule_result.schedule_plan
+        branch_infos = schedule_result.branch_infos
+        
+        # 序列化调度计划
+        schedule_plan_data = {
+            'num_branches': schedule_plan.num_branches,
+            'num_devices': schedule_plan.num_devices,
+            'branch_to_device': schedule_plan.branch_to_device,
+            'device_plans': {
+                did: {
+                    'device_id': plan.device_id,
+                    'execution_batches': plan.execution_batches,
+                    'assigned_branches': plan.assigned_branches,
+                    'max_parallel': plan.max_parallel,
+                }
+                for did, plan in schedule_plan.device_plans.items()
+            },
+            'scheduler_type': schedule_plan.scheduler_type,
+        }
+        
+        # 广播调度计划
+        comm.send_schedule_plan_async(schedule_plan_data, dst_rank=-1)
+        
+        # 发送分支Prompt到各Worker
+        device_branches = {}
+        for info in branch_infos:
+            device_id = schedule_plan.get_device_for_branch(info.branch_id)
+            if device_id not in device_branches:
+                device_branches[device_id] = []
+            device_branches[device_id].append(info)
+        
+        for device_id, infos in device_branches.items():
+            if device_id == 0:
+                continue  # Master不发给自己
+            branch_data = [
+                {
+                    'branch_id': info.branch_id,
+                    'title': info.title,
+                    'predicted_length': info.predicted_length,
+                    'prompt_tokens': info.prompt_tokens,
+                }
+                for info in infos
+            ]
+            comm.send_branch_prompt_async(branch_data, device_id)
+
+    def _collect_worker_results(
+        self,
+        schedule_result: ScheduleResult,
+        num_branches: int,
+    ) -> Dict[int, List[int]]:
+        """收集Worker结果"""
+        if not self.is_distributed() or num_branches == 0:
+            return {}
+        
+        comm = self.distributed_prefill_manager.comm
+        self.logger.info(f"收集其他设备的分支输出 ({num_branches} 个)...")
+        
+        outputs = comm.collect_all_branch_outputs(
+            num_branches=num_branches,
+            timeout=300.0
+        )
+        return outputs
+
+    def _receive_tasks_from_master(self) -> Optional[Tuple[SchedulePlan, List[BranchInfo]]]:
+        """Worker接收Master分发的任务"""
+        comm = self.distributed_prefill_manager.comm
+        
+        # 接收调度计划
+        schedule_plan_data = comm.recv_schedule_plan(timeout=60.0)
+        if schedule_plan_data is None:
+            return None
+        
+        # 反序列化
+        device_plans = {}
+        for did, pdata in schedule_plan_data['device_plans'].items():
+            device_plans[int(did)] = DeviceExecutionPlan(
+                device_id=pdata['device_id'],
+                execution_batches=pdata['execution_batches'],
+                assigned_branches=pdata['assigned_branches'],
+                max_parallel=pdata['max_parallel'],
+            )
+        schedule_plan = SchedulePlan(
+            num_branches=schedule_plan_data['num_branches'],
+            num_devices=schedule_plan_data['num_devices'],
+            branch_to_device=schedule_plan_data['branch_to_device'],
+            device_plans=device_plans,
+            scheduler_type=schedule_plan_data['scheduler_type'],
+        )
+        
+        # 接收分支Prompt
+        branch_data_list = comm.recv_branch_prompts(timeout=60.0)
+        if not branch_data_list:
+            return None
+        
+        branch_infos = [
+            BranchInfo(
+                branch_id=data['branch_id'],
+                title=data['title'],
+                predicted_length=data['predicted_length'],
+                prompt_tokens=data['prompt_tokens'],
+            )
+            for data in branch_data_list
+        ]
+        
+        return schedule_plan, branch_infos
+
+    def _send_results_to_master(self, branch_outputs: Dict[int, List[int]]) -> None:
+        """Worker发送结果给Master"""
+        comm = self.distributed_prefill_manager.comm
+        for bid, tokens in branch_outputs.items():
+            comm.send_branch_output_async(
+                branch_id=bid,
+                output_tokens=tokens,
+                dst_rank=0,
+            )
+
+    def _restore_eagle_kv(self, saved_eagle_kv: Optional[Tuple[torch.Tensor, torch.Tensor]]) -> None:
+        """恢复Eagle KV Cache到base prompt状态"""
+        if saved_eagle_kv is None:
+            return
+        k_saved, v_saved = saved_eagle_kv
+        key_cache, value_cache = self.eagle_layer.draft_past_key_values[0]
+        if hasattr(key_cache, 'restore_from_tensor'):
+            key_cache.restore_from_tensor(k_saved.clone())
+            value_cache.restore_from_tensor(v_saved.clone())
+        else:
+            self.eagle_layer.draft_past_key_values = ((k_saved.clone(), v_saved.clone()),)
+
+    # =========================================================================
+    # 并行解码辅助方法 (Parallel Decoding Helpers)
+    # =========================================================================
+
+    def _prepare_parallel_batch(
+        self,
+        prefix_ids: torch.Tensor,
+        branches_prompts: List[List[int]],
+        max_new_tokens: int,
+        branch_ids: Optional[List[int]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, List[int], List[int], torch.Tensor]:
+        """
+        准备并行解码的批次数据（统一入口）
+        
+        该方法合并了原来的 reuse_prefix_for_parallel 和 _prepare_batch_for_prefill，
+        用于在 Skeleton 生成完成后，为各分支准备并行解码的输入数据。
+        
+        核心步骤：
+        1. 复制 KV Cache: 将 skeleton 的 prefix KV 复制为多分支
+        2. 构建 BIM: 创建 Branch Index Map，追踪每个 token 的分支归属
+        3. 打包输入: 将所有分支的 prompt 打包成一个序列
+        4. 位置编码: 为各分支构建正确的位置编码
+        
+        Args:
+            prefix_ids: 共享前缀 (skeleton) [1, prefix_len]
+            branches_prompts: 各分支的 prompt token 列表
+            max_new_tokens: 每个分支最大生成长度
+            branch_ids: 分支 ID 列表（可选，用于 Continuous Batching）
+                        如果为 None，则使用 0, 1, 2, ... 作为 ID
+            
+        Returns:
+            input_ids: 打包后的输入 [1, total_len]
+            tips_indices: 各分支 tip 位置
+            branch_begins: 各分支起始位置
+            branch_lengths: 各分支初始长度
+            draft_input_ids: Draft 模型的输入 [num_para, max_len]
+        """
+        device = self.base_model.device
+        num_para = len(branches_prompts)
+        prefix_len = prefix_ids.shape[1]
+        pad_token_id = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
+        
+        # 如果没有指定 branch_ids，使用默认的 0, 1, 2, ...
+        if branch_ids is None:
+            branch_ids = list(range(num_para))
+        
+        # 初始化活跃分支列表
+        self.active_branches = list(branch_ids)
+        
+        # ---------------------------------------------------------------------
+        # 1. Base Model KV Cache: 重置到 prefix 长度
+        # ---------------------------------------------------------------------
+        self.current_length_data.fill_(prefix_len)
+        
+        # ---------------------------------------------------------------------
+        # 2. Eagle Layer KV Cache: 复制 prefix KV 为多分支
+        # ---------------------------------------------------------------------
+        if self.eagle_layer.draft_past_key_values is not None:
+            key_cache, value_cache = self.eagle_layer.draft_past_key_values[0]
+            if hasattr(key_cache, 'data'):
+                k_draft = key_cache.data[:, :, :key_cache.shape[2], :]
+                v_draft = value_cache.data[:, :, :value_cache.shape[2], :]
+            else:
+                k_draft = key_cache
+                v_draft = value_cache
+            k_prefix = k_draft[..., :prefix_len, :].clone()
+            v_prefix = v_draft[..., :prefix_len, :].clone()
+            k_expanded = k_prefix.expand(num_para, -1, -1, -1).clone()
+            v_expanded = v_prefix.expand(num_para, -1, -1, -1).clone()
+            # 批量模式下使用普通 tensor 格式
+            self.eagle_layer.draft_past_key_values = ((k_expanded, v_expanded),)
+            self.eagle_layer.kv_cache_initialized = False
+        
+        # ---------------------------------------------------------------------
+        # 3. 构建打包输入序列和 Branch Index Map
+        # ---------------------------------------------------------------------
+        flat_branch_ids = []
+        branch_index_list = [-1] * prefix_len  # Prefix 标记为 -1
+        
+        tips_indices = []
+        branch_begins = []
+        branch_lengths = []
+        pos_ids_list = list(range(prefix_len))
+        
+        draft_branch_list = []
+        draft_pos_list = []
+        
+        current_offset = prefix_len
+        for i, (br, bid) in enumerate(zip(branches_prompts, branch_ids)):
+            curr_len = len(br)
+            branch_begins.append(current_offset)
+            flat_branch_ids.extend(br)
+            branch_index_list.extend([bid] * curr_len)
+            branch_lengths.append(curr_len)
+            current_offset += curr_len
+            tips_indices.append(current_offset - 1)
+            
+            # 位置编码: 每个分支从 prefix_len 开始独立计数
+            curr_pos = list(range(prefix_len, prefix_len + curr_len))
+            pos_ids_list.extend(curr_pos)
+            
+            draft_branch_list.append(torch.tensor(br, device=device, dtype=torch.long))
+            draft_pos_list.append(torch.tensor(curr_pos, device=device, dtype=torch.long))
+        
+        # 构建 Tensor
+        branches_tensor = torch.tensor([flat_branch_ids], device=device, dtype=torch.long)
+        input_ids = torch.cat([prefix_ids, branches_tensor], dim=1)
+        tips_indices = torch.tensor(tips_indices, device=device)
+        self.full_position_ids = torch.tensor(pos_ids_list, device=device)
+        
+        # 初始化 BIM
+        total_capacity = input_ids.shape[1] + max_new_tokens + 128
+        self.branch_index_map = torch.full(
+            (total_capacity,), -2, dtype=torch.long, device=device
+        )
+        self.branch_index_map[:len(branch_index_list)] = torch.tensor(
+            branch_index_list, device=device
+        )
+        
+        # 构建 Draft 模型的 Batched 输入（左填充）
+        draft_input_ids, branch_mask = stack_with_left_padding(
+            draft_branch_list, pad_id=pad_token_id, device=device, return_mask=True
+        )
+        padded_branch_pos = stack_with_left_padding(draft_pos_list, pad_id=0, device=device)
+        
+        prefix_mask = torch.ones((num_para, prefix_len), dtype=torch.long, device=device)
+        prefix_pos = torch.arange(prefix_len, device=device).unsqueeze(0).expand(num_para, -1)
+        self.eagle_layer.cache_padding_mask = torch.cat([prefix_mask, branch_mask], dim=1)
+        self.eagle_layer.full_position_ids = torch.cat([prefix_pos, padded_branch_pos], dim=1)
+        
+        return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
+
+    # =========================================================================
     # 主生成入口 (Main Generation Entry)
     # =========================================================================
 
@@ -476,10 +1701,21 @@ class SpecSoTModel(nn.Module):
         top_p: float = 0.0,
         top_k: int = 0,
         enable_parallel: bool = True,
+        use_scheduling: bool = False,
+        max_parallel: int = 2,
         use_semantic_constraint: bool = False,
-    ) -> Tuple[torch.Tensor, float, int, float, float, float, float, float, float]:
+    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """
-        主生成函数：支持普通模式和并行骨架模式
+        统一生成入口函数
+        
+        执行逻辑：
+        1. enable_parallel=False: 使用纯投机解码 (generate_eagle)
+        2. enable_parallel=True:
+           - distributed=True: 调用 generate_distributed
+           - distributed=False: 调用 generate_local
+        3. 在 generate_local/generate_distributed 内部：
+           - use_scheduling=False: 朴素并行分配
+           - use_scheduling=True: Continuous Batching 调度
         
         Args:
             task_prompt: 用户输入的任务描述
@@ -487,19 +1723,20 @@ class SpecSoTModel(nn.Module):
             temperature: 采样温度
             top_p: nucleus sampling 参数
             top_k: top-k sampling 参数
-            enable_parallel: 是否启用骨架并行模式
-            use_semantic_constraint: 是否使用语义约束 (FSM 状态机)
+            enable_parallel: 是否启用骨架并行模式 (SpecSoT)
+            use_scheduling: 是否启用 Continuous Batching 调度
+            max_parallel: 最大并行分支数 (仅调度模式有效)
+            use_semantic_constraint: 是否使用 FSM 语义约束
             
         Returns:
             output_ids: 生成的 token IDs
-            avg_accept_len: 平均接受长度
-            num_para: 并行分支数量
-            avg_draft_time: 平均 draft 时间
-            avg_update_time: 平均 update 时间
-            avg_verify_time: 平均 verify 时间
-            total_time: 推理总时间
-            skeleton_time: Skeleton阶段时间 (仅并行模式有效，否则为0)
-            parallel_time: Parallel阶段时间 (仅并行模式有效，否则为0)
+            stats: 统计信息字典，包含:
+                - total_time: 总推理时间
+                - skeleton_time: 骨架生成时间 (仅并行模式)
+                - parallel_time: 并行解码时间 (仅并行模式)
+                - num_branches: 分支数量 (仅并行模式)
+                - avg_accept_len: 平均接受长度
+                - mode: 执行模式名称
         """
         # 公共初始化
         self.reset_state()
@@ -513,34 +1750,49 @@ class SpecSoTModel(nn.Module):
         # 记录总开始时间
         total_start_time = time.time()
 
+        # =====================================================================
+        # 分支1: 不启用并行 -> 纯投机解码 (EAGLE)
+        # =====================================================================
         if not enable_parallel:
-            # 普通投机解码模式
-            result = self.generate_eagle(task_prompt, max_new_tokens, logits_processor)
-            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time = result
-            skeleton_time = 0.0
-            parallel_time = 0.0
-        else:
-            result = self.generate_specsot(task_prompt, max_new_tokens, logits_processor, use_semantic_constraint)
-            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, skeleton_time, parallel_time = result
-            
-        # 计算总时间
-        total_time = time.time() - total_start_time
+            output_ids, stats = self.generate_eagle(task_prompt, max_new_tokens, logits_processor)
+            stats['mode'] = 'eagle'
+            stats['total_time'] = time.time() - total_start_time
+            return output_ids, stats
+
+        # =====================================================================
+        # 分支2: 启用并行 -> SpecSoT Pipeline (统一入口)
+        # =====================================================================
+        output_ids, stats = self._run_specsot_pipeline(
+            task_prompt=task_prompt,
+            max_new_tokens=max_new_tokens,
+            max_parallel=max_parallel,
+            logits_processor=logits_processor,
+            use_semantic_constraint=use_semantic_constraint,
+            use_scheduling=use_scheduling,
+        )
         
-        return output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, total_time, skeleton_time, parallel_time
-        
+        stats['total_time'] = time.time() - total_start_time
+        return output_ids, stats
+    
+    # 非并行解码
+    @torch.no_grad()
     def generate_eagle(
         self,
         task_prompt: str,
         max_new_tokens: int,
         logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Tuple[torch.Tensor, float, int, float, float, float]:
+    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """
-        标准投机解码生成（不使用骨架）
+        纯投机解码生成（不使用骨架并行）
         
         流程：
         1. 初始化: 准备 input_ids, KV Cache
         2. Prefill: 初始化 KV Cache 和第一轮 Draft Tree (支持分布式)
         3. Decode Loop: 循环执行 decode_step_single 直到停止
+        
+        Returns:
+            output_ids: 生成的 token IDs
+            stats: 统计信息字典
         """
         device = self.base_model.device
         input_ids = self.tokenizer([task_prompt], return_tensors="pt").input_ids.to(device)
@@ -552,6 +1804,12 @@ class SpecSoTModel(nn.Module):
         max_kv_len = input_len + max_new_tokens + 100
         self.past_key_values, self.past_key_values_data, self.current_length_data = \
             initialize_past_key_values(self.base_model, max_length=max_kv_len)
+        
+        # 初始化 Eagle Layer 的 KV Cache
+        # Eagle Layer 的 max_length 由 input_len + top_k * depth 决定
+        # top_k * depth 是单步 draft tree 生成的最大 token 数
+        eagle_max_len = input_len + max_new_tokens + self.eagle_layer.total_tokens + 100
+        initialize_draft_past_key_values(self.eagle_layer, max_length=eagle_max_len)
         
         # =====================================================================
         # 2. Prefill 阶段 (支持分布式)
@@ -583,6 +1841,7 @@ class SpecSoTModel(nn.Module):
         
         stop_token_id = None
         eos_token_id = self.tokenizer.eos_token_id
+        step = 0
         
         for step in range(max_new_tokens):
             evt_start.record()
@@ -624,1719 +1883,21 @@ class SpecSoTModel(nn.Module):
             ):
                 break
         
-        # 计算平均值
+        # 计算平均值并构建统计字典
         num_steps = max(step, 1)
         output_ids = input_ids[:, input_len:]
-        avg_accept_len = total_accept_len.item() / num_steps
-        avg_draft_time = total_draft_time / num_steps
-        avg_update_time = total_update_time / num_steps
-        avg_verify_time = total_verify_time / num_steps
         
-        return output_ids, avg_accept_len, 0, avg_draft_time, avg_update_time, avg_verify_time
-
-    def generate_specsot(
-        self,
-        task_prompt: str,
-        max_new_tokens: int,
-        logits_processor: Optional[LogitsProcessorList] = None,
-        use_semantic_constraint: bool = False,
-    ) -> Tuple[torch.Tensor, float, int, float, float, float, float, float]:
-        """
-        骨架并行生成模式
-        
-        三阶段流程：
-        1. Skeleton Generation - 生成回答骨架
-        2. Skeleton Parsing - 使用 parser 解析骨架
-        3. Parallel Decoding - 并行解码各分支
-        
-        Args:
-            task_prompt: 用户输入的任务描述
-            max_new_tokens: 最大生成 token 数
-            logits_processor: 采样相关的 logits processor
-            use_semantic_constraint: 是否使用语义约束 (FSM 状态机)
-        
-        Returns:
-            output_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, skeleton_time, parallel_time
-        """
-        device = self.base_model.device
-        model_type = self.get_model_type()
-        
-        # 阶段时间统计
-        skeleton_time = 0.0
-        parallel_time = 0.0
-        evt_start_skeleton = torch.cuda.Event(enable_timing=True) # 骨架开始
-        evt_end_skeleton = torch.cuda.Event(enable_timing=True)   # 骨架结束
-        evt_start_parallel = torch.cuda.Event(enable_timing=True) # 并行开始 
-        evt_end_parallel = torch.cuda.Event(enable_timing=True)   # 并行结束 
-        
-        # =====================================================================
-        # Stage 1: Skeleton Generation
-        # =====================================================================
-        # 记录Skeleton阶段开始时间
-        evt_start_skeleton.record()
-
-        input_ids, task_input_ids = prepare_skeleton_input(
-            self.tokenizer, task_prompt, model_type, device
-        )
-        input_len = input_ids.shape[1]
-        
-        # 根据参数决定是否使用 FSM 状态机约束
-        if use_semantic_constraint:
-            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
-            skeleton_logits_processor = LogitsProcessorList([self._semantic_processor])
-            if logits_processor is not None:
-                for p in logits_processor:
-                    skeleton_logits_processor.append(p)
-            self.logger.info("使用 FSM 语义约束进行骨架生成")
-        else:
-            skeleton_logits_processor = logits_processor
-            self.logger.info("不使用 FSM 语义约束，直接生成骨架")
-        
-        # 初始化 KV Cache
-        max_kv_len = input_len + max_new_tokens + 100
-        self.past_key_values, self.past_key_values_data, self.current_length_data = \
-            initialize_past_key_values(self.base_model, max_length=max_kv_len)
-        
-        # ---------------------------------------------------------------------
-        # Stage 1.1: Prefill 阶段
-        # ---------------------------------------------------------------------
-        if self.is_distributed():
-            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
-                self.distributed_prefill_manager.prefill_single_distributed(
-                    input_ids, self.past_key_values, skeleton_logits_processor
-                )
-        else:
-            draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
-                self.prefill_single(input_ids, skeleton_logits_processor)
-        set_random_seed(self.seed)
-
-        # ---------------------------------------------------------------------
-        # Stage 1.2: Skeleton Decode 循环
-        # ---------------------------------------------------------------------
-        # 骨架的停止条件：检测到 [END] 标记或 EOS
-        eos_token_id = self.tokenizer.eos_token_id
-        max_steps = 200  # 骨架长度限制
-        
-        for step in range(max_steps):
-            (
-                input_ids,
-                draft_tokens,
-                retrieve_indices,
-                tree_mask,
-                tree_position_ids,
-                _,
-            ) = self.decode_step_single(
-                input_ids=input_ids,
-                draft_tokens=draft_tokens,
-                retrieve_indices=retrieve_indices,
-                tree_mask=tree_mask,
-                tree_position_ids=tree_position_ids,
-                logits_processor=skeleton_logits_processor,
-            )
-            
-            # 骨架的停止条件：检测是否生成了 [END] 或遇到 EOS
-            generated_text = self.tokenizer.decode(input_ids[0, input_len:])
-            if check_skeleton_stop(
-                generated_text, eos_token_id, input_ids, input_len, 
-                self.current_length_data[0].item(), max_kv_len,
-                self.eagle_layer.total_tokens + 1
-            ):
-                break
-        
-        skeleton_ids = input_ids[:, input_len:]
-        skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
-        self.logger.info(f"Generated Skeleton: {skeleton_text}")
-        self.skeleton_output = skeleton_ids.clone()
-        
-        # 记录Skeleton阶段时间
-        evt_end_skeleton.record()
-        torch.cuda.synchronize()
-        skeleton_time = evt_start_skeleton.elapsed_time(evt_end_skeleton) / 1000.0  # 转换为秒
-        self.logger.info(f"Skeleton generation completed in {skeleton_time:.3f}s")
-
-        # =====================================================================
-        # Stage 2: Skeleton Parsing (骨架解析)
-        # =====================================================================
-        mode, content = parse_skeleton_output(skeleton_text)
-        
-        if mode == "direct":
-            # 直接回答模式：不需要并行处理，直接返回骨架输出
-            self.logger.info("Direct answer mode detected, returning skeleton output")
-            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0, skeleton_time, 0.0
-        
-        elif mode == "error":
-            self.logger.warning(f"Skeleton parsing error: {content}")
-            return skeleton_ids, 0.0, 0, 0.0, 0.0, 0.0, skeleton_time, 0.0
-        
-        # mode == "plan": 规划模式
-        tasks = content
-        num_para = len(tasks)
-        self.logger.info(f"Detected {num_para} parallel tasks: {[t['title'] for t in tasks]}")
-        
-        # 准备并行分支输入
-        clean_branches, instruction_len = prepare_parallel_branches(
-            self.tokenizer, tasks, skeleton_text, model_type, task_prompt
-        )
-        
-        self.parallel_branches_output = [list(br) for br in clean_branches]
-        self.instruction_len = instruction_len
-        predicted_branch_lengths = [t['length'] for t in tasks]
-        self.logger.info(f"Predicted lengths: {predicted_branch_lengths}")
-
-        # =====================================================================
-        # Stage 3: Parallel Decoding (并行分支解码)
-        # =====================================================================
-        evt_start_parallel.record()
-        # ---------------------------------------------------------------------
-        # Stage 3.1: 前缀复用 - 复用 Skeleton KV Cache + 初始化并行状态
-        # ---------------------------------------------------------------------
-        input_ids, tips_indices, branch_begins, branch_lengths_actual, draft_input_ids = \
-            self.reuse_prefix_for_parallel(task_input_ids, clean_branches, max_new_tokens)
-        
-        # ---------------------------------------------------------------------
-        # Stage 3.2: Prefill 阶段 (并行)
-        # ---------------------------------------------------------------------
-        prefix_len = task_input_ids.shape[1]
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = \
-            self.prefill_parallel(
-                prefix_len, input_ids, tips_indices,
-                branch_begins, branch_lengths_actual, draft_input_ids, logits_processor
-            )
-        
-        # ---------------------------------------------------------------------
-        # Stage 3.3: Parallel Decode 循环
-        # ---------------------------------------------------------------------
-        total_accept_len_parallel = torch.zeros(1, dtype=torch.long, device=device)
-        total_verify_time_parallel = 0.0
-        total_update_time_parallel = 0.0
-        total_draft_time_parallel = 0.0
-        
-        tokens_per_branch = self.eagle_layer.total_tokens + 1
-        
-        evt_start_p = torch.cuda.Event(enable_timing=True)
-        evt_after_verify_p = torch.cuda.Event(enable_timing=True)
-        evt_after_update_p = torch.cuda.Event(enable_timing=True)
-        evt_after_draft_p = torch.cuda.Event(enable_timing=True)
-        
-        for step_parallel in range(max_new_tokens):
-            if check_stop_conditions_parallel(
-                current_length=self.current_length_data[0].item(),
-                max_kv_len=max_kv_len,
-                num_active_branches=len(self.active_branches),
-                tokens_per_branch=tokens_per_branch,
-            ):
-                self.logger.warning(f"Incomplete branches due to KV cache limit: {self.active_branches}")
-                break
-            
-            if step_parallel % 50 == 0:
-                self.logger.debug(f"Parallel Decoding Step {step_parallel + 1}")
-
-            evt_start_p.record()
-            
-            (
-                draft_tokens,
-                retrieve_indices,
-                tree_mask,
-                tree_position_ids,
-                accept_length,
-                all_finished,
-            ) = self.decode_step_parallel(
-                draft_tokens=draft_tokens,
-                retrieve_indices=retrieve_indices,
-                tree_mask=tree_mask,
-                tree_position_ids=tree_position_ids,
-                logits_processor=logits_processor,
-                evt_after_verify=evt_after_verify_p,
-                evt_after_update=evt_after_update_p,
-            )
-            evt_after_draft_p.record()
-            
-            total_accept_len_parallel += accept_length.sum()
-            
-            torch.cuda.synchronize()
-            total_verify_time_parallel += evt_start_p.elapsed_time(evt_after_verify_p) / 1000
-            total_update_time_parallel += evt_after_verify_p.elapsed_time(evt_after_update_p) / 1000
-            total_draft_time_parallel += evt_after_update_p.elapsed_time(evt_after_draft_p) / 1000
-            
-            if all_finished:
-                self.logger.info("All branches finished generation.")
-                break
-        
-        # 计算统计
-        num_steps_parallel = max(step_parallel, 1)
-        avg_accept_len = total_accept_len_parallel.item() / num_steps_parallel
-        avg_draft_time = total_draft_time_parallel / num_steps_parallel
-        avg_update_time = total_update_time_parallel / num_steps_parallel
-        avg_verify_time = total_verify_time_parallel / num_steps_parallel
-        
-        self.logger.info(f"Avg accepted lengths: {avg_accept_len:.2f}, "
-                        f"Avg draft time: {avg_draft_time:.4f}s, "
-                        f"Avg update time: {avg_update_time:.4f}s, "
-                        f"Avg verify time: {avg_verify_time:.4f}s")
-        
-        # 记录Parallel阶段时间
-        evt_end_parallel.record()
-        torch.cuda.synchronize()
-        parallel_time = evt_start_parallel.elapsed_time(evt_end_parallel) / 1000.0  # 转换为秒
-        self.logger.info(f"Parallel decoding completed in {parallel_time:.3f}s")
-
-        # 合并结果
-        merged_ids = merge_outputs(
-            skeleton_output=self.skeleton_output,
-            parallel_branches_output=self.parallel_branches_output,
-            instruction_len=self.instruction_len,
-            device=device,
-            tasks=tasks,
-            tokenizer=self.tokenizer,
-        )
-        
-        return merged_ids, avg_accept_len, num_para, avg_draft_time, avg_update_time, avg_verify_time, skeleton_time, parallel_time
-
-    # =========================================================================
-    # 带调度的骨架并行生成 (Scheduled Skeleton Parallel Generation)
-    # =========================================================================
-
-    @torch.no_grad()
-    def generate_with_scheduling(
-        self,
-        task_prompt: str,
-        max_new_tokens: int,
-        max_parallel: int = 2,
-        device_profiles: Optional[List[DeviceProfile]] = None,
-        logits_processor: Optional[LogitsProcessorList] = None,
-        use_semantic_constraint: bool = False,
-    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """
-        带调度的骨架并行生成
-
-        使用分支调度系统优化并行解码阶段：
-        - 支持 Continuous Batching（分支完成后立即加入新分支）
-        - 支持异构设备调度（考虑算力差异）
-        - 单机也可用（串行化部分分支优化时延）
-
-        Args:
-            task_prompt: 用户输入的任务描述
-            max_new_tokens: 最大生成 token 数
-            max_parallel: 每设备最大并行分支数
-            device_profiles: 设备能力描述列表（None 则使用默认单设备）
-            logits_processor: logits 处理器
-            use_semantic_constraint: 是否使用语义约束
-
-        Returns:
-            output_ids: 生成的 token IDs
-            stats: 统计信息字典
-        """
-        device = self.base_model.device
-        model_type = self.get_model_type()
-
-        # 默认单设备配置
-        if device_profiles is None:
-            device_profiles = [DeviceProfile.default_single_device()]
-
-        self.logger.info(
-            f"开始带调度的骨架并行生成: "
-            f"max_parallel={max_parallel}, devices={len(device_profiles)}"
-        )
-
-        # 统计信息
         stats = {
             'skeleton_time': 0.0,
-            'scheduling_time': 0.0,
             'parallel_time': 0.0,
             'num_branches': 0,
+            'avg_accept_len': total_accept_len.item() / num_steps,
+            'avg_draft_time': total_draft_time / num_steps,
+            'avg_update_time': total_update_time / num_steps,
+            'avg_verify_time': total_verify_time / num_steps,
         }
-
-        # =================================================================
-        # Stage 1: Skeleton Generation (复用现有逻辑)
-        # =================================================================
-        skeleton_start = time.time()
-
-        input_ids, task_input_ids = prepare_skeleton_input(
-            self.tokenizer, task_prompt, model_type, device
-        )
-        input_len = input_ids.shape[1]
-
-        # 准备 logits processor
-        if use_semantic_constraint:
-            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
-            skeleton_logits_processor = LogitsProcessorList([self._semantic_processor])
-            if logits_processor is not None:
-                for p in logits_processor:
-                    skeleton_logits_processor.append(p)
-        else:
-            skeleton_logits_processor = logits_processor
-
-        # 初始化 KV Cache
-        max_kv_len = input_len + max_new_tokens + 100
-        self.past_key_values, self.past_key_values_data, self.current_length_data = \
-            initialize_past_key_values(self.base_model, max_length=max_kv_len)
-
-        # Prefill
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
-            self.prefill_single(input_ids, skeleton_logits_processor)
-        set_random_seed(self.seed)
-
-        # Skeleton Decode 循环
-        eos_token_id = self.tokenizer.eos_token_id
-        max_steps = 200
-
-        for step in range(max_steps):
-            (
-                input_ids, draft_tokens, retrieve_indices,
-                tree_mask, tree_position_ids, _,
-            ) = self.decode_step_single(
-                input_ids=input_ids,
-                draft_tokens=draft_tokens,
-                retrieve_indices=retrieve_indices,
-                tree_mask=tree_mask,
-                tree_position_ids=tree_position_ids,
-                logits_processor=skeleton_logits_processor,
-            )
-
-            generated_text = self.tokenizer.decode(input_ids[0, input_len:])
-            if check_skeleton_stop(
-                generated_text, eos_token_id, input_ids, input_len,
-                self.current_length_data[0].item(), max_kv_len,
-                self.eagle_layer.total_tokens + 1
-            ):
-                break
-
-        skeleton_ids = input_ids[:, input_len:]
-        skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
-        self.skeleton_output = skeleton_ids.clone()
-
-        stats['skeleton_time'] = time.time() - skeleton_start
-        self.logger.info(f"Skeleton 生成完成: {stats['skeleton_time']:.3f}s")
-        self.logger.info(f"Generated Skeleton: {self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)}")
-
-        # =================================================================
-        # Stage 2: Skeleton Parsing + Scheduling
-        # =================================================================
-        scheduling_start = time.time()
-
-        mode, content = parse_skeleton_output(skeleton_text)
-
-        if mode == "direct":
-            self.logger.info("直接回答模式，跳过调度")
-            stats['scheduling_time'] = time.time() - scheduling_start
-            return skeleton_ids, stats
-
-        if mode == "error":
-            self.logger.warning(f"骨架解析错误: {content}")
-            stats['scheduling_time'] = time.time() - scheduling_start
-            return skeleton_ids, stats
-
-        # mode == "plan": 规划模式
-        tasks = content
-        num_branches = len(tasks)
-        stats['num_branches'] = num_branches
-        self.logger.info(f"检测到 {num_branches} 个并行分支")
-
-        # 准备分支信息
-        clean_branches, instruction_len = prepare_parallel_branches(
-            self.tokenizer, tasks, skeleton_text, model_type, task_prompt
-        )
-
-        branch_infos = []
-        for i, task in enumerate(tasks):
-            branch_infos.append(BranchInfo(
-                branch_id=i,
-                title=task['title'],
-                predicted_length=task['length'],
-                prompt_tokens=clean_branches[i],
-            ))
-
-        # 执行调度
-        scheduler = HeuristicScheduler(use_compute_weight=True)
-        schedule_plan = scheduler.schedule(branch_infos, device_profiles)
-
-        stats['scheduling_time'] = time.time() - scheduling_start
-        self.logger.info(f"调度完成: {stats['scheduling_time']:.3f}s")
-        self.logger.info(schedule_plan.summary())
-
-        # =================================================================
-        # Stage 3: Parallel Decoding (使用调度计划 + Continuous Batching)
-        # =================================================================
-        parallel_start = time.time()
-
-        # 获取当前设备的执行计划（单机模式下只有设备 0）
-        device_plan = schedule_plan.get_plan_for_device(0)
-        if device_plan is None:
-            self.logger.warning("未找到设备 0 的执行计划")
-            stats['parallel_time'] = time.time() - parallel_start
-            return skeleton_ids, stats
-
-        # 创建分支信息字典
-        branch_info_dict = {info.branch_id: info for info in branch_infos}
-
-        # 初始化执行管理器
-        exec_manager = BranchExecutionManager(
-            execution_plan=device_plan,
-            branch_infos=branch_info_dict,
-            rank=0,
-        )
-
-        # 初始化模型并行状态
-        self.parallel_branches_output = [list(br) for br in clean_branches]
-        self.instruction_len = instruction_len
-
-        # 获取初始批次的分支
-        initial_branches = exec_manager.get_branches_to_add()
-        if not initial_branches:
-            self.logger.warning("没有分支需要执行")
-            stats['parallel_time'] = time.time() - parallel_start
-            return skeleton_ids, stats
-
-        # 准备初始批次的输入
-        initial_prompts = [clean_branches[bid] for bid in initial_branches]
-
-        # 前缀复用 + Prefill 初始批次
-        input_ids, tips_indices, branch_begins, branch_lengths_actual, draft_input_ids = \
-            self._prepare_batch_for_prefill(
-                task_input_ids, initial_prompts, initial_branches, max_new_tokens
-            )
-
-        prefix_len = task_input_ids.shape[1]
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, hidden_states = \
-            self.prefill_parallel(
-                prefix_len, input_ids, tips_indices,
-                branch_begins, branch_lengths_actual, draft_input_ids, logits_processor
-            )
-
-        # 激活初始批次的分支
-        exec_manager.activate_branches(initial_branches)
-
-        # Parallel Decode 循环 (支持 Continuous Batching)
-        tokens_per_branch = self.eagle_layer.total_tokens + 1
-
-        for step_parallel in range(max_new_tokens):
-            # 检查停止条件
-            if check_stop_conditions_parallel(
-                current_length=self.current_length_data[0].item(),
-                max_kv_len=max_kv_len,
-                num_active_branches=len(self.active_branches),
-                tokens_per_branch=tokens_per_branch,
-            ):
-                break
-
-            # 检查是否所有分支都已完成
-            if exec_manager.is_all_completed():
-                self.logger.info("所有分支执行完成")
-                break
-
-            # 检查是否有新分支需要 Prefill（Continuous Batching）
-            if self.prefilling_branches:
-                # 使用混合 verify + prefill 模式
-                self.logger.info(
-                    f"Continuous Batching: 混合处理 - "
-                    f"老分支验证 {self.active_branches}, 新分支 prefill {self.prefilling_branches}"
-                )
-                (
-                    draft_tokens, retrieve_indices, tree_mask,
-                    tree_position_ids, accept_length, all_finished,
-                ) = self.decode_step_parallel_with_prefill(
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    prefix_len=prefix_len,
-                    logits_processor=logits_processor,
-                )
-            else:
-                # 普通解码步骤
-                (
-                    draft_tokens, retrieve_indices, tree_mask,
-                    tree_position_ids, accept_length, all_finished,
-                ) = self.decode_step_parallel(
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    logits_processor=logits_processor,
-                )
-
-            exec_manager.step()
-
-            # 检查是否有分支完成（使用 update_state_parallel 中记录的完成分支）
-            if self.recently_completed_branches:
-                completed_branches = self.recently_completed_branches
-                self.logger.info(f"分支完成: {completed_branches}")
-                
-                # 收集完成分支的输出
-                branch_outputs = {
-                    bid: self.parallel_branches_output[bid]
-                    for bid in completed_branches
-                }
-                exec_manager.handle_completed_branches(completed_branches, branch_outputs)
-
-                # Continuous Batching: 尝试加入新分支
-                new_branches = exec_manager.get_branches_to_add()
-                if new_branches:
-                    self.logger.info(f"Continuous Batching: 准备加入新分支 {new_branches}")
-                    # 标记新分支进入 prefilling 状态
-                    # 实际的 prefill 在下一轮 decode_step_parallel_with_prefill 中完成
-                    self._add_branches_to_active(
-                        new_branches, clean_branches, prefix_len, logits_processor
-                    )
-                    exec_manager.activate_branches(new_branches)
-
-            if all_finished:
-                break
-
-            if step_parallel % 50 == 0:
-                self.logger.debug(f"Step {step_parallel}: {exec_manager.summary()}")
-
-        stats['parallel_time'] = time.time() - parallel_start
-        stats['execution_stats'] = exec_manager.get_stats()
-        self.logger.info(f"并行解码完成: {stats['parallel_time']:.3f}s")
-        self.logger.info(exec_manager.summary())
-
-        # 合并结果
-        merged_ids = merge_outputs(
-            skeleton_output=self.skeleton_output,
-            parallel_branches_output=self.parallel_branches_output,
-            instruction_len=self.instruction_len,
-            device=device,
-            tasks=tasks,
-            tokenizer=self.tokenizer,
-        )
-
-        return merged_ids, stats
-
-    # =========================================================================
-    # 分布式生成方法 (Distributed Generation Methods)
-    # =========================================================================
-
-    @torch.no_grad()
-    def generate_distributed(
-        self,
-        task_prompt: str,
-        max_new_tokens: int,
-        max_parallel: int = 4,
-        logits_processor: Optional[LogitsProcessorList] = None,
-        use_semantic_constraint: bool = False,
-    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """
-        分布式生成 - Naive 模式 (distributed=True, use_scheduling=False)
-
-        三阶段流程：
-        1. Distributed Prefill: 使用已实现的分布式 Prefill
-        2. Skeleton Decode: 在 Master 设备上执行骨架解码
-        3. Parallel Decode: 简单均分分支到各设备，每设备并行执行所有分配的分支
-
-        特点：
-        - Skeleton KV Cache 不需要同步（Parallel 阶段用不上）
-        - 使用 SimpleDistributedScheduler 进行均分调度
-        - 每个设备上的所有分支一次性并行执行
-
-        Args:
-            task_prompt: 用户输入的任务描述
-            max_new_tokens: 最大生成 token 数
-            max_parallel: 每设备最大并行分支数（naive模式下被忽略，每设备执行所有分配的分支）
-            logits_processor: logits 处理器
-            use_semantic_constraint: 是否使用语义约束
-
-        Returns:
-            output_ids: 生成的 token IDs
-            stats: 统计信息字典
-        """
-        from .scheduling import SimpleDistributedScheduler, DeviceProfile, BranchInfo
-        from .distributed import BranchCommManager
-
-        device = self.base_model.device
-        model_type = self.get_model_type()
-        rank = self.distributed_config.rank if self.distributed_config else 0
-        world_size = self.distributed_config.world_size if self.distributed_config else 1
-        is_master = (rank == 0)
-
-        stats = {
-            'skeleton_time': 0.0,
-            'scheduling_time': 0.0,
-            'parallel_time': 0.0,
-            'num_branches': 0,
-            'mode': 'distributed_naive',
-        }
-
-        self.logger.info(f"开始分布式生成 (Naive 模式): rank={rank}/{world_size-1}")
-
-        # =================================================================
-        # Stage 1: Distributed Prefill (所有 Rank 参与)
-        # =================================================================
-        # 所有 Rank 需要同时参与分布式 Prefill
-        skeleton_start = time.time()
-
-        input_ids, task_input_ids = prepare_skeleton_input(
-            self.tokenizer, task_prompt, model_type, device
-        )
-        input_len = input_ids.shape[1]
-        base_prompt_len = task_input_ids.shape[1]  # 用于后续 parallel 阶段
-
-        # 准备 logits processor
-        if use_semantic_constraint:
-            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
-            skeleton_logits_processor = LogitsProcessorList([self._semantic_processor])
-            if logits_processor is not None:
-                for p in logits_processor:
-                    skeleton_logits_processor.append(p)
-        else:
-            skeleton_logits_processor = logits_processor
-
-        # 初始化 KV Cache
-        max_kv_len = input_len + max_new_tokens + 100
-        self.past_key_values, self.past_key_values_data, self.current_length_data = \
-            initialize_past_key_values(self.base_model, max_length=max_kv_len)
-
-        # 分布式 Prefill（所有 Rank 同时执行）
-        self.logger.info("执行分布式 Prefill...")
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
-            self.distributed_prefill_manager.prefill_single_distributed(
-                input_ids, self.past_key_values, skeleton_logits_processor
-            )
-        set_random_seed(self.seed)
-
-        self.logger.info(f"分布式 Prefill 完成, rank={rank}")
-
-        # =================================================================
-        # Stage 2: Skeleton Generation (仅 Master) / Worker 等待任务
-        # =================================================================
-        if is_master:
-            # 保存 base prompt 的 Eagle KV 状态（用于后续 parallel 阶段）
-            saved_eagle_kv = None
-            if self.eagle_layer.stable_kv is not None:
-                k_draft, v_draft = self.eagle_layer.stable_kv[0]
-                saved_eagle_kv = (
-                    k_draft[..., :base_prompt_len, :].clone(),
-                    v_draft[..., :base_prompt_len, :].clone()
-                )
-
-            # Skeleton Decode 循环 (仅在 Master 上执行)
-            self.logger.info("在 Master 上执行 Skeleton 解码...")
-            eos_token_id = self.tokenizer.eos_token_id
-            max_steps = 200
-
-            for step in range(max_steps):
-                (
-                    input_ids, draft_tokens, retrieve_indices,
-                    tree_mask, tree_position_ids, _,
-                ) = self.decode_step_single(
-                    input_ids=input_ids,
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    logits_processor=skeleton_logits_processor,
-                )
-
-                generated_text = self.tokenizer.decode(input_ids[0, input_len:])
-                if check_skeleton_stop(
-                    generated_text, eos_token_id, input_ids, input_len,
-                    self.current_length_data[0].item(), max_kv_len,
-                    self.eagle_layer.total_tokens + 1
-                ):
-                    break
-
-            skeleton_ids = input_ids[:, input_len:]
-            skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
-            self.skeleton_output = skeleton_ids.clone()
-            stats['skeleton_time'] = time.time() - skeleton_start
-            self.logger.info(f"Skeleton 生成完成: {stats['skeleton_time']:.3f}s")
-            self.logger.info(f"Generated Skeleton: {skeleton_text}")
-
-            # =================================================================
-            # Stage 2: Skeleton Parsing + Simple Distributed Scheduling
-            # =================================================================
-            scheduling_start = time.time()
-
-            mode, content = parse_skeleton_output(skeleton_text)
-
-            if mode == "direct":
-                self.logger.info("直接回答模式，跳过并行阶段")
-                stats['scheduling_time'] = time.time() - scheduling_start
-                # 广播完成信号到所有 Worker
-                self._broadcast_parallel_complete_signal()
-                return skeleton_ids, stats
-
-            if mode == "error":
-                self.logger.warning(f"骨架解析错误: {content}")
-                stats['scheduling_time'] = time.time() - scheduling_start
-                self._broadcast_parallel_complete_signal()
-                return skeleton_ids, stats
-
-            # mode == "plan": 规划模式
-            tasks = content
-            num_branches = len(tasks)
-            stats['num_branches'] = num_branches
-            self.logger.info(f"检测到 {num_branches} 个并行分支")
-
-            # 准备分支信息
-            clean_branches, instruction_len = prepare_parallel_branches(
-                self.tokenizer, tasks, skeleton_text, model_type, task_prompt
-            )
-
-            branch_infos = []
-            for i, task in enumerate(tasks):
-                branch_infos.append(BranchInfo(
-                    branch_id=i,
-                    title=task['title'],
-                    predicted_length=task['length'],
-                    prompt_tokens=clean_branches[i],
-                ))
-
-            # 简单均分调度
-            device_profiles = [DeviceProfile(device_id=r) for r in range(world_size)]
-            scheduler = SimpleDistributedScheduler(all_parallel=True)
-            schedule_plan = scheduler.schedule(branch_infos, device_profiles)
-
-            stats['scheduling_time'] = time.time() - scheduling_start
-            self.logger.info(f"调度完成: {stats['scheduling_time']:.3f}s")
-            self.logger.info(schedule_plan.summary())
-
-            # =================================================================
-            # Stage 3: 分发任务并执行 Parallel Decoding
-            # =================================================================
-            parallel_start = time.time()
-
-            # 初始化分支通信管理器
-            branch_comm = BranchCommManager(
-                rank=rank,
-                world_size=world_size,
-                base_comm_manager=self.distributed_prefill_manager.comm,
-            )
-
-            # 广播调度计划和分支 Prompt 到各设备
-            branch_comm.broadcast_schedule_plan(schedule_plan)
-            branch_comm.send_branch_prompts(branch_infos, schedule_plan)
-
-            # Master 执行自己的分支
-            my_plan = schedule_plan.get_plan_for_device(0)
-            my_branch_ids = my_plan.assigned_branches if my_plan else []
-
-            self.logger.info(f"Master 执行分支: {my_branch_ids}")
-
-            # 保存所有分支输出
-            self.parallel_branches_output = [list(br) for br in clean_branches]
-            self.instruction_len = instruction_len
-
-            if my_branch_ids:
-                # 恢复 base prompt 的 KV 状态（parallel 阶段需要从 base prompt 开始）
-                # 1. 恢复 Eagle KV
-                if saved_eagle_kv is not None:
-                    k_saved, v_saved = saved_eagle_kv
-                    self.eagle_layer.stable_kv = ((k_saved.clone(), v_saved.clone()),)
-
-                # 2. 重置 base model KV cache 长度（_prepare_batch_for_prefill 会处理）
-                # 注意：不需要手动重置，_prepare_batch_for_prefill 会自动 fill_(prefix_len)
-
-                # 执行本地分支
-                my_outputs = self._execute_parallel_branches_local(
-                    task_input_ids, clean_branches, my_branch_ids,
-                    max_new_tokens, logits_processor
-                )
-                # 更新输出
-                for bid, tokens in my_outputs.items():
-                    self.parallel_branches_output[bid] = tokens
-
-            # 收集其他设备的输出
-            # 注意：只需要收集分配给其他设备的分支（总分支数 - 本地分支数）
-            num_other_branches = num_branches - len(my_branch_ids)
-            self.logger.info(f"收集其他设备的分支输出 ({num_other_branches} 个)...")
-            other_outputs = branch_comm.collect_all_outputs(
-                num_branches=num_other_branches,
-                timeout=300.0
-            )
-            for bid, tokens in other_outputs.items():
-                self.parallel_branches_output[bid] = tokens
-
-            # 广播完成信号
-            branch_comm.broadcast_all_complete()
-
-            stats['parallel_time'] = time.time() - parallel_start
-            self.logger.info(f"并行解码完成: {stats['parallel_time']:.3f}s")
-
-            # 合并结果
-            merged_ids = merge_outputs(
-                skeleton_output=self.skeleton_output,
-                parallel_branches_output=self.parallel_branches_output,
-                instruction_len=self.instruction_len,
-                device=device,
-                tasks=tasks,
-                tokenizer=self.tokenizer,
-            )
-
-            return merged_ids, stats
-
-        else:
-            # Worker: Prefill 已完成，等待接收任务并执行
-            # 传入 input_len 用于 Worker 执行
-            return self._worker_execute_distributed_naive(
-                input_len, max_new_tokens, logits_processor
-            )
-
-    @torch.no_grad()
-    def generate_distributed_with_scheduling(
-        self,
-        task_prompt: str,
-        max_new_tokens: int,
-        max_parallel: int = 2,
-        logits_processor: Optional[LogitsProcessorList] = None,
-        use_semantic_constraint: bool = False,
-    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """
-        分布式生成 - 完整调度模式 (distributed=True, use_scheduling=True)
-
-        三阶段流程：
-        1. Distributed Prefill: 使用已实现的分布式 Prefill
-        2. Skeleton Decode: 在 Master 设备上执行骨架解码
-        3. Parallel Decode: 使用启发式调度 + 分布式 Continuous Batching
-
-        特点：
-        - Skeleton KV Cache 不同步（各设备独立使用 base prompt cache）
-        - 使用 HeuristicScheduler 进行智能调度
-        - 支持 Continuous Batching（分支完成后动态加入新分支）
-
-        Args:
-            task_prompt: 用户输入的任务描述
-            max_new_tokens: 最大生成 token 数
-            max_parallel: 每设备最大并行分支数
-            logits_processor: logits 处理器
-            use_semantic_constraint: 是否使用语义约束
-
-        Returns:
-            output_ids: 生成的 token IDs
-            stats: 统计信息字典
-        """
-        from .scheduling import HeuristicScheduler, DeviceProfile, BranchInfo
-        from .distributed import BranchCommManager
-
-        device = self.base_model.device
-        model_type = self.get_model_type()
-        rank = self.distributed_config.rank if self.distributed_config else 0
-        world_size = self.distributed_config.world_size if self.distributed_config else 1
-        is_master = (rank == 0)
-
-        stats = {
-            'skeleton_time': 0.0,
-            'scheduling_time': 0.0,
-            'parallel_time': 0.0,
-            'num_branches': 0,
-            'mode': 'distributed_scheduling',
-        }
-
-        self.logger.info(f"开始分布式生成 (调度模式): rank={rank}/{world_size-1}, max_parallel={max_parallel}")
-
-        # =================================================================
-        # Stage 1: Distributed Prefill (所有 Rank 参与)
-        # =================================================================
-        # 所有 Rank 需要同时参与分布式 Prefill
-        skeleton_start = time.time()
-
-        input_ids, task_input_ids = prepare_skeleton_input(
-            self.tokenizer, task_prompt, model_type, device
-        )
-        input_len = input_ids.shape[1]
-        base_prompt_len = task_input_ids.shape[1]  # 用于后续 parallel 阶段
-
-        # 准备 logits processor
-        if use_semantic_constraint:
-            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
-            skeleton_logits_processor = LogitsProcessorList([self._semantic_processor])
-            if logits_processor is not None:
-                for p in logits_processor:
-                    skeleton_logits_processor.append(p)
-        else:
-            skeleton_logits_processor = logits_processor
-
-        # 初始化 KV Cache
-        max_kv_len = input_len + max_new_tokens + 100
-        self.past_key_values, self.past_key_values_data, self.current_length_data = \
-            initialize_past_key_values(self.base_model, max_length=max_kv_len)
-
-        # 分布式 Prefill（所有 Rank 同时执行）
-        self.logger.info("执行分布式 Prefill...")
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _, _, _ = \
-            self.distributed_prefill_manager.prefill_single_distributed(
-                input_ids, self.past_key_values, skeleton_logits_processor
-            )
-        set_random_seed(self.seed)
-
-        self.logger.info(f"分布式 Prefill 完成, rank={rank}")
-
-        # =================================================================
-        # Stage 2: Skeleton Generation (仅 Master) / Worker 等待任务
-        # =================================================================
-        if is_master:
-            # 保存 base prompt 的 Eagle KV 状态（用于后续 parallel 阶段）
-            saved_eagle_kv = None
-            if self.eagle_layer.stable_kv is not None:
-                k_draft, v_draft = self.eagle_layer.stable_kv[0]
-                saved_eagle_kv = (
-                    k_draft[..., :base_prompt_len, :].clone(),
-                    v_draft[..., :base_prompt_len, :].clone()
-                )
-
-            # Skeleton Decode 循环 (仅在 Master 上执行)
-            self.logger.info("在 Master 上执行 Skeleton 解码...")
-            eos_token_id = self.tokenizer.eos_token_id
-            max_steps = 200
-
-            for step in range(max_steps):
-                (
-                    input_ids, draft_tokens, retrieve_indices,
-                    tree_mask, tree_position_ids, _,
-                ) = self.decode_step_single(
-                    input_ids=input_ids,
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    logits_processor=skeleton_logits_processor,
-                )
-
-                generated_text = self.tokenizer.decode(input_ids[0, input_len:])
-                if check_skeleton_stop(
-                    generated_text, eos_token_id, input_ids, input_len,
-                    self.current_length_data[0].item(), max_kv_len,
-                    self.eagle_layer.total_tokens + 1
-                ):
-                    break
-
-            skeleton_ids = input_ids[:, input_len:]
-            skeleton_text = self.tokenizer.decode(skeleton_ids[0], skip_special_tokens=False)
-            self.skeleton_output = skeleton_ids.clone()
-            stats['skeleton_time'] = time.time() - skeleton_start
-            self.logger.info(f"Skeleton 生成完成: {stats['skeleton_time']:.3f}s")
-            self.logger.info(f"Generated Skeleton: {skeleton_text}")
-
-            # =================================================================
-            # Stage 2: Skeleton Parsing + Heuristic Scheduling
-            # =================================================================
-            scheduling_start = time.time()
-
-            mode, content = parse_skeleton_output(skeleton_text)
-
-            if mode == "direct":
-                self.logger.info("直接回答模式，跳过并行阶段")
-                stats['scheduling_time'] = time.time() - scheduling_start
-                self._broadcast_parallel_complete_signal()
-                return skeleton_ids, stats
-
-            if mode == "error":
-                self.logger.warning(f"骨架解析错误: {content}")
-                stats['scheduling_time'] = time.time() - scheduling_start
-                self._broadcast_parallel_complete_signal()
-                return skeleton_ids, stats
-
-            # mode == "plan": 规划模式
-            tasks = content
-            num_branches = len(tasks)
-            stats['num_branches'] = num_branches
-            self.logger.info(f"检测到 {num_branches} 个并行分支")
-
-            # 准备分支信息
-            clean_branches, instruction_len = prepare_parallel_branches(
-                self.tokenizer, tasks, skeleton_text, model_type, task_prompt
-            )
-
-            branch_infos = []
-            for i, task in enumerate(tasks):
-                branch_infos.append(BranchInfo(
-                    branch_id=i,
-                    title=task['title'],
-                    predicted_length=task['length'],
-                    prompt_tokens=clean_branches[i],
-                ))
-
-            # 启发式调度（考虑 max_parallel）
-            device_profiles = [
-                DeviceProfile(device_id=r, max_parallel=max_parallel)
-                for r in range(world_size)
-            ]
-            scheduler = HeuristicScheduler(use_compute_weight=True)
-            schedule_plan = scheduler.schedule(branch_infos, device_profiles)
-
-            stats['scheduling_time'] = time.time() - scheduling_start
-            self.logger.info(f"调度完成: {stats['scheduling_time']:.3f}s")
-            self.logger.info(schedule_plan.summary())
-
-            # =================================================================
-            # Stage 3: 分发任务并执行分布式 Continuous Batching
-            # =================================================================
-            parallel_start = time.time()
-
-            # 初始化分支通信管理器
-            branch_comm = BranchCommManager(
-                rank=rank,
-                world_size=world_size,
-                base_comm_manager=self.distributed_prefill_manager.comm,
-            )
-
-            # 广播调度计划和分支 Prompt 到各设备
-            branch_comm.broadcast_schedule_plan(schedule_plan)
-            branch_comm.send_branch_prompts(branch_infos, schedule_plan)
-
-            # Master 执行自己的分支（使用 Continuous Batching）
-            my_plan = schedule_plan.get_plan_for_device(0)
-            my_branch_ids = my_plan.assigned_branches if my_plan else []
-
-            self.logger.info(f"Master 执行分支 (Continuous Batching): {my_branch_ids}")
-
-            # 保存所有分支输出
-            self.parallel_branches_output = [list(br) for br in clean_branches]
-            self.instruction_len = instruction_len
-
-            if my_branch_ids:
-                # 恢复 base prompt 的 KV 状态（parallel 阶段需要从 base prompt 开始）
-                if saved_eagle_kv is not None:
-                    k_saved, v_saved = saved_eagle_kv
-                    self.eagle_layer.stable_kv = ((k_saved.clone(), v_saved.clone()),)
-
-                # 使用 Continuous Batching 执行本地分支
-                my_outputs = self._execute_parallel_branches_with_batching(
-                    task_input_ids, clean_branches, my_plan,
-                    {info.branch_id: info for info in branch_infos},
-                    max_new_tokens, max_parallel, logits_processor
-                )
-                # 更新输出
-                for bid, tokens in my_outputs.items():
-                    self.parallel_branches_output[bid] = tokens
-
-            # 收集其他设备的输出
-            # 注意：只需要收集分配给其他设备的分支（总分支数 - 本地分支数）
-            num_other_branches = num_branches - len(my_branch_ids)
-            self.logger.info(f"收集其他设备的分支输出 ({num_other_branches} 个)...")
-            other_outputs = branch_comm.collect_all_outputs(
-                num_branches=num_other_branches,
-                timeout=300.0
-            )
-            for bid, tokens in other_outputs.items():
-                self.parallel_branches_output[bid] = tokens
-
-            # 广播完成信号
-            branch_comm.broadcast_all_complete()
-
-            stats['parallel_time'] = time.time() - parallel_start
-            self.logger.info(f"并行解码完成: {stats['parallel_time']:.3f}s")
-
-            # 合并结果
-            merged_ids = merge_outputs(
-                skeleton_output=self.skeleton_output,
-                parallel_branches_output=self.parallel_branches_output,
-                instruction_len=self.instruction_len,
-                device=device,
-                tasks=tasks,
-                tokenizer=self.tokenizer,
-            )
-
-            return merged_ids, stats
-
-        else:
-            # Worker: Prefill 已完成，等待接收任务并执行（使用 Continuous Batching）
-            return self._worker_execute_distributed_scheduling(
-                input_len, max_new_tokens, max_parallel, logits_processor
-            )
-
-    # =========================================================================
-    # 分布式辅助方法 (Distributed Helper Methods)
-    # =========================================================================
-
-    def _broadcast_parallel_complete_signal(self) -> None:
-        """广播并行阶段完成信号（用于 direct/error 模式）"""
-        if not self.is_distributed():
-            return
-        if not self.distributed_config.is_last_rank():
-            return
-
-        from .distributed import BranchCommManager
-        branch_comm = BranchCommManager(
-            rank=self.distributed_config.rank,
-            world_size=self.distributed_config.world_size,
-            base_comm_manager=self.distributed_prefill_manager.comm,
-        )
-        branch_comm.broadcast_all_complete()
-
-    def _execute_parallel_branches_local(
-        self,
-        prefix_ids: torch.Tensor,
-        all_branches: List[List[int]],
-        branch_ids: List[int],
-        max_new_tokens: int,
-        logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Dict[int, List[int]]:
-        """
-        本地执行指定分支（所有分支一次性并行）
-
-        用于 naive 分布式模式，所有分配的分支一次性并行执行。
-
-        Args:
-            prefix_ids: 前缀 token IDs
-            all_branches: 所有分支的 prompt tokens
-            branch_ids: 要执行的分支 ID
-            max_new_tokens: 最大生成 token 数
-            logits_processor: logits 处理器
-
-        Returns:
-            分支输出字典 {branch_id: token_list}
-        """
-        if not branch_ids:
-            return {}
-
-        device = self.base_model.device
-        prefix_len = prefix_ids.shape[1]
-
-        # 获取指定分支的 prompts
-        branch_prompts = [all_branches[bid] for bid in branch_ids]
-
-        # 初始化并行状态
-        self.parallel_branches_output = [list(br) for br in all_branches]
-        self.active_branches = list(branch_ids)
-
-        # 前缀复用 + Prefill
-        input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
-            self._prepare_batch_for_prefill(
-                prefix_ids, branch_prompts, branch_ids, max_new_tokens
-            )
-
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _ = \
-            self.prefill_parallel(
-                prefix_len, input_ids, tips_indices,
-                branch_begins, branch_lengths, draft_input_ids, logits_processor
-            )
-
-        # Parallel Decode 循环
-        max_kv_len = prefix_len + max_new_tokens + 500
-        tokens_per_branch = self.eagle_layer.total_tokens + 1
-
-        for step in range(max_new_tokens):
-            if check_stop_conditions_parallel(
-                current_length=self.current_length_data[0].item(),
-                max_kv_len=max_kv_len,
-                num_active_branches=len(self.active_branches),
-                tokens_per_branch=tokens_per_branch,
-            ):
-                break
-
-            (
-                draft_tokens, retrieve_indices, tree_mask,
-                tree_position_ids, _, all_finished,
-            ) = self.decode_step_parallel(
-                draft_tokens=draft_tokens,
-                retrieve_indices=retrieve_indices,
-                tree_mask=tree_mask,
-                tree_position_ids=tree_position_ids,
-                logits_processor=logits_processor,
-            )
-
-            if all_finished:
-                break
-
-        # 返回执行的分支输出
-        outputs = {}
-        for bid in branch_ids:
-            outputs[bid] = self.parallel_branches_output[bid]
-        return outputs
-
-    def _execute_parallel_branches_with_batching(
-        self,
-        prefix_ids: torch.Tensor,
-        all_branches: List[List[int]],
-        execution_plan: 'DeviceExecutionPlan',
-        branch_info_dict: Dict[int, 'BranchInfo'],
-        max_new_tokens: int,
-        max_parallel: int,
-        logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Dict[int, List[int]]:
-        """
-        使用 Continuous Batching 执行分支
-
-        用于调度模式，支持动态加入新分支。
-
-        Args:
-            prefix_ids: 前缀 token IDs
-            all_branches: 所有分支的 prompt tokens
-            execution_plan: 执行计划
-            branch_info_dict: 分支信息字典
-            max_new_tokens: 最大生成 token 数
-            max_parallel: 最大并行度
-            logits_processor: logits 处理器
-
-        Returns:
-            分支输出字典 {branch_id: token_list}
-        """
-        from .scheduling import BranchExecutionManager
-
-        device = self.base_model.device
-        prefix_len = prefix_ids.shape[1]
-
-        # 初始化执行管理器
-        exec_manager = BranchExecutionManager(
-            execution_plan=execution_plan,
-            branch_infos=branch_info_dict,
-            rank=self.distributed_config.rank if self.distributed_config else 0,
-        )
-
-        # 初始化并行状态
-        self.parallel_branches_output = [list(br) for br in all_branches]
-        self.instruction_len = {
-            bid: len(all_branches[bid]) for bid in execution_plan.assigned_branches
-        }
-
-        # 获取初始批次
-        initial_branches = exec_manager.get_branches_to_add()
-        if not initial_branches:
-            return {}
-
-        initial_prompts = [all_branches[bid] for bid in initial_branches]
-
-        # 前缀复用 + Prefill 初始批次
-        input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
-            self._prepare_batch_for_prefill(
-                prefix_ids, initial_prompts, initial_branches, max_new_tokens
-            )
-
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _ = \
-            self.prefill_parallel(
-                prefix_len, input_ids, tips_indices,
-                branch_begins, branch_lengths, draft_input_ids, logits_processor
-            )
-
-        exec_manager.activate_branches(initial_branches)
-
-        # Continuous Batching 循环
-        max_kv_len = prefix_len + max_new_tokens + 500
-        tokens_per_branch = self.eagle_layer.total_tokens + 1
-
-        for step in range(max_new_tokens):
-            if check_stop_conditions_parallel(
-                current_length=self.current_length_data[0].item(),
-                max_kv_len=max_kv_len,
-                num_active_branches=len(self.active_branches),
-                tokens_per_branch=tokens_per_branch,
-            ):
-                break
-
-            if exec_manager.is_all_completed():
-                break
-
-            # 检查是否有新分支需要 Prefill
-            if self.prefilling_branches:
-                (
-                    draft_tokens, retrieve_indices, tree_mask,
-                    tree_position_ids, _, all_finished,
-                ) = self.decode_step_parallel_with_prefill(
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    prefix_len=prefix_len,
-                    logits_processor=logits_processor,
-                )
-            else:
-                (
-                    draft_tokens, retrieve_indices, tree_mask,
-                    tree_position_ids, _, all_finished,
-                ) = self.decode_step_parallel(
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    logits_processor=logits_processor,
-                )
-
-            exec_manager.step()
-
-            # 处理完成的分支
-            if self.recently_completed_branches:
-                completed = self.recently_completed_branches
-                branch_outputs = {
-                    bid: self.parallel_branches_output[bid]
-                    for bid in completed
-                }
-                exec_manager.handle_completed_branches(completed, branch_outputs)
-
-                # Continuous Batching: 加入新分支
-                new_branches = exec_manager.get_branches_to_add()
-                if new_branches:
-                    self._add_branches_to_active(
-                        new_branches, all_branches, prefix_len, logits_processor
-                    )
-                    exec_manager.activate_branches(new_branches)
-
-            if all_finished:
-                break
-
-        # 返回执行的分支输出
-        outputs = {}
-        for bid in execution_plan.assigned_branches:
-            outputs[bid] = self.parallel_branches_output[bid]
-        return outputs
-
-    def _worker_execute_distributed_naive(
-        self,
-        input_len: int,
-        max_new_tokens: int,
-        logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """
-        Worker 执行分布式 naive 模式
-
-        注意: 分布式 Prefill 已在 generate_distributed() 中完成，
-        KV Cache 已经初始化并同步了 base prompt 的 cache。
-
-        Args:
-            input_len: 输入序列长度（来自 Prefill）
-            max_new_tokens: 最大生成 token 数
-            logits_processor: logits 处理器
-
-        Returns:
-            output_ids: 空 tensor (Worker 不返回最终结果)
-            stats: 统计信息
-        """
-        from .distributed import BranchCommManager
-
-        device = self.base_model.device
-        rank = self.distributed_config.rank
-        world_size = self.distributed_config.world_size
-
-        stats = {
-            'parallel_time': 0.0,
-            'num_branches': 0,
-            'mode': 'worker_naive',
-        }
-
-        self.logger.info(f"Worker {rank} 等待接收任务...")
-
-        # 初始化分支通信管理器
-        branch_comm = BranchCommManager(
-            rank=rank,
-            world_size=world_size,
-            base_comm_manager=self.distributed_prefill_manager.comm,
-        )
-
-        # 接收调度计划
-        schedule_plan = branch_comm.receive_schedule_plan(timeout=60.0)
-        if schedule_plan is None:
-            self.logger.error("接收调度计划超时")
-            return torch.tensor([], device=device), stats
-
-        self.logger.info(f"收到调度计划: {schedule_plan.summary()}")
-
-        # 接收分支 Prompt
-        branch_infos = branch_comm.receive_branch_prompts(timeout=60.0)
-        if not branch_infos:
-            self.logger.warning("未收到任何分支任务")
-            branch_comm.wait_for_complete(timeout=300.0)
-            return torch.tensor([], device=device), stats
-
-        stats['num_branches'] = len(branch_infos)
-        self.logger.info(f"收到 {len(branch_infos)} 个分支任务")
-
-        # 执行分支
-        parallel_start = time.time()
-
-        # KV Cache 已经在分布式 Prefill 中初始化并同步
-        # 使用传入的 input_len (即 prefix_len)
-        prefix_len = input_len
-        max_kv_len = prefix_len + max_new_tokens + 500
-
-        # 如果需要扩展 KV Cache 容量
-        if self.past_key_values_data[0].shape[3] < max_kv_len:
-            # 保存当前 cache 数据
-            old_cache_data = [d[..., :prefix_len, :].clone() for d in self.past_key_values_data]
-
-            # 重新初始化
-            self.past_key_values, self.past_key_values_data, self.current_length_data = \
-                initialize_past_key_values(self.base_model, max_length=max_kv_len)
-
-            # 恢复 prefix cache
-            for i, d in enumerate(old_cache_data):
-                self.past_key_values_data[i][..., :prefix_len, :].copy_(d)
-            self.current_length_data.fill_(prefix_len)
-
-        # 准备分支数据
-        branch_ids = [info.branch_id for info in branch_infos]
-        all_branches = {info.branch_id: info.prompt_tokens for info in branch_infos}
-
-        # 创建 prefix_ids (从 cache 中推断)
-        # Worker 没有原始 prompt，但有同步的 prefix cache
-        prefix_ids = torch.zeros((1, prefix_len), dtype=torch.long, device=device)
-
-        # 初始化并行状态
-        max_branch_id = max(branch_ids) + 1
-        self.parallel_branches_output = [[] for _ in range(max_branch_id)]
-        for info in branch_infos:
-            self.parallel_branches_output[info.branch_id] = list(info.prompt_tokens)
-
-        self.active_branches = list(branch_ids)
-        self.instruction_len = {info.branch_id: len(info.prompt_tokens) for info in branch_infos}
-
-        # 前缀复用 + Prefill
-        branch_prompts = [all_branches[bid] for bid in branch_ids]
-
-        input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
-            self._prepare_batch_for_prefill(
-                prefix_ids, branch_prompts, branch_ids, max_new_tokens
-            )
-
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _ = \
-            self.prefill_parallel(
-                prefix_len, input_ids, tips_indices,
-                branch_begins, branch_lengths, draft_input_ids, logits_processor
-            )
-
-        # Parallel Decode 循环
-        tokens_per_branch = self.eagle_layer.total_tokens + 1
-
-        for step in range(max_new_tokens):
-            if check_stop_conditions_parallel(
-                current_length=self.current_length_data[0].item(),
-                max_kv_len=max_kv_len,
-                num_active_branches=len(self.active_branches),
-                tokens_per_branch=tokens_per_branch,
-            ):
-                break
-
-            (
-                draft_tokens, retrieve_indices, tree_mask,
-                tree_position_ids, _, all_finished,
-            ) = self.decode_step_parallel(
-                draft_tokens=draft_tokens,
-                retrieve_indices=retrieve_indices,
-                tree_mask=tree_mask,
-                tree_position_ids=tree_position_ids,
-                logits_processor=logits_processor,
-            )
-
-            if all_finished:
-                break
-
-        stats['parallel_time'] = time.time() - parallel_start
-
-        # 发送结果到 Master
-        for bid in branch_ids:
-            branch_comm.send_branch_output(
-                branch_id=bid,
-                output_tokens=self.parallel_branches_output[bid],
-            )
-
-        self.logger.info(f"Worker {rank} 完成分支执行，等待完成信号...")
-
-        # 等待完成信号
-        branch_comm.wait_for_complete(timeout=300.0)
-
-        return torch.tensor([], device=device), stats
-
-    def _worker_execute_distributed_scheduling(
-        self,
-        input_len: int,
-        max_new_tokens: int,
-        max_parallel: int,
-        logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """
-        Worker 执行分布式调度模式（支持 Continuous Batching）
-
-        注意: 分布式 Prefill 已在 generate_distributed_with_scheduling() 中完成，
-        KV Cache 已经初始化并同步了 base prompt 的 cache。
-
-        Args:
-            input_len: 输入序列长度（来自 Prefill）
-            max_new_tokens: 最大生成 token 数
-            max_parallel: 最大并行度
-            logits_processor: logits 处理器
-
-        Returns:
-            output_ids: 空 tensor
-            stats: 统计信息
-        """
-        from .distributed import BranchCommManager
-        from .scheduling import BranchExecutionManager, DeviceExecutionPlan
-
-        device = self.base_model.device
-        rank = self.distributed_config.rank
-        world_size = self.distributed_config.world_size
-
-        stats = {
-            'parallel_time': 0.0,
-            'num_branches': 0,
-            'mode': 'worker_scheduling',
-        }
-
-        self.logger.info(f"Worker {rank} 等待接收任务 (调度模式)...")
-
-        # 初始化分支通信管理器
-        branch_comm = BranchCommManager(
-            rank=rank,
-            world_size=world_size,
-            base_comm_manager=self.distributed_prefill_manager.comm,
-        )
-
-        # 接收调度计划
-        schedule_plan = branch_comm.receive_schedule_plan(timeout=60.0)
-        if schedule_plan is None:
-            self.logger.error("接收调度计划超时")
-            return torch.tensor([], device=device), stats
-
-        self.logger.info(f"收到调度计划: {schedule_plan.summary()}")
-
-        # 接收分支 Prompt
-        branch_infos = branch_comm.receive_branch_prompts(timeout=60.0)
-        if not branch_infos:
-            self.logger.warning("未收到任何分支任务")
-            branch_comm.wait_for_complete(timeout=300.0)
-            return torch.tensor([], device=device), stats
-
-        stats['num_branches'] = len(branch_infos)
-        self.logger.info(f"收到 {len(branch_infos)} 个分支任务")
-
-        # 执行分支（使用 Continuous Batching）
-        parallel_start = time.time()
-
-        # KV Cache 已经在分布式 Prefill 中初始化并同步
-        # 使用传入的 input_len (即 prefix_len)
-        prefix_len = input_len
-        max_kv_len = prefix_len + max_new_tokens + 500
-
-        # 如果需要扩展 KV Cache 容量
-        if self.past_key_values_data[0].shape[3] < max_kv_len:
-            old_cache_data = [d[..., :prefix_len, :].clone() for d in self.past_key_values_data]
-
-            self.past_key_values, self.past_key_values_data, self.current_length_data = \
-                initialize_past_key_values(self.base_model, max_length=max_kv_len)
-
-            for i, d in enumerate(old_cache_data):
-                self.past_key_values_data[i][..., :prefix_len, :].copy_(d)
-            self.current_length_data.fill_(prefix_len)
-
-        # 准备数据
-        branch_ids = [info.branch_id for info in branch_infos]
-        branch_info_dict = {info.branch_id: info for info in branch_infos}
-        all_branches = {info.branch_id: info.prompt_tokens for info in branch_infos}
-
-        # 获取本设备的执行计划
-        my_plan = schedule_plan.get_plan_for_device(rank)
-        if my_plan is None:
-            # 创建默认计划
-            my_plan = DeviceExecutionPlan(
-                device_id=rank,
-                assigned_branches=branch_ids,
-                max_parallel=max_parallel,
-            )
-
-        # 初始化执行管理器
-        exec_manager = BranchExecutionManager(
-            execution_plan=my_plan,
-            branch_infos=branch_info_dict,
-            rank=rank,
-        )
-
-        # 初始化并行状态
-        max_branch_id = max(branch_ids) + 1
-        self.parallel_branches_output = [[] for _ in range(max_branch_id)]
-        for info in branch_infos:
-            self.parallel_branches_output[info.branch_id] = list(info.prompt_tokens)
-
-        self.instruction_len = {info.branch_id: len(info.prompt_tokens) for info in branch_infos}
-
-        # 获取初始批次
-        initial_branches = exec_manager.get_branches_to_add()
-        if not initial_branches:
-            branch_comm.wait_for_complete(timeout=300.0)
-            return torch.tensor([], device=device), stats
-
-        initial_prompts = [all_branches[bid] for bid in initial_branches]
-        prefix_ids = torch.zeros((1, prefix_len), dtype=torch.long, device=device)
-
-        # 前缀复用 + Prefill 初始批次
-        input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids = \
-            self._prepare_batch_for_prefill(
-                prefix_ids, initial_prompts, initial_branches, max_new_tokens
-            )
-
-        input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _ = \
-            self.prefill_parallel(
-                prefix_len, input_ids, tips_indices,
-                branch_begins, branch_lengths, draft_input_ids, logits_processor
-            )
-
-        exec_manager.activate_branches(initial_branches)
-
-        # Continuous Batching 循环
-        tokens_per_branch = self.eagle_layer.total_tokens + 1
-
-        for step in range(max_new_tokens):
-            if check_stop_conditions_parallel(
-                current_length=self.current_length_data[0].item(),
-                max_kv_len=max_kv_len,
-                num_active_branches=len(self.active_branches),
-                tokens_per_branch=tokens_per_branch,
-            ):
-                break
-
-            if exec_manager.is_all_completed():
-                break
-
-            if self.prefilling_branches:
-                (
-                    draft_tokens, retrieve_indices, tree_mask,
-                    tree_position_ids, _, all_finished,
-                ) = self.decode_step_parallel_with_prefill(
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    prefix_len=prefix_len,
-                    logits_processor=logits_processor,
-                )
-            else:
-                (
-                    draft_tokens, retrieve_indices, tree_mask,
-                    tree_position_ids, _, all_finished,
-                ) = self.decode_step_parallel(
-                    draft_tokens=draft_tokens,
-                    retrieve_indices=retrieve_indices,
-                    tree_mask=tree_mask,
-                    tree_position_ids=tree_position_ids,
-                    logits_processor=logits_processor,
-                )
-
-            exec_manager.step()
-
-            # 处理完成的分支
-            if self.recently_completed_branches:
-                completed = self.recently_completed_branches
-                branch_outputs = {
-                    bid: self.parallel_branches_output[bid]
-                    for bid in completed
-                }
-                exec_manager.handle_completed_branches(completed, branch_outputs)
-
-                # Continuous Batching: 加入新分支
-                new_branches = exec_manager.get_branches_to_add()
-                if new_branches:
-                    all_branches_list = [all_branches.get(i, []) for i in range(max_branch_id)]
-                    self._add_branches_to_active(
-                        new_branches, all_branches_list, prefix_len, logits_processor
-                    )
-                    exec_manager.activate_branches(new_branches)
-
-            if all_finished:
-                break
-
-        stats['parallel_time'] = time.time() - parallel_start
-
-        # 发送结果到 Master
-        for bid in branch_ids:
-            branch_comm.send_branch_output(
-                branch_id=bid,
-                output_tokens=self.parallel_branches_output[bid],
-            )
-
-        self.logger.info(f"Worker {rank} 完成分支执行 (调度模式)，等待完成信号...")
-
-        # 等待完成信号
-        branch_comm.wait_for_complete(timeout=300.0)
-
-        return torch.tensor([], device=device), stats
+        
+        return output_ids, stats
 
     # =========================================================================
     # Prefill 和 Verify 方法 (Prefill & Verify Methods)
@@ -3032,8 +2593,16 @@ class SpecSoTModel(nn.Module):
             
             # 扩展 Eagle Layer KV Cache
             # 关键：新分支需要从 prefix KV 扩展，并扩展到与老分支相同的序列长度
-            if self.eagle_layer.stable_kv is not None:
-                k_draft, v_draft = self.eagle_layer.stable_kv[0]
+            # 注意：批量并行模式下使用普通 tensor 格式，不使用 KVCache 类
+            if self.eagle_layer.draft_past_key_values is not None:
+                key_cache, value_cache = self.eagle_layer.draft_past_key_values[0]
+                # 获取实际的 tensor 数据（兼容 KVCache 类和普通 tensor）
+                if hasattr(key_cache, 'data'):
+                    k_draft = key_cache.data[:, :, :key_cache.shape[2], :]
+                    v_draft = value_cache.data[:, :, :value_cache.shape[2], :]
+                else:
+                    k_draft = key_cache
+                    v_draft = value_cache
                 old_kv_seq_len = k_draft.shape[2]  # 老分支当前的 KV 长度
                 
                 # 新分支从 prefix 开始
@@ -3061,7 +2630,9 @@ class SpecSoTModel(nn.Module):
                 # 将新分支的 KV Cache 追加到现有的
                 k_combined = torch.cat([k_draft, k_expanded], dim=0)
                 v_combined = torch.cat([v_draft, v_expanded], dim=0)
-                self.eagle_layer.stable_kv = ((k_combined, v_combined),)
+                # 批量模式下使用普通 tensor 格式
+                self.eagle_layer.draft_past_key_values = ((k_combined, v_combined),)
+                self.eagle_layer.kv_cache_initialized = False  # 标记退出 KVCache 模式
             
             # 清理状态
             self.prefilling_branches = []
@@ -3489,11 +3060,18 @@ class SpecSoTModel(nn.Module):
             ]
             
             # 剪枝 Eagle Layer KV Cache
-            if self.eagle_layer.stable_kv is not None:
-                k_stable, v_stable = self.eagle_layer.stable_kv[0]
-                k_stable = k_stable[keep_mask_tensor]
-                v_stable = v_stable[keep_mask_tensor]
-                self.eagle_layer.stable_kv = ((k_stable, v_stable),)
+            # 批量模式下使用普通 tensor 格式
+            if self.eagle_layer.draft_past_key_values is not None:
+                key_cache, value_cache = self.eagle_layer.draft_past_key_values[0]
+                # 获取实际的 tensor 数据
+                if hasattr(key_cache, 'data'):
+                    k_stable = key_cache.data[:, :, :key_cache.shape[2], :][keep_mask_tensor]
+                    v_stable = value_cache.data[:, :, :value_cache.shape[2], :][keep_mask_tensor]
+                else:
+                    k_stable = key_cache[keep_mask_tensor]
+                    v_stable = value_cache[keep_mask_tensor]
+                self.eagle_layer.draft_past_key_values = ((k_stable, v_stable),)
+                self.eagle_layer.kv_cache_initialized = False  # 批量模式下退出 KVCache 模式
 
         if not self.active_branches:
             return None, None
@@ -3519,248 +3097,8 @@ class SpecSoTModel(nn.Module):
         return batched_draft_hiddens, batched_draft_tokens
 
     # =========================================================================
-    # 前缀复用：从 Skeleton 到 Parallel 的状态转换
-    # =========================================================================
-
-    def reuse_prefix_for_parallel(
-        self,
-        prefix_ids: torch.Tensor,
-        branches_prompts: List[List[int]],
-        max_new_tokens: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor, List[int], List[int], torch.Tensor]:
-        """
-        前缀复用：从 Skeleton 模式复用 KV Cache 到 Parallel 模式
-        
-        该方法在 Skeleton 生成完成后调用，复用 skeleton 的 prefix KV Cache，
-        为各分支初始化并行解码状态。
-        
-        核心步骤：
-        1. 复制 KV Cache: 将 skeleton 的 prefix KV 复制为多分支
-        2. 构建 BIM: 创建 Branch Index Map，追踪每个 token 的分支归属
-        3. 打包输入: 将所有分支的 prompt 打包成一个序列
-        4. 位置编码: 为各分支构建正确的位置编码
-        
-        关键数据结构：
-        - Branch Index Map (BIM): 记录每个 token 属于哪个分支
-          - -1: 共享 prefix
-          - -2: 空位置 (预留空间)
-          - >=0: 分支索引
-        - Packed Input: 将所有分支的 token 打包成一个序列
-          格式: [prefix | branch_0 | branch_1 | ... | branch_n]
-        
-        Args:
-            prefix_ids: 共享前缀 (skeleton) [1, prefix_len]
-            branches_prompts: 各分支的 prompt token 列表
-            max_new_tokens: 每个分支最大生成长度
-            
-        Returns:
-            input_ids: 打包后的输入 [1, total_len]
-            tips_indices: 各分支 tip 位置 (最后一个 token 的索引)
-            branch_begins: 各分支起始位置
-            branch_lengths: 各分支初始长度
-            draft_input_ids: Draft 模型的输入 [num_para, max_len]
-        """
-        device = self.base_model.device
-        num_para = len(branches_prompts)
-        prefix_len = prefix_ids.shape[1]
-        pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.tokenizer.eos_token_id
-        
-        # 初始化活跃分支列表
-        self.active_branches = list(range(num_para))
-
-        # ---------------------------------------------------------------------
-        # 1. Base Model KV Cache: 重置到 prefix 长度
-        # ---------------------------------------------------------------------
-        self.current_length_data.fill_(prefix_len)
-        
-        # ---------------------------------------------------------------------
-        # 2. Eagle Layer KV Cache: 复制 prefix KV 为多分支
-        # ---------------------------------------------------------------------
-        if self.eagle_layer.stable_kv is not None:
-            k_draft, v_draft = self.eagle_layer.stable_kv[0]
-            k_prefix = k_draft[..., :prefix_len, :].clone()
-            v_prefix = v_draft[..., :prefix_len, :].clone()
-            k_expanded = k_prefix.expand(num_para, -1, -1, -1).clone()
-            v_expanded = v_prefix.expand(num_para, -1, -1, -1).clone()
-            self.eagle_layer.stable_kv = ((k_expanded, v_expanded),)
-
-        # ---------------------------------------------------------------------
-        # 3. 构建打包输入序列和 Branch Index Map
-        # ---------------------------------------------------------------------
-        flat_branch_ids = []
-        branch_index_list = [-1] * prefix_len  # Prefix 标记为 -1
-        
-        tips_indices = []
-        branch_begins = []
-        branch_lengths = []
-        pos_ids_list = list(range(prefix_len))
-        
-        draft_branch_list = []
-        draft_pos_list = []
-        
-        current_offset = prefix_len
-        for i, br in enumerate(branches_prompts):
-            curr_len = len(br)
-            branch_begins.append(current_offset)
-            flat_branch_ids.extend(br)
-            branch_index_list.extend([i] * curr_len)
-            branch_lengths.append(curr_len)
-            current_offset += curr_len
-            tips_indices.append(current_offset - 1)
-            
-            # 位置编码: 每个分支从 prefix_len 开始独立计数
-            curr_pos = list(range(prefix_len, prefix_len + curr_len))
-            pos_ids_list.extend(curr_pos)
-            
-            draft_branch_list.append(torch.tensor(br, device=device, dtype=torch.long))
-            draft_pos_list.append(torch.tensor(curr_pos, device=device, dtype=torch.long))
-
-        # 构建 Tensor
-        branches_tensor = torch.tensor([flat_branch_ids], device=device, dtype=torch.long)
-        input_ids = torch.cat([prefix_ids, branches_tensor], dim=1)
-        tips_indices = torch.tensor(tips_indices, device=device)
-        self.full_position_ids = torch.tensor(pos_ids_list, device=device)
-
-        # 初始化 BIM
-        total_capacity = input_ids.shape[1] + max_new_tokens + 128
-        self.branch_index_map = torch.full(
-            (total_capacity,), -2, dtype=torch.long, device=device
-        )
-        self.branch_index_map[:len(branch_index_list)] = torch.tensor(
-            branch_index_list, device=device
-        )
- 
-        # 构建 Draft 模型的 Batched 输入（左填充）,用什么填充无所谓，都会mask掉
-        draft_input_ids, branch_mask = stack_with_left_padding(draft_branch_list, pad_id=pad_token_id, device=device, return_mask=True)
-        padded_branch_pos = stack_with_left_padding(draft_pos_list, pad_id=0, device=device)
-
-        prefix_mask = torch.ones((num_para, prefix_len), dtype=torch.long, device=device)
-        prefix_pos = torch.arange(prefix_len, device=device).unsqueeze(0).expand(num_para, -1)
-        self.eagle_layer.cache_padding_mask = torch.cat([prefix_mask, branch_mask], dim=1)
-        self.eagle_layer.full_position_ids = torch.cat([prefix_pos, padded_branch_pos], dim=1)
-
-        return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
-
-    # =========================================================================
     # Continuous Batching 辅助方法
     # =========================================================================
-
-    def _prepare_batch_for_prefill(
-        self,
-        prefix_ids: torch.Tensor,
-        branches_prompts: List[List[int]],
-        branch_ids: List[int],
-        max_new_tokens: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor, List[int], List[int], torch.Tensor]:
-        """
-        为指定分支准备 Prefill 输入（支持 Continuous Batching）
-
-        与 reuse_prefix_for_parallel 类似，但只处理指定的分支子集。
-
-        Args:
-            prefix_ids: 共享前缀 [1, prefix_len]
-            branches_prompts: 分支 prompt 列表
-            branch_ids: 分支 ID 列表（用于 BIM 标记）
-            max_new_tokens: 最大生成长度
-
-        Returns:
-            与 reuse_prefix_for_parallel 相同
-        """
-        device = self.base_model.device
-        num_para = len(branches_prompts)
-        prefix_len = prefix_ids.shape[1]
-        pad_token_id = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
-
-        # 初始化活跃分支列表
-        self.active_branches = list(branch_ids)
-
-        # 重置 KV Cache 到 prefix 长度
-        self.current_length_data.fill_(prefix_len)
-
-        # Eagle Layer KV Cache: 复制 prefix KV 为多分支
-        if self.eagle_layer.stable_kv is not None:
-            k_draft, v_draft = self.eagle_layer.stable_kv[0]
-            k_prefix = k_draft[..., :prefix_len, :].clone()
-            v_prefix = v_draft[..., :prefix_len, :].clone()
-            k_expanded = k_prefix.expand(num_para, -1, -1, -1).clone()
-            v_expanded = v_prefix.expand(num_para, -1, -1, -1).clone()
-            self.eagle_layer.stable_kv = ((k_expanded, v_expanded),)
-
-        # 构建打包输入序列和 BIM
-        flat_branch_ids = []
-        branch_index_list = [-1] * prefix_len
-
-        tips_indices = []
-        branch_begins = []
-        branch_lengths = []
-        pos_ids_list = list(range(prefix_len))
-
-        draft_branch_list = []
-        draft_pos_list = []
-
-        current_offset = prefix_len
-        for i, (br, bid) in enumerate(zip(branches_prompts, branch_ids)):
-            curr_len = len(br)
-            branch_begins.append(current_offset)
-            flat_branch_ids.extend(br)
-            branch_index_list.extend([bid] * curr_len)  # 使用实际的 branch_id
-            branch_lengths.append(curr_len)
-            current_offset += curr_len
-            tips_indices.append(current_offset - 1)
-
-            curr_pos = list(range(prefix_len, prefix_len + curr_len))
-            pos_ids_list.extend(curr_pos)
-
-            draft_branch_list.append(torch.tensor(br, device=device, dtype=torch.long))
-            draft_pos_list.append(torch.tensor(curr_pos, device=device, dtype=torch.long))
-
-        # 构建 Tensor
-        branches_tensor = torch.tensor([flat_branch_ids], device=device, dtype=torch.long)
-        input_ids = torch.cat([prefix_ids, branches_tensor], dim=1)
-        tips_indices = torch.tensor(tips_indices, device=device)
-        self.full_position_ids = torch.tensor(pos_ids_list, device=device)
-
-        # 初始化 BIM
-        total_capacity = input_ids.shape[1] + max_new_tokens + 128
-        self.branch_index_map = torch.full(
-            (total_capacity,), -2, dtype=torch.long, device=device
-        )
-        self.branch_index_map[:len(branch_index_list)] = torch.tensor(
-            branch_index_list, device=device
-        )
-
-        draft_input_ids, branch_mask = stack_with_left_padding(
-            draft_branch_list, pad_id=pad_token_id, device=device, return_mask=True
-        )
-        padded_branch_pos = stack_with_left_padding(draft_pos_list, pad_id=0, device=device)
-
-        prefix_mask = torch.ones((num_para, prefix_len), dtype=torch.long, device=device)
-        prefix_pos = torch.arange(prefix_len, device=device).unsqueeze(0).expand(num_para, -1)
-        self.eagle_layer.cache_padding_mask = torch.cat([prefix_mask, branch_mask], dim=1)
-        self.eagle_layer.full_position_ids = torch.cat([prefix_pos, padded_branch_pos], dim=1)
-
-        return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
-
-    def _get_completed_branches(self) -> List[int]:
-        """
-        获取已完成的分支列表
-
-        通过检查 parallel_branches_output 中是否包含 EOS token 来判断。
-
-        Returns:
-            完成的分支 ID 列表
-        """
-        completed = []
-        eos_token_id = self.tokenizer.eos_token_id
-
-        # 检查哪些分支已经生成了 EOS
-        for branch_id in list(self.active_branches):
-            if branch_id < len(self.parallel_branches_output):
-                output = self.parallel_branches_output[branch_id]
-                if output and output[-1] == eos_token_id:
-                    completed.append(branch_id)
-
-        return completed
 
     def _add_branches_to_active(
         self,
@@ -3809,248 +3147,6 @@ class SpecSoTModel(nn.Module):
         # 返回 None，实际的处理在下一轮 decode_step 中完成
         return None, None, None, None
     
-
-    def inject_new_branches(
-        self,
-        new_branch_ids: List[int],
-        prefix_len: int
-    ) -> None:
-        """
-        [Continuous Batching 核心] 动态注入新分支
-        
-        功能：
-        1. 在 KV Cache 尾部为新分支分配空间。
-        2. 将共享的 Skeleton Prefix KV 复制到新位置。
-        3. 更新 Branch Index Map (BIM)。
-        
-        Args:
-            new_branch_ids: 新加入的分支 ID 列表
-            prefix_len: 共享骨架前缀的长度 (对应 KV Cache 的 0:prefix_len)
-        """
-        if not new_branch_ids:
-            return
-
-        device = self.base_model.device
-        num_new = len(new_branch_ids)
-        
-        # 获取当前 KV Cache 的总长度指针 (所有分支共用一个 append-only 指针)
-        # current_length_data 是一个 tensor，通常存储在 CPU 或 GPU
-        current_global_len = self.current_length_data[0].item()
-        
-        # 计算增量长度: 每个新分支都需要一份 Prefix 的副本
-        added_len = num_new * prefix_len
-        
-        # 1. 显存容量检查 (简单版)
-        if current_global_len + added_len >= self.branch_index_map.shape[0]:
-            # 实际生产中应触发驱逐策略或扩容，这里抛出异常
-            raise RuntimeError(f"KV Cache Pool 耗尽! Cur: {current_global_len}, Need: {added_len}")
-
-        # 2. 执行 KV Cache 复制 (物理显存操作)
-        # 假设 0:prefix_len 存储着干净的 Skeleton Prefix
-        # 目标: 将其复制到 current_global_len : current_global_len + added_len
-        
-        target_start = current_global_len
-        
-        # 遍历所有层 (Layer)
-        for layer_kvs in self.past_key_values:
-            for kv_cache in layer_kvs: # 分别处理 Key 和 Value
-                # kv_cache.data shape: [Batch=1, Num_Heads, Max_Len, Head_Dim]
-                # 注意: 在 specsot 中，Batch 通常为 1，所有分支混在 Seq_Len 维度
-                
-                # 源数据: [1, H, prefix_len, D]
-                src_data = kv_cache.data[..., :prefix_len, :]
-                
-                # 构造目标数据: 将 src 复制 num_new 份
-                # repeat: [1, H, prefix_len, D] -> [num_new, H, prefix_len, D]
-                tiled_data = src_data.repeat(num_new, 1, 1, 1) 
-                
-                # 展平为 [1, H, num_new * prefix_len, D] 以适配存储结构
-                tiled_data = tiled_data.transpose(0, 2).reshape(1, kv_cache.data.shape[1], -1, kv_cache.data.shape[3])
-                # 修正 reshape 逻辑: 应该是先 repeat dim 0 (batch 维度模拟) 或者 dim 2 (seq 维度)
-                # 正确做法：
-                # src_data: [1, H, L, D] -> repeat(1, 1, N, 1) -> [1, H, N*L, D] (view 可能会乱序)
-                # 更稳妥的做法是利用 cat
-                src_data_sq = src_data.squeeze(0) # [H, L, D]
-                tiled_sq = src_data_sq.repeat(1, num_new, 1) # [H, N*L, D] 注意：这里是简单的重复，顺序是 L,L,L...
-                # 但我们需要配合 BIM，BIM 是 [ID1]*L, [ID2]*L... 所以简单的 repeat 是匹配的
-                
-                tiled_data = tiled_sq.unsqueeze(0) # [1, H, N*L, D]
-                
-                # 写入显存
-                target_end = target_start + added_len
-                kv_cache.data[..., target_start:target_end, :] = tiled_data
-
-        # 3. 更新 Branch Index Map (BIM)
-        # 这一步告诉 Attention 机制：这段 KV 属于哪个分支
-        new_bim_list = []
-        for bid in new_branch_ids:
-            new_bim_list.extend([bid] * prefix_len)
-            
-        bim_tensor = torch.tensor(new_bim_list, device=device, dtype=torch.long)
-        self.branch_index_map[target_start : target_start + added_len] = bim_tensor
-
-        # 4. 更新全局指针
-        self.current_length_data.fill_(current_global_len + added_len)
-        
-        # 5. 更新活跃分支记录
-        for bid in new_branch_ids:
-            if bid not in self.active_branches:
-                self.active_branches.append(bid)
-                
-        # 6. Eagle Layer 状态更新 (如果 Eagle Layer 有独立 Cache)
-        # 通常 Eagle Layer 需要重新初始化其内部状态以接纳新分支
-        # 这里假设 Eagle 的 Cache 也是随动的，或者在 decode_step 中动态处理
-        
-        print(f"[SpecSoT] Injected {num_new} branches. Cache grew by {added_len} slots.")
-
-
-    def decode_step_parallel_mixed(
-        self,
-        # === A. 老分支 (Verification) ===
-        draft_tokens: torch.Tensor,       # [B_old, K]
-        retrieve_indices: torch.Tensor,   # [B_old, K]
-        tree_mask: torch.Tensor,
-        tree_position_ids: torch.Tensor,
-        old_branch_ids: List[int],        # 对应 draft_tokens 的分支 ID
-        
-        # === B. 新分支 (Prefill) ===
-        new_prompts: List[torch.Tensor],  # List of [Len]
-        new_branch_ids: List[int],
-        
-        prefix_len: int
-    ):
-        """
-        [混合推理步] 同时处理 Draft 验证 (老任务) 和 Prompt Prefill (新任务)
-        """
-        device = self.base_model.device
-        
-        # --- 1. 构造 Base Model 的输入 ---
-        
-        combined_input_ids = []
-        combined_position_ids = []
-        combined_bim_ids = [] # 用于构建 Attention Mask
-        
-        # A. 处理老分支 (Drafts)
-        # draft_tokens [B, K] -> flatten
-        if old_branch_ids and draft_tokens is not None:
-            # 假设 draft_tokens 已经是 [B, K]
-            # 对应的 position_ids 需要从 tree_position_ids 获取
-            # tree_position_ids: [B, K]
-            
-            flat_draft = draft_tokens.view(-1)
-            flat_pos = tree_position_ids.view(-1)
-            
-            combined_input_ids.append(flat_draft)
-            combined_position_ids.append(flat_pos)
-            
-            # BIM: 每个 token 属于哪个 branch
-            k_size = draft_tokens.shape[1]
-            for bid in old_branch_ids:
-                combined_bim_ids.extend([bid] * k_size)
-                
-        # B. 处理新分支 (Prompts)
-        if new_branch_ids:
-            for prompt, bid in zip(new_prompts, new_branch_ids):
-                # prompt: [Len]
-                combined_input_ids.append(prompt)
-                
-                # pos: 从 prefix_len 开始递增
-                p_len = prompt.shape[0]
-                pos = torch.arange(prefix_len, prefix_len + p_len, device=device)
-                combined_position_ids.append(pos)
-                
-                # BIM
-                combined_bim_ids.extend([bid] * p_len)
-        
-        if not combined_input_ids:
-            return None # 无事可做
-
-        # 拼接
-        final_input_ids = torch.cat(combined_input_ids).unsqueeze(0) # [1, Total_Len]
-        final_position_ids = torch.cat(combined_position_ids).unsqueeze(0)
-        
-        # --- 2. 构造 Attention Mask ---
-        # 这是一个关键点。我们需要构建一个 Mask，使得:
-        # Token i 能看到 Token j 当且仅当:
-        # 1. BIM[i] == BIM[j] (同分支) OR BIM[j] 属于 Prefix (-1或特定标记)
-        # 2. i >= j (Causal) 或 Tree Mask 允许
-        
-        # 这里复用 self.prepare_parallel_mask 逻辑，但需要传入本次的 BIM 信息
-        # 为简化，假设 Base Model 使用 FlashAttention + BIM 索引，或者我们在 forward 中通过 hook 处理
-        # 如果是标准 Llama/Qwen，需要传入 attention_mask
-        
-        # 临时扩展 BIM (为了本次 Forward)
-        current_len = self.current_length_data[0].item()
-        temp_bim_len = len(combined_bim_ids)
-        
-        # 更新 BIM 显存 (追加本次输入的 BIM 标记)
-        # 注意：Forward 完成后 KV 才会产生，但 mask 需要现在就有
-        self.branch_index_map[current_len : current_len + temp_bim_len] = \
-            torch.tensor(combined_bim_ids, device=device)
-
-        # --- 3. Base Model Forward ---
-        # 此时调用 verify_step_parallel 的核心逻辑
-        # 由于输入已经混合，我们直接调用 Base Model
-        
-        with torch.no_grad():
-            outputs = self.base_model(
-                input_ids=final_input_ids,
-                position_ids=final_position_ids,
-                use_cache=True,
-                # attention_mask 由模型内部根据 branch_index_map 生成 (假设模型已修改支持 SpecSoT Mask)
-            )
-            logits = outputs.logits # [1, Total_Len, Vocab]
-
-        # --- 4. 拆分输出并处理 ---
-        
-        # 指针用于分割 logits
-        ptr = 0
-        
-        results = {} # 存储结果
-        
-        # A. 处理老分支结果 (Speculative Verify)
-        if old_branch_ids:
-            total_draft_len = len(old_branch_ids) * draft_tokens.shape[1]
-            draft_logits = logits[0, ptr : ptr + total_draft_len, :]
-            ptr += total_draft_len
-            
-            # Reshape 回 [B_old, K, Vocab]
-            draft_logits = draft_logits.view(len(old_branch_ids), -1, logits.shape[-1])
-            
-            # 调用验证逻辑 (Tree Verification)
-            # 这里复用原有的 verify 逻辑，但这部分比较长，我简写核心
-            # verify_results = self._verify_drafts(draft_logits, draft_tokens, ...)
-            # results['verify'] = verify_results
-            pass # 具体验证代码略，重点是这里拿到了 logits
-
-        # B. 处理新分支结果 (Prefill Next Token)
-        if new_branch_ids:
-            for i, (prompt, bid) in enumerate(zip(new_prompts, new_branch_ids)):
-                p_len = prompt.shape[0]
-                # 取最后一个 token 的 logits 预测下一个
-                # 注意：Prompt 的所有 tokens 都进去了，产生了 KV，但我们只需要最后一个 output
-                branch_logits = logits[0, ptr : ptr + p_len, :]
-                last_token_logits = branch_logits[-1, :] # [Vocab]
-                
-                # Greedy Decoding (或 Sampling)
-                next_token = torch.argmax(last_token_logits).item()
-                
-                results[bid] = {
-                    'status': 'prefill_done',
-                    'next_token': next_token
-                }
-                
-                ptr += p_len
-
-        # --- 5. 状态更新 ---
-        # KV Cache 已经由 Base Model 的 Forward 自动追加更新了
-        # 我们需要更新 current_length_data
-        self.current_length_data.add_(temp_bim_len)
-        
-        return results
-
-
-
 
 
 

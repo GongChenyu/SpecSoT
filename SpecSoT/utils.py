@@ -928,8 +928,8 @@ def set_random_seed(seed: int):
     
     Args:
         seed: 随机种子值
+        
     """
-
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
