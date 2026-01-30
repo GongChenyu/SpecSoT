@@ -153,6 +153,103 @@ def build_parallel_prefill_mask(
     return mask
 
 
+def build_continuous_decode_mask(
+    history_bim: torch.Tensor,
+    combined_bim_tensor: torch.Tensor,
+    current_length: int,
+    num_old_branches: int,
+    num_nodes: int,
+    tree_mask: Optional[torch.Tensor],
+    new_prompt_lengths: List[int],
+    device: torch.device,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    """
+    构建 Continuous Batching 并行解码阶段的混合 Attention Mask
+    
+    用于处理 PD (Parallel Decoding) 混合状态，即同时包含：
+    - 老分支的 draft tokens（使用 tree_mask）
+    - 新分支的 prompt tokens（使用 causal mask）
+    
+    该掩码确保：
+    1. 所有分支都能看到共享的 prefix (BIM == -1)
+    2. 每个分支只能看到自己的历史和当前输入
+    3. 老分支内部遵循 tree_mask
+    4. 新分支内部遵循 causal mask
+    
+    Args:
+        history_bim: 历史 BIM (Branch Index Map) [current_length]
+        combined_bim_tensor: 当前输入的 BIM [total_input_len]
+        current_length: 历史 KV Cache 的长度
+        num_old_branches: 老分支数量
+        num_nodes: 每个老分支的 draft tokens 数量
+        tree_mask: 老分支的 tree mask [num_old, 1, num_nodes, num_nodes] (可选)
+        new_prompt_lengths: 新分支的 prompt 长度列表
+        device: 目标设备
+        dtype: 数据类型
+        
+    Returns:
+        combined_mask: [1, 1, total_input_len, current_length + total_input_len]
+    """
+    total_input_len = combined_bim_tensor.shape[0]
+    
+    # =========================================================================
+    # 1. 构建 Cross Mask (输入 -> 历史)
+    # =========================================================================
+    cross_mask = torch.full(
+        (1, 1, total_input_len, current_length),
+        torch.finfo(dtype).min, device=device
+    )
+    
+    # Prefix 全部可见 (BIM == -1)
+    is_prefix = (history_bim == -1).view(1, 1, 1, -1)
+    cross_mask.masked_fill_(is_prefix, 0)
+    
+    # 同分支可见
+    input_ids_view = combined_bim_tensor.view(1, 1, -1, 1)
+    hist_ids_view = history_bim.view(1, 1, 1, -1)
+    is_same_branch = (input_ids_view == hist_ids_view)
+    cross_mask.masked_fill_(is_same_branch, 0)
+    
+    # =========================================================================
+    # 2. 构建 Input Block Mask (输入 -> 输入)
+    # =========================================================================
+    input_block_mask = torch.full(
+        (total_input_len, total_input_len),
+        torch.finfo(dtype).min, device=device
+    )
+    
+    # 老分支的 tree mask（块对角结构）
+    if num_old_branches > 0 and tree_mask is not None:
+        converted_tree_mask = torch.where(
+            tree_mask == 1, 0.0, torch.finfo(dtype).min
+        )
+        for i in range(num_old_branches):
+            st, ed = i * num_nodes, (i + 1) * num_nodes
+            input_block_mask[st:ed, st:ed] = converted_tree_mask[i, 0, :, :]
+    
+    # 新分支的 causal mask
+    if len(new_prompt_lengths) > 0:
+        old_total_len = num_old_branches * num_nodes if (num_old_branches > 0 and tree_mask is not None) else 0
+        
+        # 每个新分支内部使用 causal mask
+        offset = old_total_len
+        for prompt_len in new_prompt_lengths:
+            for j in range(prompt_len):
+                for k in range(j + 1):
+                    input_block_mask[offset + j, offset + k] = 0
+            offset += prompt_len
+    
+    input_block_mask = input_block_mask.unsqueeze(0).unsqueeze(0)
+    
+    # =========================================================================
+    # 3. 合并 Cross Mask 和 Input Block Mask
+    # =========================================================================
+    combined_mask = torch.cat([cross_mask, input_block_mask], dim=-1)
+    
+    return combined_mask
+
+
 # =============================================================================
 # 3. Verification Utilities
 # =============================================================================

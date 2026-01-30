@@ -189,18 +189,3 @@ def reset_past_key_values(passed_key_values: List[torch.Tensor]) -> List[torch.T
             passed_key_values[i][j].current_length.fill_(0)
     return passed_key_values
 
-
-def initialize_draft_past_key_values(eagle_layer, max_length: int, batch_size: int = 1):
-    """
-    初始化 Draft Model (Eagle Layer) 的 KV Cache
-    
-    与 Base Model 的 KV Cache 类似，使用预分配的内存和 KVCache 类管理。
-    
-    Args:
-        eagle_layer: Eagle Layer 模型实例
-        max_length: 最大序列长度
-        batch_size: 批次大小，默认为 1
-    """
-    # 调用 eagle_layer 的 init_kv_cache 方法
-    eagle_layer.init_kv_cache(max_length=max_length, batch_size=batch_size)
-

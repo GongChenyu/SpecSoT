@@ -28,6 +28,8 @@ from .comm_manager import (
     RingCommManager,
     create_zmq_comm_manager,
 )
+
+from .task_coordinator import DistributedTaskCoordinator
 from .comm_utils import (
     Message,
     MessageType,

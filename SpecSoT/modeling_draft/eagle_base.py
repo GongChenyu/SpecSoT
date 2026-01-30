@@ -355,6 +355,10 @@ class EagleBase(nn.Module, ABC):
                        注意：应该是 prefill_len + max_draft_steps * (top_k * depth)
                        但实际上只需要保留 expand_root 的 cache，所以可以更小
             batch_size: 批次大小
+            
+        Returns:
+            tuple: (draft_past_key_values, draft_past_key_values_data, draft_current_length_data)
+                   与 initialize_past_key_values 保持一致的返回格式
         """
         # 延迟导入避免循环依赖
         from ..kv_cache import KVCache
@@ -396,6 +400,9 @@ class EagleBase(nn.Module, ABC):
             ])
         
         self.kv_cache_initialized = True
+        
+        # 返回三元组，与 initialize_past_key_values 保持一致
+        return self.draft_past_key_values, self.draft_past_key_values_data, self.draft_current_length_data
         
     def get_kv_cache_length(self) -> int:
         """获取当前 KV Cache 的有效长度"""
