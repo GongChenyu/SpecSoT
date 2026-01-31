@@ -929,7 +929,11 @@ class SpecSoTModel(nn.Module):
                 branch_infos=branch_info_dict,
                 rank=0,
             )
-            exec_manager.activate_branches(schedule_result.my_branch_ids)
+            # 关键修复：只激活已经 prefill 的分支（self.active_branches 在 prefill 阶段设置）
+            # 而不是所有分支。剩余分支会通过 Continuous Batching 动态加入。
+            prefilled_branches = list(self.active_branches)
+            exec_manager.activate_branches(prefilled_branches)
+            self.logger.info(f"Continuous Batching: 初始激活分支 {prefilled_branches}, 待加入 {exec_manager.pending_branches}")
             
             for step in range(max_new_tokens):
                 if check_stop_conditions_parallel(
@@ -1090,48 +1094,6 @@ class SpecSoTModel(nn.Module):
         return merged_ids
 
     # =========================================================================
-    # 分布式通信辅助方法 (Distributed Communication Helpers)
-    # =========================================================================
-
-    def _notify_workers_complete(self) -> None:
-        """通知所有Worker完成（委托给任务协调器）"""
-        if not self.is_distributed() or self.task_coordinator is None:
-            return
-        self.task_coordinator.notify_complete()
-
-    def _distribute_tasks_to_workers(
-        self,
-        schedule_result: ScheduleResult,
-        parse_result: SkeletonParseResult,
-    ) -> None:
-        """分发任务给Worker（委托给任务协调器）"""
-        if not self.is_distributed() or self.task_coordinator is None:
-            return
-        self.task_coordinator.distribute_tasks(schedule_result, parse_result)
-
-    def _collect_worker_results(
-        self,
-        schedule_result: ScheduleResult,
-        num_branches: int,
-    ) -> Dict[int, List[int]]:
-        """收集Worker结果（委托给任务协调器）"""
-        if not self.is_distributed() or self.task_coordinator is None:
-            return {}
-        return self.task_coordinator.collect_results(schedule_result, num_branches)
-
-    def _receive_tasks_from_master(self) -> Optional[Tuple[SchedulePlan, List[BranchInfo]]]:
-        """Worker接收Master分发的任务（委托给任务协调器）"""
-        if self.task_coordinator is None:
-            return None
-        return self.task_coordinator.receive_tasks()
-
-    def _send_results_to_master(self, branch_outputs: Dict[int, List[int]]) -> None:
-        """Worker发送结果给Master（委托给任务协调器）"""
-        if self.task_coordinator is None:
-            return
-        self.task_coordinator.send_results(branch_outputs)
-
-    # =========================================================================
     # 并行解码辅助方法 (Parallel Decoding Helpers)
     # =========================================================================
 
@@ -1145,26 +1107,32 @@ class SpecSoTModel(nn.Module):
         """
         准备并行解码的批次数据（统一入口）
         
-        该方法合并了原来的 reuse_prefix_for_parallel 和 _prepare_batch_for_prefill，
-        用于在 Skeleton 生成完成后，为各分支准备并行解码的输入数据。
+        关键设计：
+        =========
+        在 Skeleton 阶段，已经 prefill 了 prefix (system prompt) 的 KV cache。
+        在 Parallel 阶段，我们需要：
+          1. **复用** prefix 的 KV cache（不重新计算）
+          2. 只 prefill **各分支的 parallel prompt**（新的 user turn 部分）
+        
+        因此，返回的 input_ids **只包含各分支的 prompt，不包含 prefix**。
         
         核心步骤：
-        1. 复制 KV Cache: 将 skeleton 的 prefix KV 复制为多分支
-        2. 构建 BIM: 创建 Branch Index Map，追踪每个 token 的分支归属
-        3. 打包输入: 将所有分支的 prompt 打包成一个序列
-        4. 位置编码: 为各分支构建正确的位置编码
+        1. 重置 KV Cache 长度到 prefix_len（保留 prefix cache）
+        2. 复制 Eagle Layer KV Cache 为多分支
+        3. 构建 BIM: 追踪每个 token 的分支归属（prefix 标记为 -1）
+        4. 打包输入: **只包含各分支的 prompt**（不包含 prefix）
+        5. 位置编码: 各分支从 prefix_len 开始独立计数
         
         Args:
-            prefix_ids: 共享前缀 (skeleton) [1, prefix_len]
-            branches_prompts: 各分支的 prompt token 列表
+            prefix_ids: 共享前缀 [1, prefix_len]（仅用于获取长度）
+            branches_prompts: 各分支的 prompt token 列表（不包含 prefix）
             max_new_tokens: 每个分支最大生成长度
             branch_ids: 分支 ID 列表（可选，用于 Continuous Batching）
-                        如果为 None，则使用 0, 1, 2, ... 作为 ID
             
         Returns:
-            input_ids: 打包后的输入 [1, total_len]
-            tips_indices: 各分支 tip 位置
-            branch_begins: 各分支起始位置
+            input_ids: 打包后的输入 [1, branches_total_len]（仅分支 prompts）
+            tips_indices: 各分支 tip 位置（相对于 prefix_len 的偏移）
+            branch_begins: 各分支起始位置（相对于 prefix_len 的偏移）
             branch_lengths: 各分支初始长度
             draft_input_ids: Draft 模型的输入 [num_para, max_len]
         """
@@ -1206,26 +1174,30 @@ class SpecSoTModel(nn.Module):
         # ---------------------------------------------------------------------
         # 3. 构建打包输入序列和 Branch Index Map
         # ---------------------------------------------------------------------
+        # 关键：只构建分支部分，不包含 prefix
         flat_branch_ids = []
-        branch_index_list = [-1] * prefix_len  # Prefix 标记为 -1
+        # BIM: prefix 部分标记为 -1（共享），分支部分标记为对应的 branch_id
+        branch_index_list = [-1] * prefix_len
         
         tips_indices = []
         branch_begins = []
         branch_lengths = []
-        pos_ids_list = list(range(prefix_len))
+        # 位置编码：从 prefix_len 开始
+        pos_ids_list = []
         
         draft_branch_list = []
         draft_pos_list = []
         
+        # 当前偏移从 prefix_len 开始（相对于整个序列的绝对位置）
         current_offset = prefix_len
         for i, (br, bid) in enumerate(zip(branches_prompts, branch_ids)):
             curr_len = len(br)
-            branch_begins.append(current_offset)
+            branch_begins.append(current_offset - prefix_len)  # 相对于分支起始的偏移
             flat_branch_ids.extend(br)
             branch_index_list.extend([bid] * curr_len)
             branch_lengths.append(curr_len)
             current_offset += curr_len
-            tips_indices.append(current_offset - 1)
+            tips_indices.append(current_offset - prefix_len - 1)  # 相对于分支起始的偏移
             
             # 位置编码: 每个分支从 prefix_len 开始独立计数
             curr_pos = list(range(prefix_len, prefix_len + curr_len))
@@ -1235,13 +1207,14 @@ class SpecSoTModel(nn.Module):
             draft_pos_list.append(torch.tensor(curr_pos, device=device, dtype=torch.long))
         
         # 构建 Tensor
+        # 关键修改：input_ids 只包含分支 prompts，不包含 prefix
         branches_tensor = torch.tensor([flat_branch_ids], device=device, dtype=torch.long)
-        input_ids = torch.cat([prefix_ids, branches_tensor], dim=1)
+        input_ids = branches_tensor  # 不再拼接 prefix_ids
         tips_indices = torch.tensor(tips_indices, device=device)
         self.full_position_ids = torch.tensor(pos_ids_list, device=device)
         
-        # 初始化 BIM
-        total_capacity = input_ids.shape[1] + max_new_tokens + 128
+        # 初始化 BIM（包含 prefix 的标记，用于 attention mask 构建）
+        total_capacity = prefix_len + input_ids.shape[1] + max_new_tokens + 128
         self.branch_index_map = torch.full(
             (total_capacity,), -2, dtype=torch.long, device=device
         )
@@ -1556,8 +1529,8 @@ class SpecSoTModel(nn.Module):
         
         # 处理 direct/error 模式
         if parse_result.mode != "plan":
-            if distributed:
-                self._notify_workers_complete()
+            if distributed and self.task_coordinator is not None:
+                self.task_coordinator.notify_complete()
             return decode_result.skeleton_ids, stats
         
         stats['num_branches'] = len(parse_result.tasks)
@@ -1577,8 +1550,8 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # 分布式: 分发任务给Worker
         # =====================================================================
-        if distributed:
-            self._distribute_tasks_to_workers(schedule_result, parse_result)
+        if distributed and self.task_coordinator is not None:
+            self.task_coordinator.distribute_tasks(schedule_result, parse_result)
         
         # =====================================================================
         # Phase 5: Parallel Prefill
@@ -1593,9 +1566,9 @@ class SpecSoTModel(nn.Module):
         my_branch_ids = schedule_result.my_branch_ids
         if not my_branch_ids:
             self.logger.warning("当前设备没有分配分支")
-            if distributed:
+            if distributed and self.task_coordinator is not None:
                 # 收集Worker结果
-                all_outputs = self._collect_worker_results(
+                all_outputs = self.task_coordinator.collect_results(
                     schedule_result, len(parse_result.tasks) - len(my_branch_ids)
                 )
                 for bid, tokens in all_outputs.items():
@@ -1604,12 +1577,22 @@ class SpecSoTModel(nn.Module):
             merged_ids = self._merge_results(decode_result.skeleton_ids, parse_result.tasks)
             return merged_ids, stats
         
-        my_prompts = [parse_result.clean_branches[bid] for bid in my_branch_ids]
+        # 调度模式：只 prefill 第一批次的分支，后续批次通过 Continuous Batching 加入
+        if use_scheduling and schedule_result.schedule_plan is not None:
+            my_rank = self.distributed_config.rank if distributed else 0
+            my_plan = schedule_result.schedule_plan.get_plan_for_device(my_rank)
+            initial_batch_ids = my_plan.get_initial_batch() if my_plan else []
+            self.logger.info(f"调度模式：初始 prefill 批次 {initial_batch_ids}，总分支 {my_branch_ids}")
+        else:
+            # 朴素模式：一次性 prefill 所有分支
+            initial_batch_ids = my_branch_ids
+        
+        initial_prompts = [parse_result.clean_branches[bid] for bid in initial_batch_ids]
         
         parallel_prefill_result = self._parallel_prefill(
             prefix_ids=prefill_result.task_input_ids,
-            branch_prompts=my_prompts,
-            branch_ids=my_branch_ids,
+            branch_prompts=initial_prompts,
+            branch_ids=initial_batch_ids,
             max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
         )
@@ -1637,15 +1620,15 @@ class SpecSoTModel(nn.Module):
         # =====================================================================
         # 分布式: 收集Worker结果
         # =====================================================================
-        if distributed:
+        if distributed and self.task_coordinator is not None:
             num_other = len(parse_result.tasks) - len(my_branch_ids)
             if num_other > 0:
-                other_outputs = self._collect_worker_results(schedule_result, num_other)
+                other_outputs = self.task_coordinator.collect_results(schedule_result, num_other)
                 for bid, tokens in other_outputs.items():
                     self.parallel_branches_output[bid] = tokens
             
             # 通知Worker完成
-            self._notify_workers_complete()
+            self.task_coordinator.notify_complete()
         
         stats['parallel_time'] = time.time() - parallel_start
         self.logger.info(f"并行解码完成: {stats['parallel_time']:.3f}s")
@@ -1693,7 +1676,7 @@ class SpecSoTModel(nn.Module):
         self.logger.info(f"Worker {rank} 等待接收任务...")
         
         # 接收任务
-        task_data = self._receive_tasks_from_master()
+        task_data = self.task_coordinator.receive_tasks() if self.task_coordinator else None
         if task_data is None:
             self.logger.info(f"Worker {rank} 收到完成信号，退出")
             return torch.tensor([], device=device), stats
@@ -1726,21 +1709,33 @@ class SpecSoTModel(nn.Module):
         # 创建虚拟prefix_ids
         prefix_ids = torch.zeros((1, prefix_len), dtype=torch.long, device=device)
         
-        # Phase 5: Parallel Prefill
-        parallel_prefill_result = self._parallel_prefill(
-            prefix_ids=prefix_ids,
-            branch_prompts=branch_prompts,
-            branch_ids=branch_ids,
-            max_new_tokens=max_new_tokens,
-            logits_processor=logits_processor,
-        )
-        
-        # 构建调度结果
+        # 构建调度结果（需要在 prefill 之前，用于获取初始批次）
         my_plan = schedule_plan.get_plan_for_device(rank)
         schedule_result = ScheduleResult(
             schedule_plan=schedule_plan,
             my_branch_ids=branch_ids,
             branch_infos=branch_infos,
+        )
+        
+        # 调度模式：只 prefill 第一批次的分支
+        if use_scheduling and my_plan is not None:
+            initial_batch_ids = my_plan.get_initial_batch()
+            self.logger.info(f"Worker {rank} 调度模式：初始 prefill 批次 {initial_batch_ids}，总分支 {branch_ids}")
+        else:
+            # 朴素模式：一次性 prefill 所有分支
+            initial_batch_ids = branch_ids
+        
+        # 获取初始批次的 prompts
+        branch_id_to_prompt = {bid: prompt for bid, prompt in zip(branch_ids, branch_prompts)}
+        initial_prompts = [branch_id_to_prompt[bid] for bid in initial_batch_ids]
+        
+        # Phase 5: Parallel Prefill
+        parallel_prefill_result = self._parallel_prefill(
+            prefix_ids=prefix_ids,
+            branch_prompts=initial_prompts,
+            branch_ids=initial_batch_ids,
+            max_new_tokens=max_new_tokens,
+            logits_processor=logits_processor,
         )
         
         # Phase 6: Parallel Decode
@@ -1758,7 +1753,8 @@ class SpecSoTModel(nn.Module):
         stats['parallel_time'] = time.time() - parallel_start
         
         # 发送结果给Master
-        self._send_results_to_master(parallel_decode_result.branch_outputs)
+        if self.task_coordinator is not None:
+            self.task_coordinator.send_results(parallel_decode_result.branch_outputs)
         
         self.logger.info(f"Worker {rank} 完成，等待完成信号...")
         
@@ -1852,13 +1848,17 @@ class SpecSoTModel(nn.Module):
         """
         并行模式：Prefill 阶段（处理各分支 prompt，初始化并行状态和首次 Draft）
         
-        处理多个分支的并行 Prefill，共享 prefix 的 KV Cache。
+        关键设计：
+        =========
+        - input_ids **只包含各分支的 prompts**，不包含 prefix
+        - prefix 的 KV cache 已经存在（长度为 prefix_len）
+        - 我们只需要 forward 各分支的新 tokens
         
         Args:
-            prefix_len: 共享前缀长度
-            input_ids: 打包后的输入 [1, total_len]
-            tips_indices: 各分支 tip 位置
-            branch_begins: 各分支起始位置
+            prefix_len: 共享前缀长度（KV cache 中已有的部分）
+            input_ids: 打包后的分支输入 [1, branches_total_len]（不含 prefix）
+            tips_indices: 各分支 tip 位置（相对于 input_ids 起始的偏移）
+            branch_begins: 各分支起始位置（相对于 input_ids 起始的偏移）
             branch_lengths: 各分支长度
             draft_input_ids: Draft 模型输入 [num_para, max_len]
             logits_processor: logits 处理器
@@ -1875,29 +1875,41 @@ class SpecSoTModel(nn.Module):
         num_para = len(branch_lengths)
 
         # 构建并行 Prefill 的 Attention Mask
+        # branch_len 是分支部分的总长度（input_ids 的长度）
         attention_mask = build_parallel_prefill_mask(
             self.branch_index_map,
             prefix_len,
-            branch_len=input_ids.shape[1] - prefix_len,
+            branch_len=input_ids.shape[1],  # input_ids 只包含分支部分
             device=device,
             dtype=torch.float32,
         )
 
-        # 从 KV Cache 中获取已处理的长度
+        # 从 KV Cache 中获取已处理的长度（应该等于 prefix_len）
         kv_len = self.past_key_values[0][0].shape[2]
+        
+        # 确认 kv_len 等于 prefix_len（验证 cache 状态正确）
+        assert kv_len == prefix_len, f"KV cache 长度 {kv_len} 应该等于 prefix_len {prefix_len}"
+        
+        # position_ids 应该和 input_ids 长度一致
+        # self.full_position_ids 包含所有分支的位置编码
+        # 由于 input_ids 只包含分支部分，我们直接使用 full_position_ids
         position_ids = self.full_position_ids
+        assert position_ids.shape[0] == input_ids.shape[1], \
+            f"position_ids 长度 {position_ids.shape[0]} 应该等于 input_ids 长度 {input_ids.shape[1]}"
 
         # Base Model Forward (Prefill)
+        # 只处理新的 branch tokens（input_ids 已经不包含 prefix）
         outputs, hidden_states = self(
-            input_ids=input_ids[:, kv_len:],
+            input_ids=input_ids,  # 直接使用 input_ids，因为它只包含新的 tokens
             attention_mask=attention_mask,
-            position_ids=position_ids[kv_len:],
+            position_ids=position_ids.unsqueeze(0),  # [1, seq_len]
             past_key_values=self.past_key_values,
             output_orig=False,
         )
 
         # 提取各分支 Tip 的 Logits
-        tips_hidden = hidden_states[:, tips_indices - kv_len, :]
+        # tips_indices 是相对于 input_ids 的偏移，可以直接使用
+        tips_hidden = hidden_states[:, tips_indices, :]
         tips_logits = self.base_model.lm_head(tips_hidden)
         current_logits = tips_logits.squeeze(0)  # [num_para, vocab]
 
@@ -1928,11 +1940,12 @@ class SpecSoTModel(nn.Module):
                 packed_hidden = packed_hidden.to(ea_device)
 
         # 提取各分支的 Hidden States
+        # branch_begins 和 branch_lengths 现在是相对于 input_ids 的偏移
         branch_hidden_list = []
         for i in range(num_para):
             start = branch_begins[i]
             end = start + branch_lengths[i]
-            branch_hidden_list.append(packed_hidden[start - prefix_len:end - prefix_len])
+            branch_hidden_list.append(packed_hidden[start:end])
         
         batched_hidden = stack_with_left_padding(branch_hidden_list, pad_id=0, device=device)
 
@@ -2251,14 +2264,13 @@ class SpecSoTModel(nn.Module):
             dtype=torch.float32,
         )
 
-        
         # =====================================================================
         # Step 3: Base Model Forward
         # =====================================================================
         
-        # 临时更新 BIM（用于本次 Forward）
-        temp_bim_start = current_length
-        self.branch_index_map[temp_bim_start:temp_bim_start + total_input_len] = combined_bim_tensor
+        # 临时更新 BIM（用于本次 Forward）  # 这里为什么更新bim呢？好像没有必要？
+        # temp_bim_start = current_length
+        # self.branch_index_map[temp_bim_start:temp_bim_start + total_input_len] = combined_bim_tensor
         
         with torch.inference_mode():
             outputs, hidden_states = self(
@@ -2321,11 +2333,29 @@ class SpecSoTModel(nn.Module):
         if num_new > 0:
             old_total_len = num_old * num_nodes if (num_old > 0 and draft_tokens is not None) else 0
             
-            # 更新 KV Cache 长度（新分支的 prompt 已经被处理）
-            current_len_after_old = self.current_length_data[0].item()
+            # 新分支 KV Cache 位置搬移
+            current_len_after_old = self.current_length_data[0].item() # 老分支处理后的 KV 长度（新分支 KV 的目标位置）
+
+            new_branches_kv_src_start = current_length + old_total_len  # 新分支 KV 的实际存储位置
+            new_branches_kv_dst_start = current_len_after_old  # 新分支 KV 应该放置的位置
+            
+            # 计算新分支的总 prompt 长度
+            total_new_prompt_len = sum(new_prompt_lengths)
+            
+            # 搬移新分支的 KV Cache
+            if new_branches_kv_src_start != new_branches_kv_dst_start and total_new_prompt_len > 0:
+                self.logger.debug(
+                    f"搬移新分支 KV Cache: src=[{new_branches_kv_src_start}, {new_branches_kv_src_start + total_new_prompt_len}), "
+                    f"dst=[{new_branches_kv_dst_start}, {new_branches_kv_dst_start + total_new_prompt_len})"
+                )
+                for past_kv_data in self.past_key_values_data:
+                    # 复制新分支的 KV 到正确位置
+                    src_kv = past_kv_data[..., new_branches_kv_src_start:new_branches_kv_src_start + total_new_prompt_len, :].clone()
+                    past_kv_data[..., new_branches_kv_dst_start:new_branches_kv_dst_start + total_new_prompt_len, :].copy_(src_kv, non_blocking=True)
             
             # 提取每个新分支的结果
             offset = old_total_len
+            bim_ptr = current_len_after_old  # BIM 写入位置
             for i, (bid, prompt_len) in enumerate(zip(new_branch_ids, new_prompt_lengths)):
                 # 获取该分支最后一个 token 的 logits
                 tip_logits = all_logits[0, offset + prompt_len - 1, :]  # [vocab]
@@ -2353,18 +2383,20 @@ class SpecSoTModel(nn.Module):
                 new_tips_pos_list.append(pos)
                 
                 # 更新 BIM（将新分支的 prompt KV 标记为该分支）
-                bim_start = current_len_after_old
+                bim_start = bim_ptr
                 bim_end = bim_start + prompt_len
                 self.branch_index_map[bim_start:bim_end] = bid
-                current_len_after_old = bim_end
+                bim_ptr = bim_end
                 
-                # 更新分支输出
-                self.parallel_branches_output[bid].append(root_token)
+                # 注意：不在这里更新 parallel_branches_output
+                # root_token 会在后续 update_state_parallel 中通过 seq_tokens 添加
+                # 如果在这里 append，会导致 root token 重复添加
                 
                 offset += prompt_len
             
-            # 更新 current_length
-            self.current_length_data.fill_(current_len_after_old)
+            # 更新 current_length（新分支 KV 已经搬移到正确位置）
+            final_kv_len = current_len_after_old + total_new_prompt_len
+            self.current_length_data.fill_(final_kv_len)
             
             # 将新分支加入活跃列表
             self.active_branches.extend(new_branch_ids)

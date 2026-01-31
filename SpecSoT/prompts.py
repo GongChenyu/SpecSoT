@@ -1,105 +1,51 @@
 # coding=utf-8
 """
-SpecSoT Prompts - Topology-Aware Skeleton Protocol
+SpecSoT Prompts - Multi-Turn Dialogue Prompt System
 
-骨架协议定义：
-- 模式 A：直接回答 [DIRECT] - 用于简单、原子或无法拆分的任务
-- 模式 B：规划模式 [PLAN]...[END] - 用于复杂任务的并行拆解
+This module provides a multi-turn dialogue based prompt system for SpecSoT.
+All prompt-related content and methods are centralized here.
 
-简化行格式：ID.<Length><Tool>[-]Title (无空格)
-- ID: 数字加点 (1. 2. ...)
-- Length: <数字> 预估 Token 数量 (支持多位数如 <127>, <1500>)
-- Tool: <工具名> 或 <None>
-- Deps: [-] 表示纯并行
-- Title: 任务描述
+Architecture:
+- System Prompt: Base prompt containing user input, serves as PREFIX for both phases
+- Skeleton Prompt: First turn user input for skeleton generation phase  
+- Parallel Prompt: Second turn user input for parallel branch execution phase
+
+Chat Template Structure:
+- Vicuna:  {Vicuna Header}\n\nUSER: {system_prompt}\n{user_prompt}\nASSISTANT:
+- Qwen:    <|im_start|>system\n{sys}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n
+- Llama3:  <|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{sys}<|eot_id|>...
+
+Key Design:
+1. PREFIX = System Prompt with user input (reused in both phases)
+2. Skeleton Phase: PREFIX + USER: skeleton_prompt + ASSISTANT:
+3. Parallel Phase: PREFIX + USER: parallel_prompt (per branch) + ASSISTANT:
+4. IMPORTANT: Remove [PLAN]/[END] markers from skeleton context to avoid early stopping
 """
 
-# =============================================================================
-# Chinese Prompts (中文提示词) - Protocol
-# =============================================================================
-
-# 中文 Base Prompt
-base_prompt_zh = (
-    "【系统指令】你是一个精通复杂任务规划与执行的逻辑专家。\n"
-    "你的工作模式分为两个阶段：\n"
-    "1. **规划阶段 ([PLAN])**：将复杂问题拆解为多个独立的并行子任务。\n"
-    "2. **执行阶段 ([WORK])**：根据既定计划，执行其中某一个具体步骤。\n"
-    "你必须严格遵守指令给出的当前阶段要求，严禁越界。\n"
-    "【用户输入】：\n{user_inputs}\n\n"
-)
-
-# 中文 Skeleton Trigger (骨架生成阶段)
-skeleton_trigger_zh = (
-    "【当前任务：生成骨架】\n"
-    "请判断用户输入适合「直接回答」还是「拆解规划」。请从以下两种格式中严格选择一种输出：\n\n"
-    "### 格式一：直接回答（适用于简单/原子/不可并行任务）\n"
-    "输出格式：\n"
-    "[DIRECT]\n"
-    "(在此处直接写出答案内容...)\n"
-    "[END]\n\n"
-    "### 格式二：拆解规划（适用于分支独立的可并行任务）\n"
-    "输出格式（紧凑格式，无空格）：\n"
-    "[PLAN]\n"
-    "1.<预估长度><工具名>[-]分支一标题\n"
-    "2.<预估长度><工具名>[-]分支二标题\n"
-    "...\n"
-    "[END]\n\n"
-    "**严格约束**：\n"
-    "1. **长度**：必须填写数字，如 <127><793><1500>等，支持三位数。\n"
-    "2. **工具**：如果不需要外部工具，请填写 <None>；如果需要，填写工具名如 <Search>。\n"
-    "3. **拓扑**：目前请强制使用 [-]，表示所有步骤并行执行，互不依赖。\n"
-    "4. 直接以 [DIRECT] 或 [PLAN] 开头，不要废话。\n"
-    "5. 两种格式都必须以 [END] 结尾。[END]后面禁止输出任何内容。\n"
-    "6. **紧凑格式**：各字段之间不要有空格。\n\n"
-    "### 示例一：直接回答\n"
-    "用户问：1+1等于多少？\n"
-    "输出：\n"
-    "[DIRECT]\n"
-    "1+1等于2。\n"
-    "[END]\n\n"
-    "### 示例二：拆解规划\n"
-    "用户问：分别介绍中国的三大城市\n"
-    "输出：\n"
-    "[PLAN]\n"
-    "1.<652><None>[-]介绍北京\n"
-    "2.<234><None>[-]介绍上海\n"
-    "3.<356><None>[-]介绍广州\n"
-    "[END]\n\n"
-    "【开始输出】：\n"
-)
-
-# 中文 Parallel Trigger (并行扩展阶段)
-parallel_trigger_zh = (
-    "【当前任务：分支扩展】\n"
-    "整体计划如下：\n"
-    "{skeleton_context}\n"
-    "--------------------\n"
-    "你的任务是执行步骤 **{current_id}**：\n"
-    "**{current_point}**\n\n"
-    "**撰写要求**：\n"
-    "1. 目标长度：约 **{target_length}** tokens。\n"
-    "2. 直接输出该步骤的正文内容，**不要**包含序号、标题或标签。\n"
-    "3. 确保内容能与上下文逻辑衔接。\n"
-    "【开始撰写】：\n"
-)
+import re
+from typing import List, Tuple, Optional, Dict
+import torch
 
 
 # =============================================================================
-# English Prompts (英文提示词) - Protocol
+# System Prompt (Base Prompt) - Contains User Input, Used as PREFIX
 # =============================================================================
 
-# English Base Prompt
-base_prompt_en = (
+system_prompt = (
     "[System Directive] You are a logic expert specializing in complex task planning and execution.\n"
     "Your workflow has two strictly separated phases:\n"
-    "1. **Planning Phase **: Decompose complex queries into independent parallel sub-tasks.\n"
-    "2. **Execution Phase **: Execute a specific step based on the established plan.\n"
+    "1. **Planning Phase**: Decompose complex queries into independent parallel sub-tasks.\n"
+    "2. **Execution Phase**: Execute a specific step based on the established plan.\n"
     "You must strictly adhere to the instructions for the current phase.\n"
-    "[User Input]:\n{user_inputs}\n\n"
+    "[User Input]:\n{user_input}\n"
 )
 
-# English Skeleton Trigger (Skeleton Generation Phase)
-skeleton_trigger_en = (
+
+# =============================================================================
+# Skeleton Prompt - For Skeleton Generation Phase (First Turn)
+# =============================================================================
+
+skeleton_prompt = (
     "[Current Task: Skeleton Generation]\n"
     "Analyze the input and output strictly in ONE of the following formats:\n\n"
     "### Format 1: Direct Answer (For simple/atomic/non-parallelizable tasks)\n"
@@ -118,7 +64,7 @@ skeleton_trigger_en = (
     "1. **Length**: Must be a number (supports multi-digit like <127>, <1500>).\n"
     "2. **Tool**: Use <None> if no tool is needed, otherwise <Search>, etc.\n"
     "3. **Topology**: Strictly use [-] for now to indicate parallel execution.\n"
-    "4. **Branch Title**: The brief title should be as short as possible."
+    "4. **Branch Title**: The brief title should be as short as possible.\n"
     "5. Start immediately with [DIRECT] or [PLAN].\n"
     "6. Both formats MUST end with [END]. [END] must not be followed by any content.\n"
     "7. **Compact Format**: No spaces between fields.\n\n"
@@ -136,15 +82,19 @@ skeleton_trigger_en = (
     "2.<543><None>[-]Introduce Shanghai\n"
     "3.<456><None>[-]Introduce Guangzhou\n"
     "[END]\n\n"
-    "[Output]:\n"
+    "[Output]:"
 )
 
-# English Parallel Trigger (Parallel Execution Phase)
-parallel_trigger_en = (
+
+# =============================================================================
+# Parallel Prompt - For Parallel Execution Phase (Second Turn per Branch)
+# =============================================================================
+
+parallel_prompt = (
     "[Current Task: Execute Specific Step]\n"
     "Overall Plan:\n"
     "{skeleton_context}\n"
-    "Your task is to execute Step **{current_id}**:**{current_point}**\n"
+    "Your task is to execute Step **{current_id}**: **{current_point}**\n"
     "**Requirements**:\n"
     "1. Target Length: Approx **{target_length}** tokens.\n"
     "2. The output must start with [ANSWER] and please output the body content directly. DO NOT include IDs, titles.\n"
@@ -155,12 +105,382 @@ parallel_trigger_en = (
 
 
 # =============================================================================
-# Vicuna Chat Template (保留兼容性)
+# Chat Template Builders - Build prompts according to model-specific templates
 # =============================================================================
 
-vicuna_chat_template = (
-    "A chat between a curious user and an artificial intelligence assistant. "
-    "The assistant gives helpful, detailed, and polite answers to the user's questions.\n\n"
-    "USER: {prompt}\n"
-    "ASSISTANT:"
-)
+
+def build_prompt(model_type: str, system_content: str, user_content: str) -> str:
+    """
+    构建完整的 prompt 字符串（包含 system + user + assistant 标记）。
+    用于 skeleton 阶段的完整输入。
+    
+    Args:
+        model_type: 'vicuna', 'qwen', 'llama', or 'other'
+        system_content: System prompt 内容（包含用户输入）
+        user_content: User prompt 内容（skeleton prompt）
+        
+    Returns:
+        完整的 prompt 字符串
+    """
+    if model_type == 'vicuna':
+        # Vicuna 格式: {system}\nUSER: {user}\nASSISTANT:
+        return f"{system_content}\nUSER: {user_content}\nASSISTANT:"
+    
+    elif model_type == 'qwen':
+        # Qwen ChatML 格式
+        return (
+            f"<|im_start|>system\n{system_content}<|im_end|>\n"
+            f"<|im_start|>user\n{user_content}<|im_end|>\n"
+            f"<|im_start|>assistant\n"
+        )
+    
+    elif model_type == 'llama':
+        # Llama 3 格式
+        return (
+            f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+            f"{system_content}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
+            f"{user_content}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        )
+    
+    else:
+        # 默认格式：简单拼接
+        return f"{system_content}\n{user_content}"
+
+
+def build_prefix(model_type: str, system_content: str) -> str:
+    """
+    构建 PREFIX 部分（仅 system prompt）。
+    这部分在 skeleton 和 parallel 阶段复用其 KV cache。
+    
+    Args:
+        model_type: 'vicuna', 'qwen', 'llama', or 'other'
+        system_content: System prompt 内容（已填充用户输入）
+        
+    Returns:
+        PREFIX 字符串
+    """
+    if model_type == 'vicuna':
+        # Vicuna: system content + 换行
+        return f"{system_content}\n"
+    
+    elif model_type == 'qwen':
+        # Qwen: system 消息完整格式
+        return f"<|im_start|>system\n{system_content}<|im_end|>\n"
+    
+    elif model_type == 'llama':
+        # Llama 3: system 消息完整格式
+        return (
+            f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+            f"{system_content}<|eot_id|>"
+        )
+    
+    else:
+        return system_content
+
+
+# =============================================================================
+# Utility Functions - Extract skeleton context without markers
+# =============================================================================
+
+def extract_skeleton_context(skeleton_text: str) -> str:
+    """
+    Extract skeleton content without [PLAN]/[END] or [DIRECT]/[END] markers.
+    
+    IMPORTANT: This is critical to avoid early stopping in parallel phase.
+    The [END] marker in the skeleton would cause the model to stop prematurely.
+    
+    Args:
+        skeleton_text: Raw skeleton output from model
+        
+    Returns:
+        Clean skeleton context without markers
+    """
+    skeleton_context = skeleton_text.strip()
+    
+    if "[PLAN]" in skeleton_text:
+        try:
+            start = skeleton_text.index("[PLAN]") + 6
+            end = skeleton_text.index("[END]") if "[END]" in skeleton_text else len(skeleton_text)
+            skeleton_context = skeleton_text[start:end].strip()
+        except ValueError:
+            pass
+    elif "[DIRECT]" in skeleton_text:
+        skeleton_context = skeleton_text.replace("[DIRECT]", "").replace("[END]", "").strip()
+    
+    return skeleton_context
+
+
+# =============================================================================
+# Main API Functions - Prepare inputs for inference
+# =============================================================================
+
+def prepare_skeleton_input(
+    tokenizer,
+    task_prompt: str,
+    model_type: str,
+    device: torch.device,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Prepare skeleton generation phase input.
+    
+    Structure (example for Vicuna):
+        {Vicuna Header}
+        
+        USER: {system_prompt with user_input}
+        {skeleton_prompt}
+        ASSISTANT:
+    
+    PREFIX is: {Vicuna Header}\n\nUSER: {system_prompt with user_input}\n
+    
+    Args:
+        tokenizer: Tokenizer instance
+        task_prompt: User's original input/question
+        model_type: 'vicuna', 'qwen', 'llama', or 'other'
+        device: Target device
+        
+    Returns:
+        input_ids: Complete input sequence [1, seq_len]
+        prefix_ids: PREFIX part [1, prefix_len] (for reuse in parallel phase)
+    """
+    # Build system content (PREFIX content, contains user input)
+    system_content = system_prompt.format(user_input=task_prompt)
+    
+    # Build user content (skeleton prompt)
+    user_content = skeleton_prompt
+    
+    if model_type == 'llama':
+        # Use tokenizer's apply_chat_template for Llama
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
+        ]
+        input_ids = tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt"
+        ).to(device)
+        
+        # For prefix, only include system message (without add_generation_prompt)
+        prefix_messages = [{"role": "system", "content": system_content}]
+        prefix_ids = tokenizer.apply_chat_template(
+            prefix_messages,
+            tokenize=True,
+            add_generation_prompt=False,
+            return_tensors="pt"
+        ).to(device)
+        
+        print(f"[Llama] Using apply_chat_template | input_len={input_ids.shape[1]}, prefix_len={prefix_ids.shape[1]}")
+        
+    elif model_type == 'qwen':
+        # Build Qwen ChatML format
+        full_prompt = build_prompt(model_type, system_content, user_content)
+        input_ids = tokenizer([full_prompt], return_tensors="pt").input_ids.to(device)
+        
+        # Build prefix (system part only)
+        prefix_text = build_prefix(model_type, system_content)
+        prefix_ids = tokenizer([prefix_text], return_tensors="pt").input_ids.to(device)
+        
+        print(f"[Qwen] Using ChatML format | input_len={input_ids.shape[1]}, prefix_len={prefix_ids.shape[1]}")
+        
+    elif model_type == 'vicuna':
+        # Build Vicuna format
+        full_prompt = build_prompt(model_type, system_content, user_content)
+        input_ids = tokenizer([full_prompt], return_tensors="pt").input_ids.to(device)
+        
+        # Build prefix
+        prefix_text = build_prefix(model_type, system_content)
+        prefix_ids = tokenizer([prefix_text], return_tensors="pt").input_ids.to(device)
+        
+        print(f"[Vicuna] Using Vicuna chat format | input_len={input_ids.shape[1]}, prefix_len={prefix_ids.shape[1]}")
+        
+    else:
+        # Default: simple concatenation
+        full_prompt = build_prompt(model_type, system_content, user_content)
+        input_ids = tokenizer([full_prompt], return_tensors="pt").input_ids.to(device)
+        
+        prefix_text = build_prefix(model_type, system_content)
+        prefix_ids = tokenizer([prefix_text], return_tensors="pt").input_ids.to(device)
+        
+        print(f"[Other] Using default format | input_len={input_ids.shape[1]}, prefix_len={prefix_ids.shape[1]}")
+    
+    return input_ids, prefix_ids
+
+
+def prepare_parallel_branches(
+    tokenizer,
+    tasks: List[Dict],
+    skeleton_text: str,
+    model_type: str = 'qwen',
+    task_prompt: str = "",
+) -> Tuple[List[List[int]], List[int]]:
+    """
+    准备 parallel 阶段的分支输入。
+    
+    关键设计：
+    =========
+    在 skeleton 阶段，我们 prefill 了：
+      1. system prompt 的 KV cache
+      2. skeleton prompt 的 KV cache  
+      3. skeleton 生成内容的 KV cache
+    
+    在 parallel 阶段：
+      - 我们需要删除 skeleton prompt 和 skeleton 生成内容的 cache
+      - 保留 system prompt 的 cache 作为 prefix（复用已有 cache）
+      - 只需要构建 parallel prompt（user turn）作为输入
+      - **不需要**再次添加 system prompt，因为其 cache 已存在
+    
+    因此，这里构建的 token 序列只包含 user turn 部分：
+      - Vicuna: "USER: {parallel_prompt}\nASSISTANT:"
+      - Qwen: "<|im_start|>user\n{parallel_prompt}<|im_end|>\n<|im_start|>assistant\n"
+      - Llama: "<|start_header_id|>user<|end_header_id|>\n\n{parallel_prompt}<|eot_id|>..."
+    
+    注意事项：
+      - 提取 skeleton context 时需要移除 [PLAN]/[END] 标记，避免提前停止
+    
+    Args:
+        tokenizer: Tokenizer 实例
+        tasks: 从 parse_skeleton_output 解析出的任务列表
+        skeleton_text: 原始 skeleton 输出（会被清理）
+        model_type: 'vicuna', 'qwen', 'llama', or 'other'
+        task_prompt: 原始用户输入（此参数在当前实现中不再使用，保留以兼容）
+        
+    Returns:
+        branch_token_ids: 每个分支的 token ID 列表（仅包含 user turn）
+        instruction_lengths: 每个分支的指令长度
+    """
+    # 提取干净的 skeleton context（移除 [PLAN]/[END] 标记）
+    skeleton_context = extract_skeleton_context(skeleton_text)
+    
+    branch_token_ids = []
+    instruction_lengths = []
+    
+    for task in tasks:
+        # 构建 user content（parallel prompt，填充占位符）
+        user_content = parallel_prompt.format(
+            skeleton_context=skeleton_context,
+            current_id=task['id'],
+            current_point=task['title'],
+            target_length=task['length'],
+        )
+        
+        # 关键：只构建 user turn 部分，不包含 system prompt
+        # 因为 system prompt 的 KV cache 已经存在，会作为 prefix 复用
+        # 根据不同的模型类型构建 user turn prompt
+        if model_type == 'vicuna':
+            # Vicuna 格式: USER: {user}\nASSISTANT:
+            user_turn_prompt = f"USER: {user_content}\nASSISTANT:"
+        
+        elif model_type == 'qwen':
+            # Qwen ChatML 格式: user turn + assistant 开始
+            user_turn_prompt = (
+                f"<|im_start|>user\n{user_content}<|im_end|>\n"
+                f"<|im_start|>assistant\n"
+            )
+        
+        elif model_type == 'llama':
+            # Llama 3 格式: user turn + assistant 开始
+            user_turn_prompt = (
+                f"<|start_header_id|>user<|end_header_id|>\n\n"
+                f"{user_content}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+            )
+        
+        else:
+            # 默认格式
+            user_turn_prompt = f"\n{user_content}"
+        
+        token_ids = tokenizer.encode(user_turn_prompt, add_special_tokens=False)
+        
+        branch_token_ids.append(token_ids)
+        instruction_lengths.append(len(token_ids))
+    
+    return branch_token_ids, instruction_lengths
+
+
+# =============================================================================
+# Skeleton Parser - Parse skeleton output to extract tasks
+# =============================================================================
+
+def parse_skeleton_output(text: str) -> Tuple[str, object]:
+    """
+    Parse skeleton format output.
+    
+    Format:
+    - Mode A: [DIRECT]...[END] - Direct answer
+    - Mode B: [PLAN]...[END] - Decomposition plan
+    
+    Line format: ID.<Length><Tool>[Deps]Title
+    
+    Args:
+        text: Model generated text
+        
+    Returns:
+        Tuple[mode, content]:
+        - mode: "direct" | "plan" | "error"
+        - content: 
+            - direct: str (answer content)
+            - plan: List[dict] (task list)
+            - error: str (error message)
+    """
+    text = text.strip()
+    
+    # Mode A: Direct answer
+    if text.startswith("[DIRECT]"):
+        content = text.replace("[DIRECT]", "", 1).strip()
+        if "[END]" in content:
+            content = content[:content.index("[END]")].strip()
+        return "direct", content
+    
+    # Mode B: Plan mode
+    elif "[PLAN]" in text:
+        try:
+            start = text.index("[PLAN]") + 6
+            end = text.index("[END]") if "[END]" in text else len(text)
+            plan_body = text[start:end].strip()
+        except ValueError:
+            return "error", "Malformed tags: [PLAN] or [END] not found properly"
+
+        tasks = []
+        # Regex pattern supporting both compact and loose formats
+        pattern = re.compile(
+            r"(\d+)[.:、]\s*"                     # ID + separator
+            r"[<（]?(\d+)[>）]?\s*"               # Length
+            r"[<（]?(\S+?)[>）]?\s*"              # Tool
+            r"[\[【](.*?)[\]】]\s*"               # [Deps]
+            r"(.+)"                               # Title
+        )
+        
+        for line in plan_body.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            
+            match = pattern.search(line)
+            if match:
+                t_id = int(match.group(1))
+                t_len = int(match.group(2))
+                t_tool = match.group(3).strip()
+                t_deps_str = match.group(4).strip()
+                t_title = match.group(5).strip()
+                
+                if t_tool.lower() == "none":
+                    t_tool = None
+                
+                tasks.append({
+                    "id": t_id,
+                    "length": t_len,
+                    "tool": t_tool,
+                    "deps": t_deps_str,
+                    "title": t_title,
+                    "raw_line": line,
+                })
+        
+        if not tasks:
+            return "error", f"No valid tasks parsed from plan body: {plan_body[:200]}"
+            
+        return "plan", tasks
+    
+    # Default: treat as direct answer
+    else:
+        return "direct", text
+

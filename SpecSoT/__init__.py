@@ -75,10 +75,6 @@ from .logging_utils import (
     cleanup_loggers,
 )
 
-# Prompts
-from .prompts import base_prompt_zh, skeleton_trigger_zh, parallel_trigger_zh
-from .prompts import base_prompt_en, skeleton_trigger_en, parallel_trigger_en
-
 __all__ = [
     # 主模型
     "SpecSoTModel",
@@ -132,12 +128,4 @@ __all__ = [
     "log_phase_end",
     "log_progress",
     "cleanup_loggers",
-    
-    # Prompts
-    "base_prompt_zh",
-    "skeleton_trigger_zh",
-    "parallel_trigger_zh",
-    "base_prompt_en",
-    "skeleton_trigger_en",
-    "parallel_trigger_en",
 ]

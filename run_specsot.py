@@ -52,9 +52,9 @@ def create_parser():
     parser.add_argument("--max_new_tokens", type=int, default=3000, help="最大生成token数")
     
     # 分布式配置
-    parser.add_argument("--distributed", type=str2bool, default=True, help="是否启用分布式模式")
+    parser.add_argument("--distributed", type=str2bool, default=False, help="是否启用分布式模式")
     parser.add_argument("--world_size", type=int, default=3, help="分布式总进程数")
-    parser.add_argument("--devices", type=str, default="127.0.0.1#5,127.0.0.1#6,127.0.0.1#7", help="设备列表，格式: ip#gpu_id,ip#gpu_id,...")
+    parser.add_argument("--devices", type=str, default="127.0.0.1#1,127.0.0.1#2,127.0.0.1#3", help="设备列表，格式: ip#gpu_id,ip#gpu_id,...")
     parser.add_argument("--layer_splits", type=str, default="14,28", help="层分割策略")
     parser.add_argument("--base_port", type=int, default=45000, help="通信基础端口")
     parser.add_argument("--comm_mode", type=str, default="p2p", choices=["p2p", "ring"], help="通信模式")

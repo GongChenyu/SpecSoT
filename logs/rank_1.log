@@ -1,580 +1,578 @@
-2026-01-30 11:16:34.881 - SpecSoT-Rank1-Comm - INFO - [logging_utils.py:155] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_1.log
-22026-01-30 11:16:38.888 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:458] - 分布式推理已启用: DistributedConfig(rank=1/2, layer_splits=[14, 28], comm_mode=p2p)
-2026-01-30 11:16:38.889 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:256] - 预初始化 VocabScanner 和 SemanticLogitsProcessor...
-2026-01-30 11:16:39.051 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:264] - SemanticLogitsProcessor 预初始化完成
-2026-01-30 11:16:39.061 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1518] - 开始 SpecSoT 流水线: distributed=True, use_scheduling=True
-2026-01-30 11:16:39.080 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:594] - 使用 FSM 语义约束进行骨架生成
-2026-01-30 11:16:40.976 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1693] - Worker 1 等待接收任务...
-2026-01-30 11:16:40.976 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:199] - Worker 1 等待接收调度计划...
-2026-01-30 11:16:43.393 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:223] - Worker 1 等待接收分支 Prompt...
-2026-01-30 11:16:43.403 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:239] - Worker 1 收到 2 个分支任务
-2026-01-30 11:16:43.403 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1706] - Worker 1 收到 2 个分支任务
-2026-01-30 11:16:46.851 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:2835] - 分支 0 完成生成 (EOS)
-2026-01-30 11:16:48.356 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:2835] - 分支 5 完成生成 (EOS)
-2026-01-30 11:16:48.356 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:253] - Worker 1 发送 2 个分支结果到 Master
-2026-01-30 11:16:48.357 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1763] - Worker 1 完成，等待完成信号...
-2026-01-30 11:16:48.357 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:275] - Worker 1 等待完成信号...
-2026-01-30 11:16:48.359 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:278] - Worker 1 收到完成信号
-nk1-Model - INFO - 使用 FSM 语义约束进行骨架生成
-2026-01-30 11:16:39 - SpecSoT-Rank1 - INFO - [PREFILL] 开始 | Rank=1/2 | layers=[14,28) | seq_len=476
-2026-01-30 11:16:39 - SpecSoT-Rank1 - INFO - [PREFILL] Chunks处理完成，开始 Cache 同步...
-2026-01-30 11:16:40 - SpecSoT-Rank1 - INFO - [PREFILL] 分布式 Prefill 完成 | Rank=1 | 耗时: 1.895s
-2026-01-30 11:16:40 - SpecSoT-Rank1-Model - INFO - Worker 1 等待接收任务...
-2026-01-30 11:16:40 - SpecSoT-Rank1-Model - INFO - Worker 1 等待接收调度计划...
-2026-01-30 11:16:43 - SpecSoT-Rank1-Model - INFO - Worker 1 等待接收分支 Prompt...
-2026-01-30 11:16:43 - SpecSoT-Rank1-Model - INFO - Worker 1 收到 2 个分支任务
-2026-01-30 11:16:43 - SpecSoT-Rank1-Model - INFO - Worker 1 收到 2 个分支任务
-2026-01-30 11:16:43 - SpecSoT-Rank0-BranchMgr - INFO - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
-2026-01-30 11:16:43 - SpecSoT-Rank0-BranchMgr - INFO - BranchExecutionManager 初始化: 2 分支, max_parallel=2
-2026-01-30 11:16:46 - SpecSoT-Rank1-Model - INFO - 分支 0 完成生成 (EOS)
-2026-01-30 11:16:48 - SpecSoT-Rank1-Model - INFO - 分支 5 完成生成 (EOS)
-2026-01-30 11:16:48 - SpecSoT-Rank1-Model - INFO - Worker 1 发送 2 个分支结果到 Master
-2026-01-30 11:16:48 - SpecSoT-Rank1-Model - INFO - Worker 1 完成，等待完成信号...
-2026-01-30 11:16:48 - SpecSoT-Rank1-Model - INFO - Worker 1 等待完成信号...
-2026-01-30 11:16:48 - SpecSoT-Rank1-Model - INFO - Worker 1 收到完成信号
-2026-01-30 11:16:48 - SpecSoT-Rank1 - INFO -   结果: 0 tokens | 0.0 tok/s | 显存 3129MB
-2026-01-30 11:16:48 - SpecSoT-Rank1 - INFO -   阶段: skeleton=0.00s | parallel=4.95s | 分支数=2
-2026-01-30 11:16:48 - SpecSoT-Rank1 - INFO - [CLEANUP] 通信统计: {'draft_tokens_sent': 0, 'draft_tokens_recv': 1, 'hidden_sent': 4, 'hidden_recv': 4, 'eagle_input_hidden_sent': 4, 'eagle_input_hidden_recv': 0, 'base_cache_sent': 112, 'base_cache_recv': 72, 'eagle_cache_sent': 0, 'eagle_cache_recv': 4, 'aggregated_sends': 0, 'forwarded_messages': 0, 'schedule_plan_sent': 0, 'schedule_plan_recv': 1, 'branch_prompt_sent': 0, 'branch_prompt_recv': 1, 'branch_output_sent': 2, 'branch_output_recv': 0, 'branch_complete_sent': 0, 'branch_complete_recv': 1}
-2026-01-30 11:16:48 - SpecSoT-Rank1 - INFO - Worker 执行完成
-, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.050 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=0, seq_id=18, latency=752.97ms
-2026-01-30 11:16:39.050 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:02.948 - SpecSoT-Rank1-Comm - INFO - [logging_utils.py:155] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_1.log
+22026-01-30 16:09:06.958 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:458] - 分布式推理已启用: DistributedConfig(rank=1/2, layer_splits=[14, 28], comm_mode=p2p)
+2026-01-30 16:09:06.958 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:256] - 预初始化 VocabScanner 和 SemanticLogitsProcessor...
+2026-01-30 16:09:06.993 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:264] - SemanticLogitsProcessor 预初始化完成
+2026-01-30 16:09:07.015 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1487] - 开始 SpecSoT 流水线: distributed=True, use_scheduling=True
+2026-01-30 16:09:07.059 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:594] - 使用 FSM 语义约束进行骨架生成
+2026-01-30 16:09:08.724 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1662] - Worker 1 等待接收任务...
+2026-01-30 16:09:08.724 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:199] - Worker 1 等待接收调度计划...
+2026-01-30 16:09:31.660 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:223] - Worker 1 等待接收分支 Prompt...
+2026-01-30 16:09:31.671 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:239] - Worker 1 收到 2 个分支任务
+2026-01-30 16:09:31.672 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1675] - Worker 1 收到 2 个分支任务
+2026-01-30 16:10:12.294 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:2822] - 分支 5 完成生成 (EOS)
+2026-01-30 16:10:12.609 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:2822] - 分支 2 完成生成 (EOS)
+2026-01-30 16:10:12.610 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:253] - Worker 1 发送 2 个分支结果到 Master
+2026-01-30 16:10:12.610 - SpecSoT-Rank1-Model - INFO - [specsot_model.py:1733] - Worker 1 完成，等待完成信号...
+2026-01-30 16:10:12.610 - SpecSoT-Rank1-Model - INFO - [task_coordinator.py:275] - Worker 1 等待完成信号...
+, use_scheduling=True
+[Llama] Using apply_chat_template | input_len=474, prefix_len=118
+2026-01-30 16:09:07 - SpecSoT-Rank1-Model - INFO - 使用 FSM 语义约束进行骨架生成
+2026-01-30 16:09:07 - SpecSoT-Rank1 - INFO - [PREFILL] 开始 | Rank=1/2 | layers=[14,28) | seq_len=474
+2026-01-30 16:09:07 - SpecSoT-Rank1 - INFO - [PREFILL] Chunks处理完成，开始 Cache 同步...
+2026-01-30 16:09:08 - SpecSoT-Rank1 - INFO - [PREFILL] 分布式 Prefill 完成 | Rank=1 | 耗时: 1.662s
+2026-01-30 16:09:08 - SpecSoT-Rank1-Model - INFO - Worker 1 等待接收任务...
+2026-01-30 16:09:08 - SpecSoT-Rank1-Model - INFO - Worker 1 等待接收调度计划...
+2026-01-30 16:09:31 - SpecSoT-Rank1-Model - INFO - Worker 1 等待接收分支 Prompt...
+2026-01-30 16:09:31 - SpecSoT-Rank1-Model - INFO - Worker 1 收到 2 个分支任务
+2026-01-30 16:09:31 - SpecSoT-Rank1-Model - INFO - Worker 1 收到 2 个分支任务
+2026-01-30 16:10:08 - SpecSoT-Rank0-BranchMgr - INFO - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
+2026-01-30 16:10:08 - SpecSoT-Rank0-BranchMgr - INFO - BranchExecutionManager 初始化: 2 分支, max_parallel=2
+2026-01-30 16:10:12 - SpecSoT-Rank1-Model - INFO - 分支 5 完成生成 (EOS)
+2026-01-30 16:10:12 - SpecSoT-Rank1-Model - INFO - 分支 2 完成生成 (EOS)
+2026-01-30 16:10:12 - SpecSoT-Rank1-Model - INFO - Worker 1 发送 2 个分支结果到 Master
+2026-01-30 16:10:12 - SpecSoT-Rank1-Model - INFO - Worker 1 完成，等待完成信号...
+2026-01-30 16:10:12 - SpecSoT-Rank1-Model - INFO - Worker 1 等待完成信号...
+ shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.053 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=0, seq_id=20, latency=753.14ms
-2026-01-30 11:16:39.053 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:06.987 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=0, seq_id=14, latency=1247.83ms
+2026-01-30 16:09:06.987 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.054 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=0, seq_id=22, latency=752.35ms
-2026-01-30 11:16:39.055 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:06.991 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=0, seq_id=16, latency=1249.16ms
+2026-01-30 16:09:06.991 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.060 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=0, seq_id=24, latency=755.68ms
-2026-01-30 11:16:39.060 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:06.991 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=0, seq_id=18, latency=1247.53ms
+2026-01-30 16:09:06.991 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.072 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=0, seq_id=26, latency=764.53ms
-2026-01-30 11:16:39.072 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:06.992 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=0, seq_id=20, latency=1245.60ms
+2026-01-30 16:09:06.992 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.074 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=0, seq_id=30, latency=763.72ms
-2026-01-30 11:16:39.074 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.075 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=0, seq_id=28, latency=765.76ms
-2026-01-30 11:16:39.075 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:06.993 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=0, seq_id=22, latency=1244.52ms
+2026-01-30 16:09:06.998 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.076 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=0, chunk_idx=1, seq_id=31, latency=761.37ms
-2026-01-30 11:16:39.076 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:06.999 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=0, seq_id=24, latency=1247.45ms
+2026-01-30 16:09:06.999 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.076 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=1, chunk_idx=1, seq_id=34, latency=758.94ms
-2026-01-30 11:16:39.076 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.000 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=0, seq_id=26, latency=1246.65ms
+2026-01-30 16:09:07.000 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.077 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=2, chunk_idx=1, seq_id=36, latency=757.94ms
-2026-01-30 11:16:39.077 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.004 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=0, seq_id=28, latency=1248.13ms
+2026-01-30 16:09:07.012 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.078 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=3, chunk_idx=1, seq_id=38, latency=756.90ms
-2026-01-30 11:16:39.078 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.014 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=0, seq_id=30, latency=1256.76ms
+2026-01-30 16:09:07.014 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.020 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=0, chunk_idx=1, seq_id=31, latency=1258.75ms
+2026-01-30 16:09:07.020 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.078 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=4, chunk_idx=1, seq_id=40, latency=755.28ms
-2026-01-30 11:16:39.078 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.021 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=1, chunk_idx=1, seq_id=34, latency=1257.18ms
+2026-01-30 16:09:07.026 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.079 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=5, chunk_idx=1, seq_id=42, latency=753.83ms
-2026-01-30 11:16:39.079 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.050 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=2, chunk_idx=1, seq_id=36, latency=1283.10ms
+2026-01-30 16:09:07.050 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.080 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=1, seq_id=44, latency=752.77ms
-2026-01-30 11:16:39.080 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.051 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=3, chunk_idx=1, seq_id=38, latency=1281.27ms
+2026-01-30 16:09:07.051 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.081 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
-2026-01-30 11:16:39.081 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=0, wait_time=0.14ms
-2026-01-30 11:16:39.081 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=1, seq_id=46, latency=752.58ms
-2026-01-30 11:16:39.081 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.081 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.051 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=4, chunk_idx=1, seq_id=40, latency=1279.04ms
+2026-01-30 16:09:07.051 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.083 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=1, seq_id=48, latency=752.34ms
-2026-01-30 11:16:39.083 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.052 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=5, chunk_idx=1, seq_id=42, latency=1276.94ms
+2026-01-30 16:09:07.052 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.087 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=1, seq_id=50, latency=752.14ms
-2026-01-30 11:16:39.087 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.052 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=1, seq_id=44, latency=1274.92ms
+2026-01-30 16:09:07.052 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.113 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=1, seq_id=52, latency=775.49ms
-2026-01-30 11:16:39.113 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.053 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=1, seq_id=46, latency=1273.11ms
+2026-01-30 16:09:07.053 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.114 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=1, seq_id=54, latency=774.54ms
-2026-01-30 11:16:39.114 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.053 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=1, seq_id=48, latency=1271.31ms
+2026-01-30 16:09:07.053 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.126 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=1, seq_id=56, latency=783.99ms
-2026-01-30 11:16:39.126 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.054 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=1, seq_id=50, latency=1269.41ms
+2026-01-30 16:09:07.054 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.134 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=1, seq_id=60, latency=789.51ms
-2026-01-30 11:16:39.134 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.136 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=1, seq_id=58, latency=791.95ms
-2026-01-30 11:16:39.136 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.054 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=1, seq_id=52, latency=1267.71ms
+2026-01-30 16:09:07.055 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.136 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=0, chunk_idx=2, seq_id=61, latency=787.64ms
-2026-01-30 11:16:39.136 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.055 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=1, seq_id=54, latency=1265.97ms
+2026-01-30 16:09:07.055 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.137 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=1, chunk_idx=2, seq_id=64, latency=785.96ms
-2026-01-30 11:16:39.137 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.056 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=1, seq_id=56, latency=1264.18ms
+2026-01-30 16:09:07.056 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.137 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=2, chunk_idx=2, seq_id=66, latency=785.16ms
-2026-01-30 11:16:39.137 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.057 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=1, seq_id=58, latency=1262.49ms
+2026-01-30 16:09:07.057 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.139 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=3, chunk_idx=2, seq_id=68, latency=784.16ms
-2026-01-30 11:16:39.139 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.058 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=1, seq_id=60, latency=1263.35ms
+2026-01-30 16:09:07.059 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.061 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
+2026-01-30 16:09:07.062 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=0, wait_time=0.50ms
+2026-01-30 16:09:07.062 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.062 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=0, chunk_idx=2, seq_id=61, latency=1263.40ms
+2026-01-30 16:09:07.062 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.139 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=4, chunk_idx=2, seq_id=70, latency=782.87ms
-2026-01-30 11:16:39.139 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.063 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=1, chunk_idx=2, seq_id=64, latency=1261.71ms
+2026-01-30 16:09:07.063 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.140 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=5, chunk_idx=2, seq_id=72, latency=780.77ms
-2026-01-30 11:16:39.140 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.066 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=2, chunk_idx=2, seq_id=66, latency=1261.88ms
+2026-01-30 16:09:07.066 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.140 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=2, seq_id=74, latency=778.35ms
-2026-01-30 11:16:39.141 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.091 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=3, chunk_idx=2, seq_id=68, latency=1283.49ms
+2026-01-30 16:09:07.091 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.141 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=2, seq_id=76, latency=776.45ms
-2026-01-30 11:16:39.141 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.091 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=4, chunk_idx=2, seq_id=70, latency=1281.86ms
+2026-01-30 16:09:07.091 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.142 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=2, seq_id=78, latency=774.79ms
-2026-01-30 11:16:39.142 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.103 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=5, chunk_idx=2, seq_id=72, latency=1290.70ms
+2026-01-30 16:09:07.103 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.143 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=2, seq_id=80, latency=773.15ms
-2026-01-30 11:16:39.143 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.110 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=2, seq_id=74, latency=1296.19ms
+2026-01-30 16:09:07.111 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.144 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=2, seq_id=82, latency=771.42ms
-2026-01-30 11:16:39.144 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.111 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=2, seq_id=76, latency=1294.69ms
+2026-01-30 16:09:07.111 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.144 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=2, seq_id=84, latency=769.58ms
-2026-01-30 11:16:39.144 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.112 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=2, seq_id=78, latency=1292.98ms
+2026-01-30 16:09:07.112 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.145 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=2, seq_id=86, latency=767.70ms
-2026-01-30 11:16:39.145 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.113 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=2, seq_id=80, latency=1290.73ms
+2026-01-30 16:09:07.113 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.146 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=2, seq_id=88, latency=766.01ms
-2026-01-30 11:16:39.146 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.113 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=2, seq_id=82, latency=1288.96ms
+2026-01-30 16:09:07.113 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:39.148 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=2, seq_id=90, latency=767.05ms
-2026-01-30 11:16:39.148 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.148 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=0, chunk_idx=3, seq_id=91, latency=763.13ms
-2026-01-30 11:16:39.148 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.149 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=1, chunk_idx=3, seq_id=94, latency=760.60ms
-2026-01-30 11:16:39.149 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.149 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=2, chunk_idx=3, seq_id=96, latency=758.58ms
-2026-01-30 11:16:39.149 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.150 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=3, chunk_idx=3, seq_id=98, latency=756.69ms
-2026-01-30 11:16:39.150 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.150 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=4, chunk_idx=3, seq_id=100, latency=754.83ms
-2026-01-30 11:16:39.150 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.151 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=5, chunk_idx=3, seq_id=102, latency=752.92ms
-2026-01-30 11:16:39.151 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.152 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=3, seq_id=104, latency=750.87ms
-2026-01-30 11:16:39.152 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.152 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=3, seq_id=106, latency=748.97ms
-2026-01-30 11:16:39.152 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.152 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=3, seq_id=108, latency=747.04ms
-2026-01-30 11:16:39.152 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.153 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=3, seq_id=110, latency=744.92ms
-2026-01-30 11:16:39.153 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.154 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=3, seq_id=112, latency=743.11ms
-2026-01-30 11:16:39.154 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.154 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=3, seq_id=114, latency=741.29ms
-2026-01-30 11:16:39.154 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.155 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=3, seq_id=116, latency=739.25ms
-2026-01-30 11:16:39.155 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.155 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=3, seq_id=118, latency=737.23ms
-2026-01-30 11:16:39.155 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:39.156 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=3, seq_id=120, latency=737.51ms
-2026-01-30 11:16:39.156 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 92, 4096), dtype=float16, device=cuda:0, size=0.719MB
-2026-01-30 11:16:39.246 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.246 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.248 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=1, layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=2.27ms
-2026-01-30 11:16:39.249 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=2, layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.64ms
-2026-01-30 11:16:39.249 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=0
-2026-01-30 11:16:39.249 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.250 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.250 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.251 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=3, layer_idx=15, size=1025.40KB, time=1.57ms
-2026-01-30 11:16:39.251 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.252 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=4, layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.79ms
-2026-01-30 11:16:39.253 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=5, layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.59ms
-2026-01-30 11:16:39.253 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.253 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.254 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=6, layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.62ms
-2026-01-30 11:16:39.254 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=7, layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.46ms
-2026-01-30 11:16:39.254 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.255 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.256 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=8, layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
-2026-01-30 11:16:39.256 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=9, layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.61ms
-2026-01-30 11:16:39.257 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.257 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.258 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=10, layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
-2026-01-30 11:16:39.258 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=11, layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.45ms
-2026-01-30 11:16:39.258 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.259 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.259 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=12, layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.88ms
-2026-01-30 11:16:39.260 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=13, layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.56ms
-2026-01-30 11:16:39.260 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.261 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.262 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=14, layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.94ms
-2026-01-30 11:16:39.262 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=15, layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.58ms
-2026-01-30 11:16:39.262 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.263 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.263 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=16, layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.80ms
-2026-01-30 11:16:39.264 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=17, layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.59ms
-2026-01-30 11:16:39.264 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.265 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.266 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=18, layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.94ms
-2026-01-30 11:16:39.266 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=19, layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.56ms
-2026-01-30 11:16:39.266 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.267 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.267 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=20, layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.90ms
-2026-01-30 11:16:39.268 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=21, layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.55ms
-2026-01-30 11:16:39.268 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.268 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.269 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=22, layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.89ms
-2026-01-30 11:16:39.270 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=23, layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.78ms
-2026-01-30 11:16:39.270 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.271 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.272 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=24, layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.03ms
-2026-01-30 11:16:39.272 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=25, layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.48ms
-2026-01-30 11:16:39.273 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.273 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.273 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=26, layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.81ms
-2026-01-30 11:16:39.274 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=27, layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.45ms
-2026-01-30 11:16:39.274 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.275 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.275 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=0
-2026-01-30 11:16:39.275 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.275 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=28, layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.00ms
-2026-01-30 11:16:39.276 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=30, chunk_idx=0, size=1025.40KB, time=0.65ms
-2026-01-30 11:16:39.276 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.277 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=29, layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.57ms
-2026-01-30 11:16:39.280 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
-2026-01-30 11:16:39.280 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=1, wait_time=0.03ms
-2026-01-30 11:16:39.280 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.281 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.281 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.282 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=31, layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.83ms
-2026-01-30 11:16:39.282 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=32, layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.44ms
-2026-01-30 11:16:39.283 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=1
-2026-01-30 11:16:39.283 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.283 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.283 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.284 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=33, layer_idx=15, size=1025.40KB, time=0.87ms
-2026-01-30 11:16:39.284 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.284 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=34, layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.50ms
-2026-01-30 11:16:39.285 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.285 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.285 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=35, layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.94ms
-2026-01-30 11:16:39.286 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=36, layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.48ms
-2026-01-30 11:16:39.286 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=37, layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.43ms
-2026-01-30 11:16:39.287 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.287 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.288 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=38, layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.86ms
-2026-01-30 11:16:39.288 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=39, layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.45ms
-2026-01-30 11:16:39.288 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.289 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.289 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=40, layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.79ms
-2026-01-30 11:16:39.290 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=41, layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.290 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.291 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.291 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=42, layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.87ms
-2026-01-30 11:16:39.292 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=43, layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.50ms
-2026-01-30 11:16:39.292 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.292 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.293 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=44, layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.97ms
-2026-01-30 11:16:39.294 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=45, layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.57ms
-2026-01-30 11:16:39.294 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.294 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.295 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=46, layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.94ms
-2026-01-30 11:16:39.296 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=47, layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.58ms
-2026-01-30 11:16:39.296 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.296 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.297 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=48, layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.94ms
-2026-01-30 11:16:39.298 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=49, layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.57ms
-2026-01-30 11:16:39.298 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.298 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.299 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=50, layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.97ms
-2026-01-30 11:16:39.300 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=51, layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.58ms
-2026-01-30 11:16:39.300 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.300 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.301 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=52, layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.91ms
-2026-01-30 11:16:39.302 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=53, layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.64ms
-2026-01-30 11:16:39.302 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.302 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.303 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=54, layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.84ms
-2026-01-30 11:16:39.303 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=55, layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.46ms
-2026-01-30 11:16:39.304 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.304 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.305 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=56, layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.83ms
-2026-01-30 11:16:39.305 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=57, layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.46ms
-2026-01-30 11:16:39.305 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.306 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.306 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=1
-2026-01-30 11:16:39.306 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.306 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=58, layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.92ms
-2026-01-30 11:16:39.307 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=60, chunk_idx=1, size=1025.40KB, time=0.49ms
-2026-01-30 11:16:39.307 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.307 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
-2026-01-30 11:16:39.307 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=2, wait_time=0.11ms
-2026-01-30 11:16:39.308 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.308 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=59, layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.63ms
-2026-01-30 11:16:39.309 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.309 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.310 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=61, layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.83ms
-2026-01-30 11:16:39.310 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=62, layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.311 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=2
-2026-01-30 11:16:39.311 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.311 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.311 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.312 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=63, layer_idx=15, size=1025.40KB, time=0.88ms
-2026-01-30 11:16:39.312 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.312 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=64, layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.313 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=65, layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.46ms
-2026-01-30 11:16:39.313 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.313 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.314 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=66, layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.70ms
-2026-01-30 11:16:39.314 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=67, layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.49ms
-2026-01-30 11:16:39.315 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.315 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.316 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=68, layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.84ms
-2026-01-30 11:16:39.316 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=69, layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.45ms
-2026-01-30 11:16:39.316 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.316 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.317 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=70, layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.80ms
-2026-01-30 11:16:39.318 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=71, layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.318 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.319 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.319 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=72, layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.86ms
-2026-01-30 11:16:39.320 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=73, layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.50ms
-2026-01-30 11:16:39.320 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.320 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.321 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=74, layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.85ms
-2026-01-30 11:16:39.321 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=75, layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.322 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.322 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.323 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=76, layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.86ms
-2026-01-30 11:16:39.323 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=77, layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.46ms
-2026-01-30 11:16:39.323 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.324 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.325 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=78, layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.97ms
-2026-01-30 11:16:39.325 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=79, layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.325 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.326 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.326 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=80, layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.81ms
-2026-01-30 11:16:39.327 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=81, layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.45ms
-2026-01-30 11:16:39.327 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.328 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.328 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=82, layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.84ms
-2026-01-30 11:16:39.329 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=83, layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.48ms
-2026-01-30 11:16:39.329 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.329 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.330 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=84, layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.86ms
-2026-01-30 11:16:39.330 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=85, layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.48ms
-2026-01-30 11:16:39.331 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.331 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.332 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=86, layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.86ms
-2026-01-30 11:16:39.332 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=87, layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.47ms
-2026-01-30 11:16:39.332 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.333 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128)
-2026-01-30 11:16:39.333 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=2
-2026-01-30 11:16:39.333 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.334 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=88, layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.95ms
-2026-01-30 11:16:39.334 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=90, chunk_idx=2, size=1025.40KB, time=0.49ms
-2026-01-30 11:16:39.334 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
-2026-01-30 11:16:39.335 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
-2026-01-30 11:16:39.335 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=3, wait_time=0.03ms
-2026-01-30 11:16:39.335 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 92, 4096), dtype=float16, device=cuda:0, size=0.719MB
-2026-01-30 11:16:39.335 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=89, layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.71ms
-2026-01-30 11:16:39.336 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.336 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.337 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=91, layer_idx=14, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.75ms
-2026-01-30 11:16:39.337 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=92, layer_idx=14, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.43ms
-2026-01-30 11:16:39.338 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=3
-2026-01-30 11:16:39.338 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 92, 4096), dtype=float16, device=cuda:0, size=0.719MB
-2026-01-30 11:16:39.338 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.338 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.339 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=93, layer_idx=15, size=737.40KB, time=0.71ms
-2026-01-30 11:16:39.339 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 92, 4096), dtype=float16, device=cuda:0, size=0.719MB
-2026-01-30 11:16:39.339 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=94, layer_idx=15, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.42ms
-2026-01-30 11:16:39.340 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=95, layer_idx=15, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.41ms
-2026-01-30 11:16:39.340 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.340 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.341 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=96, layer_idx=16, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.78ms
-2026-01-30 11:16:39.341 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=97, layer_idx=16, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.39ms
-2026-01-30 11:16:39.342 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.342 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.343 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=98, layer_idx=17, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.63ms
-2026-01-30 11:16:39.343 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=99, layer_idx=17, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.43ms
-2026-01-30 11:16:39.344 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.344 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.345 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=100, layer_idx=18, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.76ms
-2026-01-30 11:16:39.345 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=101, layer_idx=18, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.41ms
-2026-01-30 11:16:39.345 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.346 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.346 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=102, layer_idx=19, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.77ms
-2026-01-30 11:16:39.347 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=103, layer_idx=19, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.41ms
-2026-01-30 11:16:39.347 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.348 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.348 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=104, layer_idx=20, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.81ms
-2026-01-30 11:16:39.349 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=105, layer_idx=20, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.59ms
-2026-01-30 11:16:39.349 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.350 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.350 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=106, layer_idx=21, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.73ms
-2026-01-30 11:16:39.351 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=107, layer_idx=21, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.44ms
-2026-01-30 11:16:39.351 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.352 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.352 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=108, layer_idx=22, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.77ms
-2026-01-30 11:16:39.353 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=109, layer_idx=22, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.41ms
-2026-01-30 11:16:39.353 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.354 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.354 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=110, layer_idx=23, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.73ms
-2026-01-30 11:16:39.355 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=111, layer_idx=23, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.43ms
-2026-01-30 11:16:39.355 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.356 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.356 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=112, layer_idx=24, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.73ms
-2026-01-30 11:16:39.357 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=113, layer_idx=24, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.44ms
-2026-01-30 11:16:39.357 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.358 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.358 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=114, layer_idx=25, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.64ms
-2026-01-30 11:16:39.359 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=115, layer_idx=25, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.46ms
-2026-01-30 11:16:39.359 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.360 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.360 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=116, layer_idx=26, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.75ms
-2026-01-30 11:16:39.361 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=117, layer_idx=26, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.44ms
-2026-01-30 11:16:39.362 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.362 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=3, key_shape=(1, 8, 92, 128)
-2026-01-30 11:16:39.362 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=3
-2026-01-30 11:16:39.362 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 92, 4096), dtype=float16, device=cuda:0, size=0.719MB
-2026-01-30 11:16:39.363 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=118, layer_idx=27, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.91ms
-2026-01-30 11:16:39.363 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=120, chunk_idx=3, size=737.40KB, time=0.38ms
-2026-01-30 11:16:39.363 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 92, 4096), dtype=float16, device=cuda:0, size=0.719MB
-2026-01-30 11:16:39.363 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=119, layer_idx=27, chunk_idx=3, key_shape=(1, 8, 92, 128), size=370.62KB, time=0.33ms
-2026-01-30 11:16:39.364 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:411] - [WAIT] 等待接收 DRAFT_TOKENS (src_rank=2, timeout=60.0s)
-2026-01-30 11:16:40.837 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=0, seq_id=2, latency=4.92ms
-2026-01-30 11:16:40.837 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.114 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=2, seq_id=84, latency=1287.06ms
+2026-01-30 16:09:07.114 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.839 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=0, seq_id=4, latency=3.27ms
-2026-01-30 11:16:40.839 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.114 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=2, seq_id=86, latency=1285.36ms
+2026-01-30 16:09:07.114 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.841 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=0, seq_id=6, latency=2.88ms
-2026-01-30 11:16:40.841 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.115 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=2, seq_id=88, latency=1283.40ms
+2026-01-30 16:09:07.115 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.845 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=0, seq_id=8, latency=4.04ms
-2026-01-30 11:16:40.845 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:07.116 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=2, seq_id=90, latency=1284.03ms
+2026-01-30 16:09:07.116 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.117 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=0, chunk_idx=3, seq_id=91, latency=1280.58ms
+2026-01-30 16:09:07.117 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.117 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=1, chunk_idx=3, seq_id=94, latency=1278.36ms
+2026-01-30 16:09:07.117 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.118 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=2, chunk_idx=3, seq_id=96, latency=1276.23ms
+2026-01-30 16:09:07.118 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.118 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=3, chunk_idx=3, seq_id=98, latency=1274.30ms
+2026-01-30 16:09:07.118 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.119 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=4, chunk_idx=3, seq_id=100, latency=1272.66ms
+2026-01-30 16:09:07.119 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.119 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=5, chunk_idx=3, seq_id=102, latency=1270.71ms
+2026-01-30 16:09:07.119 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.120 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=6, chunk_idx=3, seq_id=104, latency=1268.77ms
+2026-01-30 16:09:07.120 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.120 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=7, chunk_idx=3, seq_id=106, latency=1266.77ms
+2026-01-30 16:09:07.120 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.121 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=8, chunk_idx=3, seq_id=108, latency=1265.03ms
+2026-01-30 16:09:07.121 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.121 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=9, chunk_idx=3, seq_id=110, latency=1263.27ms
+2026-01-30 16:09:07.121 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.122 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=10, chunk_idx=3, seq_id=112, latency=1261.53ms
+2026-01-30 16:09:07.122 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.122 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=11, chunk_idx=3, seq_id=114, latency=1259.82ms
+2026-01-30 16:09:07.123 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.123 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=12, chunk_idx=3, seq_id=116, latency=1258.12ms
+2026-01-30 16:09:07.123 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.123 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 0 | layer_idx=13, chunk_idx=3, seq_id=118, latency=1256.01ms
+2026-01-30 16:09:07.124 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:07.124 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:248] - [RECV] HIDDEN from rank 0 | chunk_idx=3, seq_id=120, latency=1255.91ms
+2026-01-30 16:09:07.124 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:252] -   hidden_state: shape=(1, 90, 4096), dtype=float16, device=cuda:0, size=0.703MB
+2026-01-30 16:09:07.222 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.223 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.225 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=1, layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=2.16ms
+2026-01-30 16:09:07.226 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=2, layer_idx=14, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
+2026-01-30 16:09:07.227 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=0
+2026-01-30 16:09:07.227 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.227 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.227 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.228 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=3, layer_idx=15, size=1025.40KB, time=1.22ms
+2026-01-30 16:09:07.228 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.229 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=4, layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.80ms
+2026-01-30 16:09:07.230 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=5, layer_idx=15, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.230 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.231 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.231 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=6, layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.03ms
+2026-01-30 16:09:07.232 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=7, layer_idx=16, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.81ms
+2026-01-30 16:09:07.233 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.233 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.234 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=8, layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.15ms
+2026-01-30 16:09:07.235 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=9, layer_idx=17, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.79ms
+2026-01-30 16:09:07.235 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.236 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.237 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=10, layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.12ms
+2026-01-30 16:09:07.238 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=11, layer_idx=18, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.77ms
+2026-01-30 16:09:07.238 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.238 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.239 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=12, layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.03ms
+2026-01-30 16:09:07.240 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=13, layer_idx=19, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.76ms
+2026-01-30 16:09:07.241 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.241 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.242 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=14, layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.18ms
+2026-01-30 16:09:07.243 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=15, layer_idx=20, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.79ms
+2026-01-30 16:09:07.243 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.244 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.245 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=16, layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.10ms
+2026-01-30 16:09:07.246 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=17, layer_idx=21, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.68ms
+2026-01-30 16:09:07.246 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.246 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.247 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=18, layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.06ms
+2026-01-30 16:09:07.248 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=19, layer_idx=22, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.248 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.249 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.250 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=20, layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.95ms
+2026-01-30 16:09:07.250 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=21, layer_idx=23, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.70ms
+2026-01-30 16:09:07.251 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.251 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.252 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=22, layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.04ms
+2026-01-30 16:09:07.253 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=23, layer_idx=24, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.253 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.254 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.254 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=24, layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.06ms
+2026-01-30 16:09:07.255 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=25, layer_idx=25, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.70ms
+2026-01-30 16:09:07.256 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.256 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.257 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=26, layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.95ms
+2026-01-30 16:09:07.258 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=27, layer_idx=26, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.258 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.258 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.259 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=0
+2026-01-30 16:09:07.259 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.260 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=28, layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.48ms
+2026-01-30 16:09:07.261 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=30, chunk_idx=0, size=1025.40KB, time=1.43ms
+2026-01-30 16:09:07.261 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.262 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=29, layer_idx=27, chunk_idx=0, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.85ms
+2026-01-30 16:09:07.267 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
+2026-01-30 16:09:07.267 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=1, wait_time=0.05ms
+2026-01-30 16:09:07.267 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.269 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.269 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.270 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=31, layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.02ms
+2026-01-30 16:09:07.271 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=32, layer_idx=14, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.271 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=1
+2026-01-30 16:09:07.271 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.271 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.272 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.273 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=33, layer_idx=15, size=1025.40KB, time=1.34ms
+2026-01-30 16:09:07.273 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.273 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=34, layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.72ms
+2026-01-30 16:09:07.274 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=35, layer_idx=15, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.274 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.275 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.276 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=36, layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.89ms
+2026-01-30 16:09:07.276 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=37, layer_idx=16, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.277 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.277 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.278 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=38, layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.05ms
+2026-01-30 16:09:07.279 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=39, layer_idx=17, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.76ms
+2026-01-30 16:09:07.279 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.280 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.280 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=40, layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.12ms
+2026-01-30 16:09:07.281 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=41, layer_idx=18, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.73ms
+2026-01-30 16:09:07.282 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.282 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.283 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=42, layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.19ms
+2026-01-30 16:09:07.284 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=43, layer_idx=19, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.83ms
+2026-01-30 16:09:07.284 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.285 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.286 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=44, layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.04ms
+2026-01-30 16:09:07.287 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=45, layer_idx=20, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.78ms
+2026-01-30 16:09:07.287 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.287 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.288 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=46, layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.15ms
+2026-01-30 16:09:07.289 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=47, layer_idx=21, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.289 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.290 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.291 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=48, layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.94ms
+2026-01-30 16:09:07.291 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=49, layer_idx=22, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.68ms
+2026-01-30 16:09:07.292 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.292 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.293 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=50, layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
+2026-01-30 16:09:07.294 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=51, layer_idx=23, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.294 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.295 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.295 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=52, layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.03ms
+2026-01-30 16:09:07.296 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=53, layer_idx=24, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.296 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.297 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.298 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=54, layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.97ms
+2026-01-30 16:09:07.298 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=55, layer_idx=25, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.299 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.299 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.300 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=56, layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.05ms
+2026-01-30 16:09:07.301 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=57, layer_idx=26, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.69ms
+2026-01-30 16:09:07.301 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.302 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.302 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=1
+2026-01-30 16:09:07.302 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.303 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=58, layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.24ms
+2026-01-30 16:09:07.303 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=60, chunk_idx=1, size=1025.40KB, time=0.60ms
+2026-01-30 16:09:07.303 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.304 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
+2026-01-30 16:09:07.304 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=2, wait_time=0.06ms
+2026-01-30 16:09:07.304 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.304 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=59, layer_idx=27, chunk_idx=1, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.07ms
+2026-01-30 16:09:07.306 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.306 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.307 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=61, layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.08ms
+2026-01-30 16:09:07.308 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=62, layer_idx=14, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.308 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=2
+2026-01-30 16:09:07.308 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.309 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.309 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.309 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=63, layer_idx=15, size=1025.40KB, time=0.90ms
+2026-01-30 16:09:07.309 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.310 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=64, layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.71ms
+2026-01-30 16:09:07.311 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=65, layer_idx=15, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.311 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.312 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.313 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=66, layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.02ms
+2026-01-30 16:09:07.313 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=67, layer_idx=16, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.68ms
+2026-01-30 16:09:07.314 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.314 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.315 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=68, layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.09ms
+2026-01-30 16:09:07.316 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=69, layer_idx=17, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.316 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.317 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.318 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=70, layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.99ms
+2026-01-30 16:09:07.318 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=71, layer_idx=18, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.319 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.319 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.320 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=72, layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.18ms
+2026-01-30 16:09:07.321 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=73, layer_idx=19, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.70ms
+2026-01-30 16:09:07.321 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.322 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.322 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=74, layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.96ms
+2026-01-30 16:09:07.323 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=75, layer_idx=20, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.324 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.324 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.325 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=76, layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
+2026-01-30 16:09:07.326 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=77, layer_idx=21, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.67ms
+2026-01-30 16:09:07.326 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.326 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.327 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=78, layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.03ms
+2026-01-30 16:09:07.328 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=79, layer_idx=22, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.69ms
+2026-01-30 16:09:07.328 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.329 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.330 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=80, layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.97ms
+2026-01-30 16:09:07.330 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=81, layer_idx=23, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.331 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.331 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.332 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=82, layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.05ms
+2026-01-30 16:09:07.333 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=83, layer_idx=24, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.68ms
+2026-01-30 16:09:07.333 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.333 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.334 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=84, layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
+2026-01-30 16:09:07.335 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=85, layer_idx=25, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.66ms
+2026-01-30 16:09:07.336 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.336 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.337 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=86, layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.98ms
+2026-01-30 16:09:07.337 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=87, layer_idx=26, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.69ms
+2026-01-30 16:09:07.338 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.338 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128)
+2026-01-30 16:09:07.339 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=2
+2026-01-30 16:09:07.339 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.339 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=88, layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=1.27ms
+2026-01-30 16:09:07.340 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=90, chunk_idx=2, size=1025.40KB, time=0.60ms
+2026-01-30 16:09:07.340 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 128, 4096), dtype=float16, device=cuda:0, size=1.000MB
+2026-01-30 16:09:07.340 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:471] - [WAIT] 等待接收 HIDDEN (src_rank=0, timeout=60.0s)
+2026-01-30 16:09:07.340 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:489] - [RECV_OK] HIDDEN 接收成功 | from rank 0, chunk_idx=3, wait_time=0.14ms
+2026-01-30 16:09:07.341 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:494] -   hidden: shape=(1, 90, 4096), dtype=float16, device=cuda:0, size=0.703MB
+2026-01-30 16:09:07.341 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=89, layer_idx=27, chunk_idx=2, key_shape=(1, 8, 128, 128), size=514.62KB, time=0.96ms
+2026-01-30 16:09:07.343 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=14, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.343 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=14, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.344 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=91, layer_idx=14, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.90ms
+2026-01-30 16:09:07.344 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=92, layer_idx=14, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.60ms
+2026-01-30 16:09:07.345 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:267] - [QUEUE] EAGLE_INPUT_HIDDEN -> rank 2 | layer_idx=15, chunk_idx=3
+2026-01-30 16:09:07.345 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:271] -   hidden: shape=(1, 90, 4096), dtype=float16, device=cuda:0, size=0.703MB
+2026-01-30 16:09:07.346 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=15, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.346 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=15, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.346 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:137] - [SEND] EAGLE_INPUT_HIDDEN -> rank 2 | seq_id=93, layer_idx=15, size=721.40KB, time=1.02ms
+2026-01-30 16:09:07.346 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:142] -   hidden: shape=(1, 90, 4096), dtype=float16, device=cuda:0, size=0.703MB
+2026-01-30 16:09:07.347 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=94, layer_idx=15, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.67ms
+2026-01-30 16:09:07.348 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=95, layer_idx=15, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.61ms
+2026-01-30 16:09:07.348 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=16, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.349 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=16, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.349 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=96, layer_idx=16, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.88ms
+2026-01-30 16:09:07.350 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=97, layer_idx=16, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.59ms
+2026-01-30 16:09:07.351 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=17, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.351 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=17, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.354 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=98, layer_idx=17, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=3.34ms
+2026-01-30 16:09:07.355 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=99, layer_idx=17, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.68ms
+2026-01-30 16:09:07.355 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=18, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.356 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=18, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.357 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=100, layer_idx=18, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.95ms
+2026-01-30 16:09:07.357 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=101, layer_idx=18, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.60ms
+2026-01-30 16:09:07.358 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=19, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.358 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=19, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.359 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=102, layer_idx=19, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=1.00ms
+2026-01-30 16:09:07.360 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=103, layer_idx=19, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.62ms
+2026-01-30 16:09:07.360 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=20, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.361 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=20, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.361 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=104, layer_idx=20, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.96ms
+2026-01-30 16:09:07.362 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=105, layer_idx=20, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.64ms
+2026-01-30 16:09:07.363 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=21, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.363 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=21, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.364 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=106, layer_idx=21, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.84ms
+2026-01-30 16:09:07.364 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=107, layer_idx=21, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.61ms
+2026-01-30 16:09:07.365 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=22, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.365 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=22, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.366 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=108, layer_idx=22, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=1.01ms
+2026-01-30 16:09:07.367 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=109, layer_idx=22, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.62ms
+2026-01-30 16:09:07.367 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=23, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.368 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=23, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.368 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=110, layer_idx=23, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.99ms
+2026-01-30 16:09:07.369 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=111, layer_idx=23, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.61ms
+2026-01-30 16:09:07.370 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=24, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.370 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=24, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.371 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=112, layer_idx=24, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.91ms
+2026-01-30 16:09:07.371 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=113, layer_idx=24, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.61ms
+2026-01-30 16:09:07.372 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=25, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.372 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=25, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.373 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=114, layer_idx=25, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.96ms
+2026-01-30 16:09:07.374 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=115, layer_idx=25, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.62ms
+2026-01-30 16:09:07.374 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=26, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.375 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=26, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.375 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=116, layer_idx=26, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.88ms
+2026-01-30 16:09:07.376 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=117, layer_idx=26, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=0.62ms
+2026-01-30 16:09:07.377 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 0 | layer_idx=27, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.377 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:295] - [QUEUE] BASE_CACHE -> rank 2 | layer_idx=27, chunk_idx=3, key_shape=(1, 8, 90, 128)
+2026-01-30 16:09:07.377 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:240] - [QUEUE] HIDDEN -> rank 2 | chunk_idx=3
+2026-01-30 16:09:07.377 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:244] -   hidden: shape=(1, 90, 4096), dtype=float16, device=cuda:0, size=0.703MB
+2026-01-30 16:09:07.378 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 0 | seq_id=118, layer_idx=27, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=1.21ms
+2026-01-30 16:09:07.378 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:128] - [SEND] HIDDEN -> rank 2 | seq_id=120, chunk_idx=3, size=721.40KB, time=0.48ms
+2026-01-30 16:09:07.379 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:133] -   hidden: shape=(1, 90, 4096), dtype=float16, device=cuda:0, size=0.703MB
+2026-01-30 16:09:07.379 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:411] - [WAIT] 等待接收 DRAFT_TOKENS (src_rank=2, timeout=60.0s)
+2026-01-30 16:09:07.380 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:147] - [SEND] BASE_CACHE -> rank 2 | seq_id=119, layer_idx=27, chunk_idx=3, key_shape=(1, 8, 90, 128), size=362.62KB, time=1.08ms
+2026-01-30 16:09:08.556 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=0, seq_id=2, latency=6.21ms
+2026-01-30 16:09:08.556 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.871 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=0, incremental=True, seq_id=10, latency=3.26ms
-2026-01-30 11:16:40.872 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.559 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=0, seq_id=4, latency=3.74ms
+2026-01-30 16:09:08.559 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.880 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=1, seq_id=12, latency=2.89ms
-2026-01-30 11:16:40.881 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.563 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=0, seq_id=6, latency=3.59ms
+2026-01-30 16:09:08.563 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.883 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=1, seq_id=14, latency=2.77ms
-2026-01-30 11:16:40.883 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.567 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=0, seq_id=8, latency=4.60ms
+2026-01-30 16:09:08.567 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.885 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=1, seq_id=16, latency=2.94ms
-2026-01-30 11:16:40.885 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.596 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=0, incremental=True, seq_id=10, latency=3.95ms
+2026-01-30 16:09:08.596 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.889 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=1, seq_id=18, latency=4.01ms
-2026-01-30 11:16:40.889 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.611 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=1, seq_id=12, latency=4.38ms
+2026-01-30 16:09:08.611 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.892 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=1, incremental=True, seq_id=20, latency=3.26ms
-2026-01-30 11:16:40.892 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.614 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=1, seq_id=14, latency=3.47ms
+2026-01-30 16:09:08.614 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.895 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=2, seq_id=22, latency=2.87ms
-2026-01-30 11:16:40.896 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.617 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=1, seq_id=16, latency=3.47ms
+2026-01-30 16:09:08.617 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.898 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=2, seq_id=24, latency=2.59ms
-2026-01-30 11:16:40.898 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.621 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=1, seq_id=18, latency=4.08ms
+2026-01-30 16:09:08.621 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.900 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=2, seq_id=26, latency=2.56ms
-2026-01-30 11:16:40.900 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.626 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=1, incremental=True, seq_id=20, latency=4.03ms
+2026-01-30 16:09:08.626 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.904 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=2, seq_id=28, latency=4.06ms
-2026-01-30 11:16:40.904 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.631 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=2, seq_id=22, latency=3.42ms
+2026-01-30 16:09:08.631 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.913 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=2, incremental=True, seq_id=30, latency=9.71ms
-2026-01-30 11:16:40.914 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.634 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=2, seq_id=24, latency=3.46ms
+2026-01-30 16:09:08.634 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
   value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.914 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=3, seq_id=32, latency=6.88ms
-2026-01-30 11:16:40.914 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.915 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=3, seq_id=34, latency=5.45ms
-2026-01-30 11:16:40.915 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.916 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=3, seq_id=36, latency=4.35ms
-2026-01-30 11:16:40.916 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.917 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=3, seq_id=38, latency=3.74ms
-2026-01-30 11:16:40.917 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.971 - SpecSoT-Rank1-Comm - INFO - [base_comm_manager.py:232] - [RECV] DRAFT_TOKENS from rank 2 | seq_id=42, latency=2.10ms
-2026-01-30 11:16:40.971 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:236] -   draft_tokens: shape=(1, 40), dtype=int64, device=cpu, size=0.000MB
+2026-01-30 16:09:08.638 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=2, seq_id=26, latency=3.09ms
+2026-01-30 16:09:08.638 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+  value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.642 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=2, seq_id=28, latency=4.86ms
+2026-01-30 16:09:08.643 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+  value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.647 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=2, incremental=True, seq_id=30, latency=3.97ms
+2026-01-30 16:09:08.647 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+  value: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.651 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=28, chunk_idx=3, seq_id=32, latency=2.83ms
+2026-01-30 16:09:08.651 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.654 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=29, chunk_idx=3, seq_id=34, latency=2.65ms
+2026-01-30 16:09:08.654 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.658 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=30, chunk_idx=3, seq_id=36, latency=2.89ms
+2026-01-30 16:09:08.658 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.667 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:268] - [RECV] BASE_CACHE from rank 2 | layer_idx=31, chunk_idx=3, seq_id=38, latency=9.19ms
+2026-01-30 16:09:08.667 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:272] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.714 - SpecSoT-Rank1-Comm - INFO - [base_comm_manager.py:232] - [RECV] DRAFT_TOKENS from rank 2 | seq_id=42, latency=4.45ms
+2026-01-30 16:09:08.714 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:236] -   draft_tokens: shape=(1, 40), dtype=int64, device=cpu, size=0.000MB
   retrieve_indices: shape=(1, 33, 3), dtype=int64, device=cpu, size=0.001MB
   tree_mask: shape=(1, 1, 40, 40), dtype=float32, device=cpu, size=0.006MB
   tree_position_ids: shape=(1, 40), dtype=int64, device=cpu, size=0.000MB
-2026-01-30 11:16:40.971 - SpecSoT-Rank1-Comm - INFO - [base_comm_manager.py:436] - [RECV_OK] DRAFT_TOKENS 接收成功 | from rank 2, wait_time=1607.50ms, draft_tokens shape=(1, 40)
-2026-01-30 11:16:40.972 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=3, incremental=True, seq_id=40, latency=3.81ms
-2026-01-30 11:16:40.972 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-  value: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.973 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:817] - [WAIT] 等待接收所有 Cache | expected_base_caches=16, expected_eagle_caches=4, my_layer_range=[14, 28), timeout=60.0s
-2026-01-30 11:16:40.973 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:822] -   待接收的 base cache: [(0, 28), (0, 29), (0, 30), (0, 31), (1, 28), (1, 29), (1, 30), (1, 31), (2, 28), (2, 29), (2, 30), (2, 31), (3, 28), (3, 29), (3, 30), (3, 31)]
-2026-01-30 11:16:40.973 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=0, from rank=2, remaining=15
-2026-01-30 11:16:40.973 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.973 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=0, from rank=2, remaining=14
-2026-01-30 11:16:40.973 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=0, from rank=2, remaining=13
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=0, from rank=2, remaining=12
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=1, from rank=2, remaining=11
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=1, from rank=2, remaining=10
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=1, from rank=2, remaining=9
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=1, from rank=2, remaining=8
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=2, from rank=2, remaining=7
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=2, from rank=2, remaining=6
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=2, from rank=2, remaining=5
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=2, from rank=2, remaining=4
-2026-01-30 11:16:40.974 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=3, from rank=2, remaining=3
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=3, from rank=2, remaining=2
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=3, from rank=2, remaining=1
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=3, from rank=2, remaining=0
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=0, incremental=True, from rank=2, kv_length=128, remaining=3
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=1, incremental=True, from rank=2, kv_length=256, remaining=2
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=2, incremental=True, from rank=2, kv_length=384, remaining=1
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=3, incremental=True, from rank=2, kv_length=476, remaining=0
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 92, 128), dtype=float16, device=cuda:0, size=0.180MB
-2026-01-30 11:16:40.975 - SpecSoT-Rank1-Comm - INFO - [base_comm_manager.py:915] - [SYNC_OK] 所有 Cache 接收完成 | base_cache=16, eagle_cache=4, wait_time=3.51ms
-2026-01-30 11:16:43.392 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:297] - [RECV] SCHEDULE_PLAN from rank 0 | seq_id=121, latency=0.84ms
-2026-01-30 11:16:43.393 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:958] - [RECV_OK] SCHEDULE_PLAN | from rank 0
-2026-01-30 11:16:43.393 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:305] - [RECV] BRANCH_PROMPT from rank 0 | num_branches=2, seq_id=123, latency=0.98ms
-2026-01-30 11:16:43.393 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:1007] - [RECV_OK] BRANCH_PROMPT | 2 branches received
-2026-01-30 11:16:48.356 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:442] - [SEND] BRANCH_OUTPUT -> rank 0 | branch_id=0, num_tokens=317
-2026-01-30 11:16:48.356 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:442] - [SEND] BRANCH_OUTPUT -> rank 0 | branch_id=5, num_tokens=362
-2026-01-30 11:16:48.359 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:321] - [RECV] BRANCH_COMPLETE from rank 0 | seq_id=125, latency=0.91ms
-2026-01-30 11:16:48.359 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:1133] - [RECV_OK] BRANCH_COMPLETE signal
-2026-01-30 11:16:48.457 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:102] - [THREAD] 发送线程退出
-2026-01-30 11:16:48.459 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:198] - 接收线程退出
-2026-01-30 11:16:48.460 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:370] - 通信管理器已停止
+2026-01-30 16:09:08.715 - SpecSoT-Rank1-Comm - INFO - [base_comm_manager.py:436] - [RECV_OK] DRAFT_TOKENS 接收成功 | from rank 2, wait_time=1336.03ms, draft_tokens shape=(1, 40)
+2026-01-30 16:09:08.716 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:284] - [RECV] EAGLE_CACHE from rank 2 | chunk_idx=3, incremental=True, seq_id=40, latency=6.56ms
+2026-01-30 16:09:08.716 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:288] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+  value: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.717 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:817] - [WAIT] 等待接收所有 Cache | expected_base_caches=16, expected_eagle_caches=4, my_layer_range=[14, 28), timeout=60.0s
+2026-01-30 16:09:08.717 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:822] -   待接收的 base cache: [(0, 28), (0, 29), (0, 30), (0, 31), (1, 28), (1, 29), (1, 30), (1, 31), (2, 28), (2, 29), (2, 30), (2, 31), (3, 28), (3, 29), (3, 30), (3, 31)]
+2026-01-30 16:09:08.717 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=0, from rank=2, remaining=15
+2026-01-30 16:09:08.717 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=0, from rank=2, remaining=14
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=0, from rank=2, remaining=13
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=0, from rank=2, remaining=12
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=1, from rank=2, remaining=11
+2026-01-30 16:09:08.718 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=1, from rank=2, remaining=10
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=1, from rank=2, remaining=9
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=1, from rank=2, remaining=8
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=2, from rank=2, remaining=7
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=2, from rank=2, remaining=6
+2026-01-30 16:09:08.719 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=2, from rank=2, remaining=5
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=2, from rank=2, remaining=4
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=28, chunk=3, from rank=2, remaining=3
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=29, chunk=3, from rank=2, remaining=2
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.720 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=30, chunk=3, from rank=2, remaining=1
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:844] - [CACHE_RECV] BASE_CACHE | layer=31, chunk=3, from rank=2, remaining=0
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:848] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=0, incremental=True, from rank=2, kv_length=128, remaining=3
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=1, incremental=True, from rank=2, kv_length=256, remaining=2
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=2, incremental=True, from rank=2, kv_length=384, remaining=1
+2026-01-30 16:09:08.721 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 128, 128), dtype=float16, device=cuda:0, size=0.250MB
+2026-01-30 16:09:08.722 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:894] - [CACHE_RECV] EAGLE_CACHE | chunk=3, incremental=True, from rank=2, kv_length=474, remaining=0
+2026-01-30 16:09:08.722 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:898] -   key: shape=(1, 8, 90, 128), dtype=float16, device=cuda:0, size=0.176MB
+2026-01-30 16:09:08.722 - SpecSoT-Rank1-Comm - INFO - [base_comm_manager.py:915] - [SYNC_OK] 所有 Cache 接收完成 | base_cache=16, eagle_cache=4, wait_time=5.41ms
+2026-01-30 16:09:31.658 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:297] - [RECV] SCHEDULE_PLAN from rank 0 | seq_id=121, latency=20013.37ms
+2026-01-30 16:09:31.659 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:958] - [RECV_OK] SCHEDULE_PLAN | from rank 0
+2026-01-30 16:09:31.659 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:305] - [RECV] BRANCH_PROMPT from rank 0 | num_branches=2, seq_id=123, latency=20013.65ms
+2026-01-30 16:09:31.661 - SpecSoT-Rank1-Comm - DEBUG - [base_comm_manager.py:1007] - [RECV_OK] BRANCH_PROMPT | 2 branches received
+2026-01-30 16:10:12.610 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:442] - [SEND] BRANCH_OUTPUT -> rank 0 | branch_id=2, num_tokens=326
+2026-01-30 16:10:12.610 - SpecSoT-Rank1-Comm - DEBUG - [p2p_comm_manager.py:442] - [SEND] BRANCH_OUTPUT -> rank 0 | branch_id=5, num_tokens=319

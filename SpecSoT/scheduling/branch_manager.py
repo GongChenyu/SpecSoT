@@ -140,9 +140,16 @@ class BranchExecutionManager:
             branch_ids: 分支 ID 列表
         """
         for branch_id in branch_ids:
-            if branch_id in self.branch_states:
-                self.branch_states[branch_id].status = BranchStatus.DECODING
-            self.active_branches.append(branch_id)
+            # 从 pending 中移除（如果存在）
+            if branch_id in self.pending_branches:
+                self.pending_branches.remove(branch_id)
+            # 初始化状态（如果尚未初始化）
+            if branch_id not in self.branch_states:
+                self.branch_states[branch_id] = BranchRuntimeState(branch_id=branch_id)
+            self.branch_states[branch_id].status = BranchStatus.DECODING
+            # 加入活跃列表（避免重复）
+            if branch_id not in self.active_branches:
+                self.active_branches.append(branch_id)
             self.logger.debug(f"分支 {branch_id} 加入活跃列表")
 
     def handle_completed_branches(
