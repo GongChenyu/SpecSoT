@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-SpecSoT 统一推理入口
+SpecSoT v2 统一推理入口
 
 执行模式组合：
 1. 单机模式 (--distributed False):
@@ -25,7 +25,17 @@ SpecSoT 统一推理入口
 import sys
 import argparse
 
-from SpecSoT.engine import MasterEngine, WorkerEngine, str2bool
+from SpecSoT_v2.master import MasterEngine
+from SpecSoT_v2.worker import WorkerEngine
+
+
+def str2bool(v):
+    """字符串转布尔值"""
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    return False
 
 # 每个 add_argument 仅仅占用一行
 def create_parser():
@@ -49,6 +59,7 @@ def create_parser():
     # 推理配置
     parser.add_argument("--enable_parallel", type=str2bool, default=True, help="启用骨架并行模式")
     parser.add_argument("--use_semantic_constraint", type=str2bool, default=True, help="是否使用 FSM 语义约束")
+    parser.add_argument("--use_bim_mode", type=str2bool, default=True, help="是否使用 BIM 模式 (True: In-One-Sequence, False: Batching)")
     parser.add_argument("--max_new_tokens", type=int, default=3000, help="最大生成token数")
     
     # 分布式配置

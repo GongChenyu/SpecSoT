@@ -1,3 +1,10 @@
-# Ignore log and result folders
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.log
 logs/
-results/
+
+.env
+.venv
+venv/

@@ -1,6 +1,0 @@
-2026-01-30 18:43:32.523 - SpecSoT-Rank0-BranchMgr - INFO - [logging_utils.py:155] - 日志将保存到: /data/home/chenyu/Coding/SD+SoT/SpecSoT/logs/rank_0.log
-2026-01-30 18:43:32.523 - SpecSoT-Rank0-BranchMgr - INFO - [branch_manager.py:100] - BranchExecutionManager 初始化: 6 分支, max_parallel=2
-2026-01-30 18:43:32.523 - SpecSoT-Rank0-BranchMgr - DEBUG - [branch_manager.py:153] - 分支 1 加入活跃列表
-2026-01-30 18:43:32.523 - SpecSoT-Rank0-BranchMgr - DEBUG - [branch_manager.py:153] - 分支 2 加入活跃列表
-2026-01-30 18:43:37.054 - SpecSoT-Rank0-BranchMgr - INFO - [branch_manager.py:183] - 分支 2 完成: 326 tokens
-2026-01-30 18:43:37.054 - SpecSoT-Rank0-BranchMgr - DEBUG - [branch_manager.py:153] - 分支 3 加入活跃列表
