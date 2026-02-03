@@ -822,3 +822,66 @@ python run_specsot.py --use_bim_mode False
 # 对比 Batching 和 BIM 模式输出
 python test_mode_consistency.py
 ```
+
+---
+
+## 十二、维度圣经 (Dimension Bible)
+
+为保证系统在 Single（单序列）和 Parallel（多分支）模式下的无缝切换，所有函数必须严格遵守以下维度定义。
+
+### 12.1 符号定义
+
+| 符号 | 含义 | 说明 |
+|------|------|------|
+| **B** | Batch Size | Single 模式 `B=1`，Parallel 模式 `B=num_branches` |
+| **S** | Seq Len | 当前序列的总长度 |
+| **V** | Vocab | 词表大小 |
+| **H** | Hidden | 隐藏层维度 |
+| **T** | Tree Size | Draft Tree 节点总数（如 64） |
+| **L** | Leaves | Draft Tree 叶子节点数 |
+| **D** | Depth | Draft Tree 最大深度 |
+
+### 12.2 核心数据流维度
+
+| 变量名 | 标准维度 | 关键说明 |
+|--------|---------|----------|
+| `input_ids` | `[B, S]` | 即使单条也必须 `[1, S]`，严禁 `[S]` |
+| `position_ids` | `[B, S]` | 与 input_ids 严格对齐 |
+| `attention_mask` | `[B, 1, S, S]` | 4D Mask，支持 broadcasting |
+| `logits` | `[B, S, V]` | 模型输出 Logits |
+| `hidden_states` | `[B, S, H]` | 模型最后一层隐状态 |
+
+### 12.3 Speculative Decoding 专用维度
+
+| 变量名 | 标准维度 | 关键说明 |
+|--------|---------|----------|
+| `draft_tokens` | `[B, T]` | 候选 Token 树展平后的 ID |
+| `tree_mask` | `[B, 1, T, T]` | 树内部 Attention Mask，必须 4D |
+| `tree_position_ids` | `[B, T]` | 树节点相对位置偏移 |
+| `retrieve_indices` | `[B, L, D]` | **关键！** 从根到叶的路径索引 |
+| `candidates` | `[B, L, D]` | 候选 Token ID |
+| `candidate_logits` | `[B, L, D, V]` | 候选路径对应的 Logits |
+
+### 12.4 评估与结果维度
+
+| 变量名 | 标准维度 | 关键说明 |
+|--------|---------|----------|
+| `best_candidate` | `[B]` | **必须返回 Tensor**，不要返回 int |
+| `accept_length` | `[B]` | **必须返回 Tensor**，不要返回 int |
+| `sample_token` | `[B, 1]` | Bonus Token，便于与 input_ids 拼接 |
+| `accept_hidden` | `[B, x, H]` | 下一轮 Draft 根节点隐状态，x 是接受长度 |
+
+### 12.5 状态管理维度
+
+| 变量名 | 标准维度 | 关键说明 |
+|--------|---------|----------|
+| `past_key_values` | `[B, Num_Head, Max_Len, Head_Dim]` | 每层的 KV Cache |
+| `current_length_data` | `[num_layers * 2]` | BIM 模式共享；Batching 模式用 `valid_lengths` |
+| `path_indices` | `[accept_len+1]` | 从 3D retrieve_indices 提取后的 1D 路径 |
+
+### 12.6 维度规范要点
+
+1. **始终保持 Batch 维度**：即使 `batch_size=1`，也不要 squeeze
+2. **返回 Tensor 而非标量**：`best_candidate`、`accept_length` 等必须是 Tensor
+3. **统一 3D retrieve_indices**：始终使用 `[B, L, D]` 格式
+4. **安全获取标量**：使用 `tensor[0].item()` 而非 `tensor.item()`

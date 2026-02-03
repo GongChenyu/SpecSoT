@@ -38,10 +38,9 @@ from .config import (
 from .core import (
     KVCache,
     initialize_past_key_values,
-    reset_past_key_values,
+    initialize_eagle_past_key_values,
     Drafter,
     BranchStateManager,
-    AlignmentManager,
 )
 
 # =====================================================================
@@ -67,7 +66,7 @@ from .processing import (
     SemanticLogitsProcessor,
     VocabScanner,
     prepare_skeleton_input,
-    prepare_parallel_branches,
+    prepare_parallel_inputs,
     parse_skeleton_output,
 )
 
@@ -108,10 +107,9 @@ __all__ = [
     # 核心组件层
     "KVCache",
     "initialize_past_key_values",
-    "reset_past_key_values",
+    "initialize_eagle_past_key_values",
     "Drafter",
     "BranchStateManager",
-    "AlignmentManager",
     "evaluate_single",
     "evaluate_parallel",
     
@@ -130,7 +128,7 @@ __all__ = [
     "SemanticLogitsProcessor",
     "VocabScanner",
     "prepare_skeleton_input",
-    "prepare_parallel_branches",
+    "prepare_parallel_inputs",
     "parse_skeleton_output",
     
     # 工具层

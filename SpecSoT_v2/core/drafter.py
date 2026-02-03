@@ -140,8 +140,7 @@ class Drafter:
         
         # Phase 4: Cache Cleanup - 重置 cache 到 expand_root 后的长度
         # tree_grow 阶段产生的 cache 是临时的，需要丢弃
-        if self.eagle_layer.kv_cache_initialized:
-            self.eagle_layer.set_kv_cache_length(expand_root_cache_len)
+        self.eagle_layer.set_kv_cache_length(expand_root_cache_len)
 
         # Phase 3: Post Process
         return self._post_process_tree(
@@ -176,12 +175,9 @@ class Drafter:
         eagle = self.eagle_layer
         actual_hidden = hidden_states
 
-        # 获取 KV cache 长度（兼容 KVCache 类和 tuple 格式）
-        kv_len = eagle.get_kv_cache_length() if eagle.kv_cache_initialized else 0
-        if not eagle.kv_cache_initialized and eagle.draft_past_key_values is not None:
-            # 回退到旧的 tuple 格式
-            kv_len = eagle.draft_past_key_values[0][0].shape[2] if hasattr(eagle.draft_past_key_values[0][0], 'shape') else eagle.draft_past_key_values[0][0].shape[-2]
-
+        # 获取 KV cache 长度
+        kv_len = eagle.get_kv_cache_length()
+       
         # 根据当前状态确定输入
         # 核心逻辑：确保 actual_hidden 和 actual_input 长度一致
         if kv_len > 0:
@@ -227,11 +223,6 @@ class Drafter:
             past_key_values=eagle.draft_past_key_values,
             use_cache=True,
         )
-
-        # 如果使用 KVCache 类，draft_past_key_values 已经原地更新，不需要重新赋值
-        # 但为了兼容旧的 tuple 格式，仍然保留赋值
-        if not eagle.kv_cache_initialized:
-            eagle.draft_past_key_values = past_key_values
 
         # 生成 top-k 候选
         last_hidden = out_hidden[:, -1]
@@ -492,21 +483,19 @@ class Drafter:
         bsz = input_ids.shape[0]
         input_ids = input_ids.to(hidden_states.device)
 
-        # 记录之前的 KV 长度（兼容 KVCache 类和 tuple 格式）
-        prev_kv_len = eagle.get_kv_cache_length() if eagle.kv_cache_initialized else 0
-        if not eagle.kv_cache_initialized and eagle.draft_past_key_values is not None:
-            prev_kv_len = eagle.draft_past_key_values[0][0].shape[2]
+        # 记录之前的 KV 长度
+        prev_kv_len = eagle.get_kv_cache_length()
 
         # Phase 1: Expand Root
         scores, parents, next_token, next_input_ids, last_hidden = \
             self._expand_root_dist_prefill(hidden_states, input_ids, chunk_idx)
 
         # 记录 expand_root 后的 cache 长度（用于之后重置）
-        expand_root_cache_len = eagle.get_kv_cache_length() if eagle.kv_cache_initialized else 0
+        expand_root_cache_len = eagle.get_kv_cache_length()
 
         # 计算增量 KV cache
         incremental_kv = None
-        if eagle.kv_cache_initialized and eagle.draft_past_key_values is not None:
+        if eagle.draft_past_key_values is not None:
             # 使用 KVCache 类
             key_cache, value_cache = eagle.draft_past_key_values[0]
             current_len = key_cache.shape[2]  # KVCache.shape[2] 是 current_length
@@ -514,14 +503,6 @@ class Drafter:
                 # 从 KVCache 的底层数据中提取增量部分
                 new_key = key_cache.data[:, :, prev_kv_len:current_len, :].clone()
                 new_value = value_cache.data[:, :, prev_kv_len:current_len, :].clone()
-                incremental_kv = (new_key, new_value)
-        elif eagle.draft_past_key_values is not None:
-            # 旧的 tuple 格式
-            key, value = eagle.draft_past_key_values[0]
-            current_len = key.shape[2]
-            if current_len > prev_kv_len:
-                new_key = key[:, :, prev_kv_len:current_len, :].clone()
-                new_value = value[:, :, prev_kv_len:current_len, :].clone()
                 incremental_kv = (new_key, new_value)
 
         # 非最后 chunk
@@ -546,8 +527,7 @@ class Drafter:
         tokens_list.extend(loop_tokens)
 
         # Phase 4: Cache Cleanup - 重置 cache 到 expand_root 后的长度
-        if eagle.kv_cache_initialized:
-            eagle.set_kv_cache_length(expand_root_cache_len)
+        eagle.set_kv_cache_length(expand_root_cache_len)
 
         # Phase 3: Post Process
         tree_result = self._post_process_tree(
@@ -567,10 +547,8 @@ class Drafter:
         actual_input = input_ids
         actual_hidden = hidden_states
 
-        # 获取 KV cache 长度（兼容 KVCache 类和 tuple 格式）
-        kv_len = eagle.get_kv_cache_length() if eagle.kv_cache_initialized else 0
-        if not eagle.kv_cache_initialized and eagle.draft_past_key_values is not None:
-            kv_len = eagle.draft_past_key_values[0][0].shape[2]
+        # 获取 KV cache 长度
+        kv_len = eagle.get_kv_cache_length()
 
         position_ids = None
         if eagle.full_position_ids is not None and kv_len > 0:
@@ -586,9 +564,7 @@ class Drafter:
             use_cache=True,
         )
 
-        # 如果使用 KVCache 类，draft_past_key_values 已经原地更新
-        if not eagle.kv_cache_initialized:
-            eagle.draft_past_key_values = past_key_values
+        # 使用 KVCache 类时，draft_past_key_values 已经原地更新，无需手动设置
 
         last_hidden = out_hidden[:, -1]
         last_headout = eagle.get_head_output(last_hidden)

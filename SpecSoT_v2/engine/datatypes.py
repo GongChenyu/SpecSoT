@@ -43,8 +43,6 @@ class SkeletonPrefillResult:
     task_input_ids: torch.Tensor
     input_len: int
     base_prompt_len: int
-    max_kv_len: int
-    hidden_states: Optional[torch.Tensor] = None
 
 
 @dataclass

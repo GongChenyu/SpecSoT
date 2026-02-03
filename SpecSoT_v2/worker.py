@@ -22,47 +22,10 @@ from typing import Dict, Any, Optional
 from threading import Thread, Event
 from dataclasses import dataclass
 
-from SpecSoT_v2.engine.generator import SpecSoTGenerator
-from SpecSoT_v2.config.distributed_config import DistributedConfig
-from SpecSoT_v2.utils.gpu_monitor import GPUMemoryMonitor
-
-
-# =============================================================================
-# 日志工具
-# =============================================================================
-
-def setup_worker_logger(rank: int, log_dir: str) -> logging.Logger:
-    """
-    设置 Worker 日志
-    
-    控制台: 只显示 INFO 级别的关键信息
-    文件: 记录所有 DEBUG 级别的详细信息
-    """
-    logger_name = f"SpecSoT-Rank{rank}" if rank >= 0 else "SpecSoT"
-    logger = logging.getLogger(logger_name)
-    
-    if logger.handlers:  # 已配置过
-        return logger
-    
-    logger.setLevel(logging.DEBUG)
-    
-    # 文件处理器 - 记录所有级别
-    log_file = os.path.join(log_dir, f"rank_{rank}.log" if rank >= 0 else "specsot.log")
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s', 
-        datefmt='%H:%M:%S'
-    ))
-    logger.addHandler(file_handler)
-    
-    # 控制台处理器 - 只显示 INFO 以上
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter('%(message)s'))
-    logger.addHandler(console_handler)
-    
-    return logger
+from .engine.generator import SpecSoTGenerator
+from .config.distributed_config import DistributedConfig
+from .utils.gpu_monitor import GPUMemoryMonitor
+from .utils.logging import get_logger
 
 
 # =============================================================================
@@ -112,7 +75,7 @@ class WorkerEngine:
         
         # 设置日志
         rank = getattr(args, 'rank', 0)
-        self.logger = setup_worker_logger(rank, self.log_dir)
+        self.logger = get_logger(rank=rank, log_dir=self.log_dir)
         
         # 模型（延迟初始化）
         self.model = None
@@ -175,6 +138,9 @@ class WorkerEngine:
         
         if distributed:
             self.logger.info(f"  - rank={args.rank}/{args.world_size-1}")
+        else:
+            device = getattr(args, 'device', 'cuda:0')
+            self.logger.info(f"  - 设备: {device}")
         
         self.logger.debug(f"完整配置: {vars(args)}")
 
@@ -202,13 +168,16 @@ class WorkerEngine:
         self.logger.info("正在加载模型...")
         start = time.time()
 
+        # 设备选择：分布式模式由环境变量控制，非分布式使用 --device 参数
+        device = getattr(self.args, 'device', 'cuda:0')
+        
         self.model = SpecSoTGenerator.from_pretrained(
             base_model_path=self.args.base_model_path,
             ea_model_path=self.args.eagle_model_path,
             use_eagle3=self.args.use_eagle3,
             dtype=torch.float16,
             low_cpu_mem_usage=True,
-            device_map="cuda:0",
+            device_map=device,
             total_token=40,
             depth=4,
             top_k=6,
@@ -235,7 +204,8 @@ class WorkerEngine:
         monitor_device = torch.cuda.current_device() if torch.cuda.is_available() else 0
 
         for i in range(len(df)):
-            task_prompt = df.loc[i, "task_prompt"]
+            # task_prompt = df.loc[i, "task_prompt"]
+            task_prompt = "Please explain the benefits of playing basketball from six aspects, with each explanation within 100 words."
             self.logger.info(f"\n[样本 {i+1}/{len(df)}] {task_prompt[:60]}...")
             
             result = self._run_single_inference(task_prompt, monitor_device)
@@ -258,6 +228,9 @@ class WorkerEngine:
             result = self.model.generate(
                 task_prompt=task_prompt,
                 max_new_tokens=args.max_new_tokens,
+                temperature=getattr(args, 'temperature', 0.0),
+                top_p=getattr(args, 'top_p', 0.0),
+                top_k=getattr(args, 'top_k', 0),
                 enable_parallel=args.enable_parallel,
                 use_scheduling=args.use_scheduling,
                 max_parallel=args.max_parallel,

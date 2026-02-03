@@ -10,15 +10,15 @@ SpecSoT 核心组件层
 - eval_utils: 评估工具
 """
 
-from .kv_cache import KVCache, initialize_past_key_values, reset_past_key_values
+from .kv_cache import KVCache, initialize_past_key_values, initialize_eagle_past_key_values
 from .drafter import Drafter
-from .state_manager import BranchStateManager, AlignmentManager, BranchState
+from .state_manager import BranchStateManager, BranchState
 
 __all__ = [
     # KV Cache
     "KVCache",
     "initialize_past_key_values", 
-    "reset_past_key_values",
+    "initialize_eagle_past_key_values",
     # Drafter
     "Drafter",
     # State Manager

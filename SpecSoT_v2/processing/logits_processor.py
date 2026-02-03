@@ -811,7 +811,7 @@ class SemanticLogitsProcessor(LogitsProcessor):
         if allowed_mask is not None:
             # 使用布尔索引，一次性设置所有非允许 token 为 -inf
             scores = scores.clone()
-            scores[:, ~allowed_mask] = float('-inf')
+            scores[:, :, ~allowed_mask] = float('-inf')
         
         return scores
 
@@ -830,7 +830,7 @@ class SemanticLogitsProcessor(LogitsProcessor):
                 logits_size = scores.shape[-1]
                 allowed_mask = self.vocab_scanner.get_mask('lbracket', device, logits_size)
                 scores = scores.clone()
-                scores[:, ~allowed_mask] = float('-inf')
+                scores[:, :, ~allowed_mask] = float('-inf')
             return scores
         
         # 增量解码新 token

@@ -22,7 +22,7 @@ import subprocess
 from typing import List, Optional
 from dataclasses import dataclass
 
-from utils.utils import DeviceConfig, parse_devices, cleanup_ports
+from .utils.utils import DeviceConfig, parse_devices, cleanup_ports
 
 
 @dataclass
@@ -155,6 +155,10 @@ class MasterEngine:
         print(f"任务类型: {self.args.task}")
         print(f"样本数量: {self.args.num_samples}")
         print(f"最大Token: {self.args.max_new_tokens}")
+        
+        if not self.args.distributed:
+            device = getattr(self.args, 'device', 'cuda:0')
+            print(f"设备: {device}")
         
         if self.args.distributed:
             print(f"设备数量: {self.world_size}")

@@ -23,6 +23,8 @@ from enum import Enum
 
 import torch
 import torch.nn as nn
+from .kv_cache import initialize_past_key_values, initialize_eagle_past_key_values, KVCache
+from ..utils.utils import stack_with_left_padding
 
 
 class InferenceMode(Enum):
@@ -111,16 +113,7 @@ class BranchStateManager:
         
         # 模式
         self.mode = InferenceMode.BIM if use_bim_mode else InferenceMode.BATCHING
-        
-        # ===== BIM 模式状态 =====
-        # BIM: Branch Index Map
-        self.bim: Optional[torch.Tensor] = None
-        # Position IDs
-        self.position_ids: Optional[torch.Tensor] = None
-        # 预分配的 BIM 缓冲区
-        self._bim_buffer: Optional[torch.Tensor] = None
-        self._position_buffer: Optional[torch.Tensor] = None
-        
+
         # ===== 通用状态 =====
         # 分支状态字典
         self.branch_states: Dict[int, BranchState] = {}
@@ -128,46 +121,24 @@ class BranchStateManager:
         self.active_branches: List[int] = []
         # 共享 prefix 长度
         self.prefix_len: int = 0
-        # 当前总序列长度（BIM 模式）
-        self.current_seq_len: int = 0
+
         
-        # ===== Batching 模式状态 =====
-        # 各分支的有效长度（Batching 模式下所有分支 cache 长度相同，但有效长度不同）
-        self.valid_lengths: Optional[torch.Tensor] = None
-        # 各分支的 padding 长度
-        self.padding_lengths: Optional[torch.Tensor] = None
-        
-        # 初始化缓冲区
-        self._init_buffers()
-    
-    def _init_buffers(self):
-        """初始化预分配缓冲区"""
         if self.use_bim_mode:
-            # BIM 缓冲区: [max_seq_len]
-            self._bim_buffer = torch.full(
-                (self.max_seq_len,), 
-                self.BIM_EMPTY, 
-                dtype=torch.long, 
-                device=self.device
-            )
-            # Position 缓冲区: [max_seq_len]
-            self._position_buffer = torch.zeros(
-                self.max_seq_len, 
-                dtype=torch.long, 
-                device=self.device
-            )
+            # ===== BIM 模式状态 =====
+            # BIM: Branch Index Map
+            self.bim = torch.full(self.max_seq_len, self.BIM_EMPTY, dtype=torch.long, device=self.device)
+            # Position IDs
+            self.position_ids = torch.zeros(self.max_seq_len, dtype=torch.long, device=self.device)
+            # 当前总序列长度（BIM 模式）
+            self.current_seq_len: int = 0
         else:
-            # Batching 模式: 有效长度缓冲区
-            self.valid_lengths = torch.zeros(
-                self.max_branches, 
-                dtype=torch.long, 
-                device=self.device
-            )
-            self.padding_lengths = torch.zeros(
-                self.max_branches, 
-                dtype=torch.long, 
-                device=self.device
-            )
+            # ===== Batching 模式状态 =====
+            # Batching 模式下的 padding mask [num_branches, max_len]，1=有效，0=padding
+            self.padding_mask: Optional[torch.Tensor] = None
+            # Batching 模式下的 position_ids [num_branches, max_len]
+            self.batching_position_ids: Optional[torch.Tensor] = None
+            # Batching 模式下各分支长度列表
+            self.branch_lengths: List[int] = []
     
     def reset(self):
         """重置所有状态"""
@@ -177,38 +148,136 @@ class BranchStateManager:
         self.current_seq_len = 0
         
         if self.use_bim_mode:
-            self._bim_buffer.fill_(self.BIM_EMPTY)
-            self._position_buffer.fill_(0)
-            self.bim = None
-            self.position_ids = None
+            self.bim.fill_(self.BIM_EMPTY)
+            self.position_ids.fill_(0)
         else:
-            self.valid_lengths.fill_(0)
-            self.padding_lengths.fill_(0)
+            # Batching 模式状态重置
+            self.padding_mask = None
+            self.batching_position_ids = None
+            self.branch_lengths = []
+
+    # =========================================================================
+    # Skeleton -> Parallel 阶段转换
+    # =========================================================================
+
+    def init_parallel_state(
+        self,
+        base_model: nn.Module,
+        eagle_layer: nn.Module,
+        prefix_len: int,
+        num_branches: int,
+        max_new_tokens: int,
+        old_past_key_values: List,
+        old_past_key_values_data: List[torch.Tensor],
+        old_current_length_data: torch.Tensor,
+    ) -> Tuple[List, List, torch.Tensor]:
+        """
+        初始化并行阶段状态（Skeleton -> Parallel 转换）
+        
+        同时处理 Base Model 和 Eagle Layer 的 KV Cache：
+        - Base Model: 根据模式复用/扩展 KV cache
+        - Eagle Layer: 复用 prefix cache 并扩展到各分支
+        
+        根据不同模式执行不同的初始化：
+        - BIM 模式: 重置 cache 长度到 prefix_len，复用原有内存
+        - Batching 模式: 创建新的 batch KV cache，复制 prefix cache
+        
+        Args:
+            base_model: Base Model（用于获取配置）
+            eagle_layer: Eagle Layer（用于处理 draft cache）
+            prefix_len: 共享 prefix 长度
+            num_branches: 分支数量
+            max_new_tokens: 最大生成 token 数
+            old_past_key_values: 原有的 KV cache（skeleton 阶段的）
+            old_past_key_values_data: 原有的 KV cache 数据列表（连续内存块）
+            old_current_length_data: 原有的 current_length_data
+            
+        Returns:
+            past_key_values: 新的 KV cache 列表
+            past_key_values_data: 新的 KV cache 数据列表
+            current_length_data: 新的 current_length_data
+        """
+        # 重置状态管理器
+        self.reset()
+        self.prefix_len = prefix_len
+        self.current_seq_len = prefix_len
+        
+        max_kv_len = old_past_key_values_data[0].shape[3]  # seq_len 维度
+        
+        if self.use_bim_mode:
+            # =================================================================
+            # BIM 模式：复用原有内存，只重置长度
+            # =================================================================
+            
+            # 1. Base Model Cache: 重置长度
+            old_current_length_data.fill_(prefix_len)
+            
+            # 2. Eagle Layer Cache: 重置长度
+            eagle_layer.draft_current_length_data.fill_(prefix_len)
+            
+            # 3. 设置 BIM 状态
+            self.bim[:prefix_len] = self.BIM_PREFIX
+            self.position_ids[:prefix_len] = torch.arange(prefix_len, device=self.device)
+            
+            return old_past_key_values, old_past_key_values_data, old_current_length_data
+        
+        else:
+            # =================================================================
+            # Batching 模式：创建新 cache，复制 prefix 到各分支
+            # =================================================================
+            
+            # -----------------------------------------------------------------
+            # 1. Base Model Cache: 创建新 cache 并复制 prefix
+            # -----------------------------------------------------------------
+            new_past_key_values, new_data_list, new_length_data = initialize_past_key_values(
+                model=base_model, max_length=max_kv_len, batch_size=num_branches
+            )
+            
+            # 直接操作连续内存块：复制 prefix 并扩展到 num_branches
+            # old_data 形状: [num_layers*2, 1, num_heads, seq_len, head_dim]
+            # new_data 形状: [num_layers*2, num_branches, num_heads, seq_len, head_dim]
+            for old_data, new_data in zip(old_past_key_values_data, new_data_list):
+                prefix_data = old_data[:, :, :, :prefix_len, :]
+                new_data[:, :, :, :prefix_len, :] = prefix_data.expand(-1, num_branches, -1, -1, -1)
+            
+            new_length_data.fill_(prefix_len)
+            
+            # -----------------------------------------------------------------
+            # 2. Eagle Layer Cache: 创建新 cache 并复制 prefix
+            # -----------------------------------------------------------------
+            old_draft_data = eagle_layer.draft_past_key_values_data  # 保存引用
+            
+            # 使用统一函数初始化新的 KV Cache
+            new_draft_kv, new_draft_data, new_draft_length = initialize_eagle_past_key_values(
+                eagle_layer, max_length=max_kv_len, batch_size=num_branches
+            )
+            
+            # 直接操作连续内存块（与 Base Model 一致）
+            # old_draft_data 形状: [num_layers*2, 1, num_heads, seq_len, head_dim] 或 List
+            # new_draft_data 形状: [num_layers*2, num_branches, num_heads, seq_len, head_dim] 或 List
+            if isinstance(old_draft_data, list):
+                for old_data, new_data in zip(old_draft_data, new_draft_data):
+                    prefix_data = old_data[:, :, :, :prefix_len, :]
+                    new_data[:, :, :, :prefix_len, :] = prefix_data.expand(-1, num_branches, -1, -1, -1)
+            else:
+                # 单个 tensor 的情况
+                prefix_data = old_draft_data[:, :, :, :prefix_len, :]
+                new_draft_data[:, :, :, :prefix_len, :] = prefix_data.expand(-1, num_branches, -1, -1, -1)
+            
+            new_draft_length.fill_(prefix_len)
+            
+            # 设置新的 KV Cache 到 eagle_layer
+            eagle_layer.reset_state()
+            eagle_layer.draft_past_key_values = new_draft_kv
+            eagle_layer.draft_past_key_values_data = new_draft_data
+            eagle_layer.draft_current_length_data = new_draft_length
+            
+            return new_past_key_values, new_data_list, new_length_data
+ 
     
     # =========================================================================
     # BIM 模式接口
     # =========================================================================
-    
-    def init_prefix(self, prefix_len: int):
-        """
-        初始化共享 prefix
-        
-        Args:
-            prefix_len: prefix 长度
-        """
-        self.prefix_len = prefix_len
-        self.current_seq_len = prefix_len
-        
-        if self.use_bim_mode:
-            # 设置 prefix 区域的 BIM
-            self._bim_buffer[:prefix_len] = self.BIM_PREFIX
-            # 设置 prefix 的 position ids
-            self._position_buffer[:prefix_len] = torch.arange(
-                prefix_len, device=self.device
-            )
-            # 更新视图
-            self.bim = self._bim_buffer[:prefix_len]
-            self.position_ids = self._position_buffer[:prefix_len]
     
     def add_branch(
         self, 
@@ -239,10 +308,10 @@ class BranchStateManager:
                 raise RuntimeError(f"序列长度超出限制: {end_pos} > {self.max_seq_len}")
             
             # 设置 BIM
-            self._bim_buffer[start_pos:end_pos] = branch_id
+            self.bim[start_pos:end_pos] = branch_id
             
             # 设置 Position IDs（从 prefix_len 开始）
-            self._position_buffer[start_pos:end_pos] = torch.arange(
+            self.position_ids[start_pos:end_pos] = torch.arange(
                 self.prefix_len, 
                 self.prefix_len + branch_len, 
                 device=self.device
@@ -250,10 +319,6 @@ class BranchStateManager:
             
             # 更新当前序列长度
             self.current_seq_len = max(self.current_seq_len, end_pos)
-            
-            # 更新视图
-            self.bim = self._bim_buffer[:self.current_seq_len]
-            self.position_ids = self._position_buffer[:self.current_seq_len]
             
             # 创建分支状态
             state = BranchState(
@@ -270,7 +335,6 @@ class BranchStateManager:
                 current_len=branch_len,
                 cache_len=self.prefix_len + branch_len,
             )
-            self.valid_lengths[len(self.active_branches)] = state.cache_len
         
         self.branch_states[branch_id] = state
         self.active_branches.append(branch_id)
@@ -298,17 +362,13 @@ class BranchStateManager:
             if new_end > self.max_seq_len:
                 raise RuntimeError(f"序列长度超出限制: {new_end} > {self.max_seq_len}")
             
-            self._bim_buffer[old_end:new_end] = branch_id
+            self.bim[old_end:new_end] = branch_id
             
             # Position 继续递增
             for i in range(num_tokens):
-                self._position_buffer[old_end + i] = self.prefix_len + state.current_len + i
+                self.position_ids[old_end + i] = self.prefix_len + state.current_len + i
             
             self.current_seq_len = max(self.current_seq_len, new_end)
-            
-            # 更新视图
-            self.bim = self._bim_buffer[:self.current_seq_len]
-            self.position_ids = self._position_buffer[:self.current_seq_len]
         
         # 更新状态
         state.current_len += num_tokens
@@ -463,14 +523,14 @@ class BranchStateManager:
             # 更新 BIM
             start_pos = self.prefix_len + current_offset
             end_pos = start_pos + curr_len
-            self._bim_buffer[start_pos:end_pos] = branch_id
+            self.bim[start_pos:end_pos] = branch_id
 
             # Position IDs: 每个分支从 prefix_len 开始独立计数
             curr_pos = list(range(self.prefix_len, self.prefix_len + curr_len))
             pos_ids_list.extend(curr_pos)
 
-            # 更新 Position buffer
-            self._position_buffer[start_pos:end_pos] = torch.tensor(
+            # 更新 Position IDs
+            self.position_ids[start_pos:end_pos] = torch.tensor(
                 curr_pos, device=self.device, dtype=torch.long
             )
 
@@ -478,8 +538,6 @@ class BranchStateManager:
 
         # 更新序列长度
         self.current_seq_len = self.prefix_len + current_offset
-        self.bim = self._bim_buffer[:self.current_seq_len]
-        self.position_ids = self._position_buffer[:self.current_seq_len]
 
         # 构建输出 Tensor
         flat_tokens = torch.tensor(
@@ -489,7 +547,7 @@ class BranchStateManager:
             pos_ids_list, device=self.device, dtype=torch.long
         ).unsqueeze(0)
 
-        return flat_tokens, self._bim_buffer, position_ids, branch_begins, branch_lengths
+        return flat_tokens, self.bim, position_ids, branch_begins, branch_lengths
 
     def align_branches(
         self,
@@ -511,44 +569,273 @@ class BranchStateManager:
         if self.use_bim_mode:
             raise ValueError("align_branches 仅用于 Batching 模式")
 
-        num_branches = len(branch_prompts)
         branch_lengths = [len(p) for p in branch_prompts]
-        max_len = max(branch_lengths)
 
-        # 分配输出 tensor
-        padded_input = torch.full(
-            (num_branches, max_len),
-            pad_token_id,
-            dtype=torch.long,
-            device=self.device,
-        )
-        position_ids = torch.zeros(
-            (num_branches, max_len),
-            dtype=torch.long,
-            device=self.device,
-        )
-        padding_mask = torch.zeros(
-            (num_branches, max_len),
-            dtype=torch.long,
-            device=self.device,
+        # 左填充对齐（使用工具函数）
+        prompt_tensors = [torch.tensor(p, dtype=torch.long, device=self.device) for p in branch_prompts]
+        padded_input, padding_mask = stack_with_left_padding(
+            prompt_tensors, pad_token_id, self.device, return_mask=True
         )
 
-        # 左填充对齐
-        for i, (prompt, length) in enumerate(zip(branch_prompts, branch_lengths)):
-            pad_len = max_len - length
-            padded_input[i, pad_len:] = torch.tensor(
-                prompt, device=self.device, dtype=torch.long
-            )
-            position_ids[i, pad_len:] = torch.arange(
-                self.prefix_len, self.prefix_len + length, device=self.device
-            )
-            padding_mask[i, pad_len:] = 1
+        # position_ids 需要单独处理（每个分支从 prefix_len 开始）
+        position_tensors = [
+            torch.arange(self.prefix_len, self.prefix_len + len(p), dtype=torch.long, device=self.device)
+            for p in branch_prompts
+        ]
+        position_ids = stack_with_left_padding(position_tensors, 0, self.device)
 
-            # 更新 padding_lengths
-            self.padding_lengths[i] = pad_len
-            self.valid_lengths[i] = self.prefix_len + length
+        # 保存到状态管理器
+        self.padding_mask = padding_mask
+        self.batching_position_ids = position_ids
+        self.branch_lengths = branch_lengths
 
         return padded_input, position_ids, padding_mask
+
+    # =========================================================================
+    # 并行 Prefill 准备方法
+    # =========================================================================
+
+    def prepare_parallel_prefill_bim(
+        self,
+        branch_prompts: List[List[int]],
+        branch_ids: List[int],
+        max_new_tokens: int,
+    ) -> Dict[str, Any]:
+        """
+        BIM 模式：准备并行 Prefill 所需的所有数据
+
+        包括：
+        1. 重置 KV Cache 长度到 prefix_len（外部执行）
+        2. 构建拉平序列和 BIM
+        3. 构建 position_ids
+        4. 构建 attention_mask
+        5. 计算 tips_indices
+
+        Args:
+            branch_prompts: 各分支的 prompt token 列表
+            branch_ids: 分支 ID 列表
+            max_new_tokens: 最大生成 token 数（用于 BIM 容量计算）
+
+        Returns:
+            Dict 包含:
+                - input_ids: [1, branches_total_len] 拉平的分支 tokens
+                - branch_index_map: [total_capacity] BIM 索引
+                - position_ids: [1, branches_total_len] 位置编码
+                - attention_mask: [1, 1, branches_len, prefix_len + branches_len]
+                - tips_indices: [num_branches] 各分支 tip 在拉平序列中的位置
+                - branch_begins: 各分支在拉平序列中的起始位置
+                - branch_lengths: 各分支长度
+        """
+        if not self.use_bim_mode:
+            raise ValueError("prepare_parallel_prefill_bim 仅用于 BIM 模式")
+
+        # 1. 复用 flatten_branches 构建拉平序列和 BIM
+        input_ids, _, position_ids, branch_begins, branch_lengths = self.flatten_branches(
+            branch_prompts, branch_ids
+        )
+
+        # 2. 计算 tips_indices（各分支 tip 在拉平序列中的位置）
+        tips_indices = torch.tensor(
+            [begin + length - 1 for begin, length in zip(branch_begins, branch_lengths)],
+            device=self.device
+        )
+
+        # 3. 构建扩展容量的 BIM（预留 max_new_tokens 空间）
+        branches_len = sum(branch_lengths)
+        total_capacity = self.prefix_len + branches_len + max_new_tokens + 128
+        branch_index_map = torch.full(
+            (total_capacity,), self.BIM_EMPTY, dtype=torch.long, device=self.device
+        )
+        # 复制已有的 BIM 数据
+        branch_index_map[:self.current_seq_len] = self.bim[:self.current_seq_len]
+
+        # 4. 构建 attention mask
+        attention_mask = self.build_bim_prefill_mask(
+            branch_index_map, self.prefix_len, branches_len
+        )
+
+        # 5. 注册分支状态
+        for branch_id, begin, length in zip(branch_ids, branch_begins, branch_lengths):
+            state = BranchState(
+                branch_id=branch_id,
+                start_pos=self.prefix_len + begin,
+                current_len=length,
+                cache_len=self.prefix_len + length,
+            )
+            self.branch_states[branch_id] = state
+            self.active_branches.append(branch_id)
+
+        return {
+            'input_ids': input_ids,
+            'branch_index_map': branch_index_map,
+            'position_ids': position_ids,
+            'attention_mask': attention_mask,
+            'tips_indices': tips_indices,
+            'branch_begins': branch_begins,
+            'branch_lengths': branch_lengths,
+        }
+
+    def prepare_parallel_prefill_batching(
+        self,
+        branch_prompts: List[List[int]],
+        branch_ids: List[int],
+        pad_token_id: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Batching 模式：准备并行 Prefill 所需的所有数据
+
+        包括：
+        1. 左填充对齐各分支
+        2. 构建 position_ids
+        3. 构建 padding_mask
+        4. 构建 attention_mask (causal + padding)
+
+        注意：KV Cache 的扩展（复制 prefix 到各分支）需要外部执行
+
+        Args:
+            branch_prompts: 各分支的 prompt token 列表
+            branch_ids: 分支 ID 列表
+            pad_token_id: padding token ID
+
+        Returns:
+            Dict 包含:
+                - input_ids: [num_branches, max_len] 对齐后的输入
+                - position_ids: [num_branches, max_len] 位置编码
+                - padding_mask: [num_branches, max_len] padding 掩码 (1=有效, 0=padding)
+                - attention_mask: [num_branches, 1, max_len, prefix_len + max_len]
+                - branch_lengths: 各分支长度
+        """
+        if self.use_bim_mode:
+            raise ValueError("prepare_parallel_prefill_batching 仅用于 Batching 模式")
+
+        # 1. 左填充对齐（复用 align_branches）
+        padded_input, position_ids, padding_mask = self.align_branches(branch_prompts, pad_token_id)
+        
+        max_branch_len = padded_input.shape[1]
+        branch_lengths = self.branch_lengths  # align_branches 已设置
+
+        # 2. 构建 attention mask
+        attention_mask = self.build_batching_prefill_mask(
+            padding_mask, branch_lengths, max_branch_len
+        )
+
+        # 3. 注册分支状态
+        for branch_id, length in zip(branch_ids, branch_lengths):
+            state = BranchState(
+                branch_id=branch_id,
+                start_pos=0,
+                current_len=length,
+                cache_len=self.prefix_len + length,
+            )
+            self.branch_states[branch_id] = state
+            self.active_branches.append(branch_id)
+
+        return {
+            'input_ids': padded_input,
+            'position_ids': position_ids,
+            'padding_mask': padding_mask,
+            'attention_mask': attention_mask,
+            'branch_lengths': branch_lengths,
+        }
+
+    def build_bim_prefill_mask(
+        self,
+        branch_index_map: torch.Tensor,
+        prefix_len: int,
+        branches_len: int,
+    ) -> torch.Tensor:
+        """
+        构建 BIM 模式并行 Prefill 的 attention mask
+
+        确保：
+        1. 所有分支都能看到共享的 prefix
+        2. 每个分支只能看到自己的内容
+        3. 遵循因果约束
+
+        Args:
+            branch_index_map: BIM 索引 [total_capacity]
+            prefix_len: prefix 长度
+            branches_len: 分支总长度
+
+        Returns:
+            attention_mask: [1, 1, branches_len, prefix_len + branches_len]
+        """
+        total_len = prefix_len + branches_len
+
+        total_ids = branch_index_map[:total_len]
+        branch_ids = branch_index_map[prefix_len:total_len]
+
+        # 初始化为全部遮蔽
+        mask = torch.full(
+            (1, 1, branches_len, total_len),
+            torch.finfo(self.dtype).min, device=self.device
+        )
+
+        # 1. Prefix 全部可见 (BIM == -1)
+        is_prefix = (total_ids == self.BIM_PREFIX).unsqueeze(0)
+        mask.masked_fill_(is_prefix, 0)
+
+        # 2. 同分支可见 + 因果约束
+        branch_ids_view = branch_ids.unsqueeze(1)  # [branches_len, 1]
+        total_ids_view = total_ids.unsqueeze(0)    # [1, total_len]
+        block_mask = (branch_ids_view == total_ids_view)
+
+        branch_idx = torch.arange(prefix_len, total_len, device=self.device).unsqueeze(1)
+        total_idx = torch.arange(total_len, device=self.device).unsqueeze(0)
+        causal_mask = (total_idx <= branch_idx)
+
+        valid_mask = block_mask & causal_mask
+        mask.masked_fill_(valid_mask, 0)
+
+        return mask
+
+    def build_batching_prefill_mask(
+        self,
+        padding_mask: torch.Tensor,
+        branch_lengths: List[int],
+        max_branch_len: int,
+    ) -> torch.Tensor:
+        """
+        构建 Batching 模式并行 Prefill 的 attention mask
+
+        确保：
+        1. 可以看到 prefix（KV Cache）
+        2. 可以看到自己的有效 tokens（非 padding）
+        3. 遵循因果约束
+
+        Args:
+            padding_mask: [num_branches, max_branch_len] padding 掩码 (1=有效, 0=padding)
+            branch_lengths: 各分支长度
+            max_branch_len: 最大分支长度
+
+        Returns:
+            attention_mask: [num_branches, 1, max_branch_len, prefix_len + max_branch_len]
+        """
+        num_branches = len(branch_lengths)
+        total_key_len = self.prefix_len + max_branch_len
+
+        mask = torch.full(
+            (num_branches, 1, max_branch_len, total_key_len),
+            torch.finfo(self.dtype).min,
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+        for i, length in enumerate(branch_lengths):
+            pad_len = max_branch_len - length
+
+            # 可以看到 prefix（KV Cache 中的部分）
+            mask[i, :, :, :self.prefix_len] = 0
+
+            # 可以看到自己分支的有效 tokens（因果）
+            for q in range(max_branch_len):
+                if padding_mask[i, q] == 1:  # 有效位置
+                    # 可以看到 prefix_len 到 prefix_len + q 的位置（只看有效部分）
+                    valid_start = self.prefix_len + pad_len
+                    valid_end = self.prefix_len + q + 1
+                    mask[i, :, q, valid_start:valid_end] = 0
+
+        return mask
     
     # =========================================================================
     # Attention Mask 构建
@@ -593,7 +880,7 @@ class BranchStateManager:
             key_len = self.current_seq_len
         
         # 获取 BIM
-        bim = self.bim[:key_len] if self.bim is not None else self._bim_buffer[:key_len]
+        bim = self.bim[:key_len]
         
         # query 对应的 BIM（通常是序列末尾的 query_len 个位置）
         query_start = key_len - query_len
@@ -655,15 +942,161 @@ class BranchStateManager:
         causal_mask = (key_idx <= query_idx + query_offset)
         mask = mask.masked_fill(causal_mask, 0)
         
-        # padding 掩码（如果有）
-        if self.padding_lengths is not None:
-            for i in range(min(batch_size, len(self.active_branches))):
-                pad_len = self.padding_lengths[i].item()
-                if pad_len > 0:
-                    mask[i, :, :, :pad_len] = torch.finfo(self.dtype).min
+        # padding 掩码（使用 padding_mask 而不是 padding_lengths）
+        if self.padding_mask is not None and self.padding_mask.shape[0] >= batch_size:
+            # padding_mask: [num_branches, seq_len], 1=有效, 0=padding
+            # 需要将 padding 位置在 attention mask 中遮蔽
+            for i in range(batch_size):
+                # 找到 padding 结束的位置
+                valid_positions = self.padding_mask[i].nonzero(as_tuple=True)[0]
+                if len(valid_positions) > 0:
+                    first_valid = valid_positions[0].item()
+                    if first_valid > 0:
+                        # 遮蔽 KV cache 中对应的 padding 部分
+                        # key 中的 padding 位置 = prefix_len + [0, first_valid)
+                        pad_start = self.prefix_len
+                        pad_end = self.prefix_len + first_valid
+                        mask[i, :, :, pad_start:pad_end] = torch.finfo(self.dtype).min
         
         return mask
     
+    # =========================================================================
+    # Continuous Batching (混合 Prefill + Decode) Mask 构建
+    # =========================================================================
+
+    def build_continuous_decode_mask(
+        self,
+        history_bim: torch.Tensor,
+        combined_bim_tensor: torch.Tensor,
+        current_length: int,
+        num_old_branches: int,
+        num_nodes: int,
+        tree_mask: Optional[torch.Tensor],
+        new_prompt_lengths: List[int],
+    ) -> torch.Tensor:
+        """
+        构建 Continuous Batching 并行解码阶段的混合 Attention Mask
+        
+        用于处理 PD (Parallel Decoding) 混合状态，即同时包含：
+        - 老分支的 draft tokens（使用 tree_mask）
+        - 新分支的 prompt tokens（使用 causal mask）
+        
+        该掩码确保：
+        1. 所有分支都能看到共享的 prefix (BIM == -1)
+        2. 每个分支只能看到自己的历史和当前输入
+        3. 老分支内部遵循 tree_mask
+        4. 新分支内部遵循 causal mask
+        
+        Args:
+            history_bim: 历史 BIM (Branch Index Map) [current_length]
+            combined_bim_tensor: 当前输入的 BIM [total_input_len]
+            current_length: 历史 KV Cache 的长度
+            num_old_branches: 老分支数量
+            num_nodes: 每个老分支的 draft tokens 数量
+            tree_mask: 老分支的 tree mask [num_old, 1, num_nodes, num_nodes] (可选)
+            new_prompt_lengths: 新分支的 prompt 长度列表
+            
+        Returns:
+            combined_mask: [1, 1, total_input_len, current_length + total_input_len]
+        """
+        total_input_len = combined_bim_tensor.shape[0]
+        
+        # =====================================================================
+        # 1. 构建 Cross Mask (输入 -> 历史)
+        # =====================================================================
+        cross_mask = torch.full(
+            (1, 1, total_input_len, current_length),
+            torch.finfo(self.dtype).min, device=self.device
+        )
+        
+        # Prefix 全部可见 (BIM == -1)
+        is_prefix = (history_bim == self.BIM_PREFIX).view(1, 1, 1, -1)
+        cross_mask.masked_fill_(is_prefix, 0)
+        
+        # 同分支可见
+        input_ids_view = combined_bim_tensor.view(1, 1, -1, 1)
+        hist_ids_view = history_bim.view(1, 1, 1, -1)
+        is_same_branch = (input_ids_view == hist_ids_view)
+        cross_mask.masked_fill_(is_same_branch, 0)
+        
+        # =====================================================================
+        # 2. 构建 Input Block Mask (输入 -> 输入)
+        # =====================================================================
+        input_block_mask = torch.full(
+            (total_input_len, total_input_len),
+            torch.finfo(self.dtype).min, device=self.device
+        )
+        
+        # 老分支的 tree mask（块对角结构）
+        if num_old_branches > 0 and tree_mask is not None:
+            converted_tree_mask = torch.where(
+                tree_mask == 1, 0.0, torch.finfo(self.dtype).min
+            )
+            for i in range(num_old_branches):
+                st, ed = i * num_nodes, (i + 1) * num_nodes
+                input_block_mask[st:ed, st:ed] = converted_tree_mask[i, 0, :, :]
+        
+        # 新分支的 causal mask
+        if len(new_prompt_lengths) > 0:
+            old_total_len = num_old_branches * num_nodes if (num_old_branches > 0 and tree_mask is not None) else 0
+            
+            # 每个新分支内部使用 causal mask
+            offset = old_total_len
+            for prompt_len in new_prompt_lengths:
+                for j in range(prompt_len):
+                    for k in range(j + 1):
+                        input_block_mask[offset + j, offset + k] = 0
+                offset += prompt_len
+        
+        input_block_mask = input_block_mask.unsqueeze(0).unsqueeze(0)
+        
+        # =====================================================================
+        # 3. 合并 Cross Mask 和 Input Block Mask
+        # =====================================================================
+        combined_mask = torch.cat([cross_mask, input_block_mask], dim=-1)
+        
+        return combined_mask
+
+    def prepare_continuous_decode_inputs(
+        self,
+        old_branch_ids: List[int],
+        new_branch_ids: List[int],
+        new_prompt_tokens: Dict[int, List[int]],
+        prefix_len: int,
+    ) -> Dict[str, Any]:
+        """
+        准备 Continuous Batching 的输入数据
+        
+        同时处理：
+        - 老分支的 decode 输入
+        - 新分支的 prefill 输入
+        
+        Args:
+            old_branch_ids: 老分支 ID 列表
+            new_branch_ids: 新分支 ID 列表
+            new_prompt_tokens: 新分支的 prompt tokens {branch_id: [token_ids]}
+            prefix_len: 共享 prefix 长度
+            
+        Returns:
+            Dict 包含:
+                - new_prompt_lengths: 新分支 prompt 长度列表
+                - new_branch_bim: 新分支的 BIM 列表
+                - combined_bim: 整体 BIM tensor
+        """
+        new_prompt_lengths = []
+        new_branch_bim = []
+        
+        for bid in new_branch_ids:
+            prompt = new_prompt_tokens[bid]
+            prompt_len = len(prompt)
+            new_prompt_lengths.append(prompt_len)
+            new_branch_bim.extend([bid] * prompt_len)
+        
+        return {
+            'new_prompt_lengths': new_prompt_lengths,
+            'new_branch_bim': new_branch_bim,
+        }
+
     # =========================================================================
     # 工具方法
     # =========================================================================
@@ -693,193 +1126,3 @@ class BranchStateManager:
             },
         }
 
-
-class AlignmentManager:
-    """
-    Batching 模式对齐管理器
-    
-    处理不同长度输入的对齐：
-    - 左填充对齐
-    - Position IDs 计算
-    - Attention Mask 构建
-    """
-    
-    def __init__(
-        self,
-        device: torch.device = None,
-        dtype: torch.dtype = torch.float32,
-        pad_token_id: int = 0,
-    ):
-        """
-        初始化对齐管理器
-        
-        Args:
-            device: 设备
-            dtype: 数据类型
-            pad_token_id: padding token ID
-        """
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.dtype = dtype
-        self.pad_token_id = pad_token_id
-    
-    def align_inputs(
-        self,
-        input_ids_list: List[torch.Tensor],
-        cache_lengths: List[int],
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        对齐不同长度的输入
-        
-        Args:
-            input_ids_list: 各分支的 input_ids 列表
-            cache_lengths: 各分支的 KV Cache 长度
-            
-        Returns:
-            aligned_input_ids: [batch_size, max_len]
-            position_ids: [batch_size, max_len]
-            padding_mask: [batch_size, max_len] (1=有效, 0=padding)
-        """
-        batch_size = len(input_ids_list)
-        input_lengths = [ids.shape[-1] for ids in input_ids_list]
-        max_len = max(input_lengths)
-        
-        # 分配输出 tensor
-        aligned_input_ids = torch.full(
-            (batch_size, max_len),
-            self.pad_token_id,
-            dtype=torch.long,
-            device=self.device,
-        )
-        position_ids = torch.zeros(
-            (batch_size, max_len),
-            dtype=torch.long,
-            device=self.device,
-        )
-        padding_mask = torch.zeros(
-            (batch_size, max_len),
-            dtype=torch.long,
-            device=self.device,
-        )
-        
-        # 左填充对齐
-        for i, (ids, input_len, cache_len) in enumerate(
-            zip(input_ids_list, input_lengths, cache_lengths)
-        ):
-            pad_len = max_len - input_len
-            
-            # 复制 input_ids（右对齐）
-            aligned_input_ids[i, pad_len:] = ids.view(-1)
-            
-            # Position IDs（从 cache_len 开始）
-            position_ids[i, pad_len:] = torch.arange(
-                cache_len, cache_len + input_len, device=self.device
-            )
-            
-            # Padding mask
-            padding_mask[i, pad_len:] = 1
-        
-        return aligned_input_ids, position_ids, padding_mask
-    
-    def build_aligned_attention_mask(
-        self,
-        padding_mask: torch.Tensor,
-        cache_lengths: List[int],
-        query_len: int,
-    ) -> torch.Tensor:
-        """
-        构建对齐后的 attention mask
-        
-        Args:
-            padding_mask: [batch_size, query_len]
-            cache_lengths: 各分支的 KV Cache 长度
-            query_len: query 长度
-            
-        Returns:
-            attention_mask: [batch_size, 1, query_len, max_key_len]
-        """
-        batch_size = padding_mask.shape[0]
-        max_cache_len = max(cache_lengths)
-        max_key_len = max_cache_len + query_len
-        
-        # 初始化
-        mask = torch.full(
-            (batch_size, 1, query_len, max_key_len),
-            torch.finfo(self.dtype).min,
-            device=self.device,
-            dtype=self.dtype,
-        )
-        
-        for i, cache_len in enumerate(cache_lengths):
-            # 因果掩码
-            for q in range(query_len):
-                # 可以看到 cache 中的所有位置
-                mask[i, 0, q, :cache_len] = 0
-                # 可以看到当前位置及之前的输入
-                if padding_mask[i, q] == 1:
-                    # 找到这个 query 位置对应的有效范围
-                    valid_start = (padding_mask[i, :q+1] == 0).sum().item()
-                    mask[i, 0, q, cache_len:cache_len + q + 1 - valid_start] = 0
-        
-        return mask
-    
-    def align_caches_for_new_branch(
-        self,
-        prefix_cache: Any,  # KVCache
-        target_length: int,
-        prefix_len: int,
-    ) -> Any:
-        """
-        为新分支创建等长的 KV Cache
-        
-        Batching 模式下，所有分支的 cache 长度必须一致。
-        新分支的 cache = prefix + padding
-        
-        Args:
-            prefix_cache: 共享的 prefix cache
-            target_length: 目标 cache 长度（老分支的 cache 长度）
-            prefix_len: prefix 长度
-            
-        Returns:
-            新分支的 KV Cache
-        """
-        # 这个方法需要 KVCache 的具体实现
-        # 这里只提供接口定义
-        raise NotImplementedError("需要 KVCache 类的具体实现")
-
-
-def build_bim_for_parallel_branches(
-    prefix_len: int,
-    branch_lengths: List[int],
-    device: torch.device,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    为并行分支构建 BIM 和 Position IDs
-    
-    Args:
-        prefix_len: prefix 长度
-        branch_lengths: 各分支长度列表
-        device: 设备
-        
-    Returns:
-        bim: Branch Index Map [total_len]
-        position_ids: Position IDs [total_len]
-    """
-    total_len = prefix_len + sum(branch_lengths)
-    
-    bim = torch.empty(total_len, dtype=torch.long, device=device)
-    position_ids = torch.empty(total_len, dtype=torch.long, device=device)
-    
-    # Prefix
-    bim[:prefix_len] = BranchStateManager.BIM_PREFIX
-    position_ids[:prefix_len] = torch.arange(prefix_len, device=device)
-    
-    # Branches
-    current_pos = prefix_len
-    for branch_id, branch_len in enumerate(branch_lengths):
-        bim[current_pos:current_pos + branch_len] = branch_id
-        position_ids[current_pos:current_pos + branch_len] = torch.arange(
-            prefix_len, prefix_len + branch_len, device=device
-        )
-        current_pos += branch_len
-    
-    return bim, position_ids

@@ -44,13 +44,13 @@ def create_parser():
 
     # 模型配置
     # Qwen3
-    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B", help="Base Model 路径")
-    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
-    # parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
-    # LLaMA3
-    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
-    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
+    parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B", help="Base Model 路径")
+    parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
     parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
+    # LLaMA3
+    # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
+    # parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
     # Vicuna
     # parser.add_argument("--base_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/vicuna-7b-v1.3", help="Base Model 路径")
     # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
@@ -59,8 +59,9 @@ def create_parser():
     # 推理配置
     parser.add_argument("--enable_parallel", type=str2bool, default=True, help="启用骨架并行模式")
     parser.add_argument("--use_semantic_constraint", type=str2bool, default=True, help="是否使用 FSM 语义约束")
-    parser.add_argument("--use_bim_mode", type=str2bool, default=True, help="是否使用 BIM 模式 (True: In-One-Sequence, False: Batching)")
-    parser.add_argument("--max_new_tokens", type=int, default=3000, help="最大生成token数")
+    parser.add_argument("--use_bim_mode", type=str2bool, default=False, help="是否使用 BIM 模式 (True: In-One-Sequence, False: Batching)")
+    parser.add_argument("--max_new_tokens", type=int, default=1000, help="最大生成token数")
+    parser.add_argument("--device", type=str, default="cuda:7", help="默认设备 (非分布式模式下使用)")
     
     # 分布式配置
     parser.add_argument("--distributed", type=str2bool, default=False, help="是否启用分布式模式")
@@ -76,7 +77,7 @@ def create_parser():
     parser.add_argument("--rank", type=int, default=0, help="当前进程的rank（内部使用）")
 
     # 调度配置
-    parser.add_argument("--use_scheduling", type=str2bool, default=True, help="是否启用分支调度")
+    parser.add_argument("--use_scheduling", type=str2bool, default=False, help="是否启用分支调度")
     parser.add_argument("--max_parallel", type=int, default=2, help="每设备最大并行分支数")
 
     # 任务配置

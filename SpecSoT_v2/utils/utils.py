@@ -16,10 +16,46 @@ import numpy as np
 from typing import List, Tuple, Optional, Dict
 from dataclasses import dataclass
 
+from transformers.generation.logits_process import (
+    LogitsProcessorList,
+    RepetitionPenaltyLogitsProcessor,
+    TemperatureLogitsWarper,
+    TopKLogitsWarper,
+    TopPLogitsWarper,
+)
 
-# =============================================================================
-# 设备配置相关
-# =============================================================================
+def prepare_logits_processor(
+    temperature: float = 0.0,
+    repetition_penalty: float = 0.0,
+    top_p: float = 0.0,
+    top_k: int = 0,
+) -> LogitsProcessorList:
+    """
+    准备采样 logits 处理器列表（温度、top-p、top-k 等）
+    
+    Args:
+        temperature: 采样温度 (0 表示 greedy)
+        repetition_penalty: 重复惩罚系数
+        top_p: nucleus sampling 阈值
+        top_k: top-k sampling 数量
+        
+    Returns:
+        LogitsProcessorList: 处理器列表
+    """
+    processor_list = LogitsProcessorList()
+    
+    if temperature > 1e-5:
+        if temperature != 1.0:
+            processor_list.append(TemperatureLogitsWarper(temperature))
+        if repetition_penalty > 1.0:
+            processor_list.append(RepetitionPenaltyLogitsProcessor(repetition_penalty))
+        if 1e-8 <= top_p < 1.0:
+            processor_list.append(TopPLogitsWarper(top_p))
+        if top_k > 0:
+            processor_list.append(TopKLogitsWarper(top_k))
+            
+    return processor_list
+
 
 @dataclass
 class DeviceConfig:

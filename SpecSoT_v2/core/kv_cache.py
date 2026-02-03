@@ -108,7 +108,7 @@ class KVCache:
         return self.data.narrow(dim, 0, self.current_length.item())
 
 
-def initialize_past_key_values(model, max_length=2200):
+def initialize_past_key_values(model, max_length=2200, batch_size=1):
     """
     Initialize past key and value states for a given transformer model.
 
@@ -117,6 +117,8 @@ def initialize_past_key_values(model, max_length=2200):
 
     Args:
         model (nn.Module): The transformer model for which past key-value states need to be initialized.
+        max_length (int): Maximum sequence length for the cache.
+        batch_size (int): Batch size for the cache (default: 1).
 
     Returns:
         tuple:
@@ -126,8 +128,6 @@ def initialize_past_key_values(model, max_length=2200):
     """
     # Extracting configuration from the model
     config = model.config
-    # Initializing the batch size to 1, this can be modified if different batch sizes are required
-    batch_size = 1
     # Initializing a tensor to store past keys and values for all layers
 
     devices=[]
@@ -199,18 +199,135 @@ def initialize_past_key_values(model, max_length=2200):
     return past_key_values, past_key_values_data_list, current_length_data
 
 
-def reset_past_key_values(passed_key_values: List[torch.Tensor]) -> List[torch.Tensor]:
+import torch
+
+def initialize_eagle_past_key_values(model, max_length=2200, batch_size=1):
     """
-    重置 KV Cache 长度为零
+    静态方法：为 Eagle 模型（Eagle2 或 Eagle3）初始化 KV Cache。
+    
+    融合了 Base Model 的设备感知能力和 Eagle 类的配置适配逻辑。
     
     Args:
-        passed_key_values: KV Cache 列表
+        model: Eagle 模型实例 (Eagle2 或 Eagle3)
+        max_length (int): Cache 最大长度
+        batch_size (int): Batch size
         
     Returns:
-        重置后的 KV Cache 列表
+        tuple: 
+            - past_key_values (list[list[KVCache]]): 封装好的 Cache 对象列表
+            - past_key_values_data_list (list[Tensor]): 实际存储数据的 Tensor 列表
+            - current_length_data (Tensor): 长度追踪 Tensor (CPU)
     """
-    for i in range(len(passed_key_values)):
-        for j in range(2):
-            passed_key_values[i][j].current_length.fill_(0)
-    return passed_key_values
+    config = model.config
+
+    # ------------------------------------------------------------------
+    # 1. 结构归一化 (Normalize Model Structure)
+    # ------------------------------------------------------------------
+    if hasattr(model, 'midlayer'):
+        # Eagle 3: 单层结构
+        layers = [model.midlayer]
+    elif hasattr(model, 'layers'):
+        # Eagle 2: 列表结构 (ModuleList)
+        layers = model.layers
+    else:
+        raise AttributeError("Unknown Eagle architecture: missing 'midlayer' or 'layers'.")
+    
+    num_layers = len(layers)
+
+    # ------------------------------------------------------------------
+    # 2. 关键参数探测 (Robust Parameter Detection)
+    # ------------------------------------------------------------------
+    # [Dtype & Device] 从第一层权重的属性获取，比 model.dtype 更可靠
+    ref_weight = layers[0].self_attn.q_proj.weight
+    dtype = ref_weight.dtype
+    
+    # [Config] 兼容 Eagle2 (MHA) 和 Eagle3 (GQA)
+    # 如果 config 中没有 num_key_value_heads，则默认为 num_attention_heads (MHA)
+    num_heads = config.num_attention_heads
+    num_kv_heads = getattr(config, "num_key_value_heads", num_heads)
+    if num_kv_heads is None: num_kv_heads = num_heads
+    
+    head_dim = getattr(config, "head_dim", config.hidden_size // num_heads)
+
+    # ------------------------------------------------------------------
+    # 3. 显存预分配 (Memory Allocation with Device Awareness)
+    # 逻辑：按设备分组分配内存块，减少碎片，支持跨设备部署
+    # ------------------------------------------------------------------
+    devices = [layer.self_attn.q_proj.weight.device for layer in layers]
+    past_key_values_data_list = []
+    
+    # 遍历层设备，构建连续的内存块
+    current_device = devices[0]
+    layers_on_current_device = 0
+    
+    for i, device in enumerate(devices):
+        # 如果设备变更（跨卡），或者是最后一层，则分配之前的内存块
+        if device != current_device:
+            _allocate_block(
+                past_key_values_data_list, layers_on_current_device, 
+                batch_size, num_kv_heads, max_length, head_dim, 
+                current_device, dtype
+            )
+            current_device = device
+            layers_on_current_device = 0
+        
+        layers_on_current_device += 1
+
+    # 分配最后一个设备的剩余层
+    _allocate_block(
+        past_key_values_data_list, layers_on_current_device, 
+        batch_size, num_kv_heads, max_length, head_dim, 
+        current_device, dtype
+    )
+
+    # ------------------------------------------------------------------
+    # 4. 长度追踪与对象封装 (Length Tracking & Object Wrapping)
+    # ------------------------------------------------------------------
+    # [Length Tensor] 必须在 CPU 上以便快速索引和更新
+    current_length_data = torch.zeros(num_layers * 2, dtype=torch.long, device="cpu")
+    
+    past_key_values = []
+    
+    # 将扁平的 data_list 映射回每层的 KVCache 对象
+    # data_list index 逻辑：只要设备变了，list index 就会 +1
+    data_list_idx = 0 
+    layer_idx_in_block = 0
+    start_device_idx = devices[0].index if devices[0].index is not None else 0
+    
+    for i in range(num_layers):
+        device_idx = devices[i].index if devices[i].index is not None else 0
+        
+        # 如果当前层设备与起始设备索引跨度超过了当前块，切换到下一个 data block
+        # 注意：这里简化处理，假设 data_list 顺序与 devices 遍历顺序一致
+        if i > 0 and devices[i] != devices[i-1]:
+            data_list_idx += 1
+            layer_idx_in_block = 0
+            
+        kv_block = past_key_values_data_list[data_list_idx]
+        
+        past_key_values.append([
+            KVCache(kv_block[2 * layer_idx_in_block],     current_length_data[2 * i]),
+            KVCache(kv_block[2 * layer_idx_in_block + 1], current_length_data[2 * i + 1])
+        ])
+        
+        layer_idx_in_block += 1
+
+    return past_key_values, past_key_values_data_list, current_length_data
+
+
+def _allocate_block(data_list, num_layers, batch_size, num_kv_heads, max_length, head_dim, device, dtype):
+    """辅助函数：分配显存块并追加到列表"""
+    if num_layers > 0:
+        data = torch.zeros(
+            num_layers * 2, # Key 和 Value 各一个
+            batch_size,
+            num_kv_heads,
+            max_length,
+            head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        data_list.append(data)
+
+
 

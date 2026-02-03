@@ -59,6 +59,14 @@ def add_inference_args(parser):
         help="采样温度 (0 表示 greedy)"
     )
     parser.add_argument(
+        "--top_p", type=float, default=0.0,
+        help="Nucleus sampling 参数"
+    )
+    parser.add_argument(
+        "--top_k", type=int, default=0,
+        help="Top-k sampling 参数"
+    )
+    parser.add_argument(
         "--enable_parallel", type=str2bool, default=True,
         help="启用骨架并行模式"
     )
@@ -93,16 +101,19 @@ def cmd_infer(args):
 
     # 执行推理
     print("正在生成...")
-    output_ids, stats = model.generate(
+    result = model.generate(
         task_prompt=args.prompt,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
+        top_p=args.top_p,
+        top_k=args.top_k,
         enable_parallel=args.enable_parallel,
         use_semantic_constraint=args.use_semantic_constraint,
     )
 
-    # 解码输出
-    text = model.tokenizer.decode(output_ids[0].tolist(), skip_special_tokens=True)
+    # 从 GenerateResult 中提取信息
+    text = result.output_text
+    stats = result.stats
 
     print("\n" + "=" * 50)
     print("生成结果:")

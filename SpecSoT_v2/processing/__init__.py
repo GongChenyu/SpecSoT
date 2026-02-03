@@ -9,11 +9,12 @@ SpecSoT 处理层
 
 from .prompts import (
     prepare_skeleton_input,
-    prepare_parallel_branches,
+    prepare_parallel_inputs,
     parse_skeleton_output,
     skeleton_prompt,
     parallel_prompt,
     system_prompt,
+    build_prompt,
 )
 from .logits_processor import (
     SemanticLogitsProcessor,
@@ -23,11 +24,12 @@ from .logits_processor import (
 __all__ = [
     # Prompts
     "prepare_skeleton_input",
-    "prepare_parallel_branches", 
+    "prepare_parallel_inputs", 
     "parse_skeleton_output",
     "skeleton_prompt",
     "parallel_prompt",
     "system_prompt",
+    "build_prompt",
     # Logits Processor
     "SemanticLogitsProcessor",
     "VocabScanner",

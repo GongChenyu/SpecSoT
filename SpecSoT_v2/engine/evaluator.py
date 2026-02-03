@@ -79,9 +79,9 @@ def greedy_sampling(
     必须逐个 token 验证，因为 Semantic Processor 需要完整的上下文历史。
     
     Args:
-        input_ids: 前置 token IDs [seq_len] 或 [1, seq_len]
-        logits: [num_paths, seq_len, vocab]
-        candidates: [num_paths, seq_len]
+        input_ids: 前置 token IDs [batch_size=1, prefix_len] 
+        logits: [batch_size=1, num_paths, seq_len, vocab] 
+        candidates: [batch_size=1, num_paths, seq_len]
         logits_processor: logits 处理器
         
     Returns:
@@ -90,71 +90,122 @@ def greedy_sampling(
         sample_p: 采样概率分布 [vocab]
     """
     device = logits.device
-    num_paths, seq_len = candidates.shape
+    batch_size, num_paths, seq_len, vocab_size = logits.shape
     
     # 维度处理
     if input_ids.ndim == 1:
         input_ids = input_ids.unsqueeze(0)  # [1, prefix_len]
+    if logits.ndim == 3:
+        logits = logits.unsqueeze(0)        # [1, num_paths, seq_len, vocab]
+    if candidates.ndim == 2:
+        candidates = candidates.unsqueeze(0) # [1, num_paths, seq_len]
     
     # 初始化
-    accept_cand = candidates[0, :1]  # [1] Root token
+    accept_cand = candidates[:, 0, :1]  # 取 Batch 0, Path 0, Root Token
     accept_length = 1
-    best_candidate = 0
-    active_mask = torch.ones(num_paths, dtype=torch.bool, device=device)
-    current_full_context = input_ids.clone()
+    best_candidate_idx = 0  # 暂时用 scalar 记录 index，最后转 tensor
+    # active_mask: [1, num_paths] - 标记哪些路径还是活跃的
+    active_mask = torch.ones((batch_size, num_paths), dtype=torch.bool, device=device)
+    # full_context_prefix: [1, prefix_len]
+    full_context_prefix = input_ids.clone()
 
     # 循环验证
     for i in range(1, seq_len):
-        # 筛选活跃路径
-        prefix_match = (candidates[:, :accept_length] == accept_cand).all(dim=1)
+        # 3.1 筛选活跃路径
+        # candidates: [1, N, L] -> slice -> [1, N, i]
+        # accept_cand: [1, i] -> unsqueeze -> [1, 1, i] 以便广播比较
+        current_draft_slice = candidates[:, :, :accept_length]
+        current_accept_seq = accept_cand.unsqueeze(1)
+        
+        # 检查前缀匹配: [1, N]
+        prefix_match = (current_draft_slice == current_accept_seq).all(dim=2)
         active_mask = active_mask & prefix_match
         
+        # 如果没有活跃路径，提前退出
         if not active_mask.any():
             break
         
-        # 获取第一个活跃路径
-        fi = torch.nonzero(active_mask, as_tuple=True)[0][0].item()
+        # 3.2 获取第一个活跃路径的索引 (Grid Search 逻辑通常只需验证第一个合法的即可)
+        # torch.nonzero 返回 [k, 2] (batch_idx, path_idx)，我们需要 path_idx
+        # 因为 batch=1, batch_idx 恒为 0
+        active_indices = torch.nonzero(active_mask, as_tuple=False)
+        fi = active_indices[0, 1].item() # first active path index
         
-        # 准备数据
-        current_logits_input = logits[fi, i - 1].unsqueeze(0)  # [1, vocab]
-        draft_context = candidates[fi, :i].unsqueeze(0)
-        step_context = torch.cat([current_full_context, draft_context], dim=1)
+        # 3.3 准备 LogitsProcessor 的输入
+        # 这里的 logits 需要是 [1, vocab]，对应当前步 (i-1)
+        current_logits_input = logits[:, fi, i - 1, :].unsqueeze(0) # [1, 1, vocab]
         
-        # 应用 Logits Processor
-        processed_logits = logits_processor(step_context, current_logits_input)[0]
+        # 构造当前完整的 context: prefix + draft_so_far
+        # draft_tokens: [1, i] (从 candidates 中取前 i 个 token)
+        draft_context = candidates[:, fi, :i]
+        step_context = torch.cat([full_context_prefix, draft_context], dim=1) # [1, prefix + i]
         
-        # Greedy 选择
-        selected_token_id = torch.argmax(processed_logits).item()
+        # 3.4 应用 Logits Processor (核心：语义约束在这里生效)
+        # 输入: input_ids=[1, seq], scores=[1, vocab]
+        # 输出: scores=[1, vocab]
+        processed_logits = logits_processor(step_context, current_logits_input)
         
-        # 验证 Draft
-        tok_mask = (candidates[:, i] == selected_token_id) & active_mask
+        # 3.5 Greedy 选择
+        selected_token_id = torch.argmax(processed_logits, dim=-1).item()
         
-        if tok_mask.any():
-            # Accept
-            best_candidate = torch.nonzero(tok_mask, as_tuple=True)[0][0].item()
-            new_tok = torch.tensor([selected_token_id], device=device)
-            accept_cand = torch.cat([accept_cand, new_tok], dim=0)
+        # 3.6 验证 Draft 是否匹配 Greedy 结果
+        # 检查当前步 (i) 的 token 是否等于 selected_token_id
+        # candidates[:, :, i]: [1, N]
+        target_token_mask = (candidates[:, :, i] == selected_token_id)
+        
+        # 只有既是 active 又是 target token 的路径才能继续
+        valid_next_mask = target_token_mask & active_mask
+        
+        if valid_next_mask.any():
+            # Accept: 更新最佳路径索引
+            # 找到第一个符合条件的路径
+            valid_indices = torch.nonzero(valid_next_mask, as_tuple=False)
+            best_candidate_idx = valid_indices[0, 1].item()
+            
+            # 更新已接受序列
+            new_tok = torch.tensor([[selected_token_id]], device=device) # [1, 1]
+            accept_cand = torch.cat([accept_cand, new_tok], dim=1) # [1, len+1]
             accept_length += 1
         else:
-            # Reject
+            # Reject: 贪婪解码结果与 Draft 不符，且无备选路径
             break
 
-    # 计算最终 logits
+    # ==========================================
+    # 4. 计算最终用于采样的 Logits (Next Token Prediction)
+    # ==========================================
+    # 如果接受长度小于 seq_len，我们需要基于最后一个接受的 token 预测下一个
+    # 如果接受长度等于 seq_len，我们基于最后一个 token 预测（即 drafting 结束后的下一步）
+    
+    # 确定最终使用的 logits 输入位置
+    # 注意：logits 的 seq_len 维度对应的是 input 的位置
+    # 如果 accept_length 是 3 (root, t1, t2)，我们要预测 t3
+    # 对应的 logits 索引应该是 accept_length - 1 (因为 logits 是从第0个输入开始产生的输出)
+    
     if accept_length < seq_len:
-        final_logits_input = logits[best_candidate, accept_length - 1].unsqueeze(0)
-        final_draft_part = candidates[best_candidate, :accept_length].unsqueeze(0)
+        logit_idx = accept_length - 1
+        final_draft_part = candidates[:, best_candidate_idx, :accept_length] # [1, len]
     else:
-        final_logits_input = logits[best_candidate, -1].unsqueeze(0)
-        final_draft_part = candidates[best_candidate, :].unsqueeze(0)
+        logit_idx = -1 # 最后一个
+        final_draft_part = candidates[:, best_candidate_idx, :] # [1, len]
 
-    final_context = torch.cat([current_full_context, final_draft_part], dim=1)
-    processed_final = logits_processor(final_context, final_logits_input)[0]
-    sample_p = torch.softmax(processed_final, dim=0)
+    final_logits_input = logits[:, best_candidate_idx, logit_idx, :].unsqueeze(0) # [1, 1, vocab]
+    
+    # 最终 Context
+    final_context = torch.cat([full_context_prefix, final_draft_part], dim=1)
+    
+    # 再次经过 Processor 处理（确保最终输出也符合语义约束）
+    processed_final = logits_processor(final_context, final_logits_input)
+    
+    # 计算概率
+    sample_p = torch.softmax(processed_final, dim=-1) # [1, vocab]
 
+    # ==========================================
+    # 5. 返回结果 (保持 Tensor 格式)
+    # ==========================================
     return (
-        torch.tensor(best_candidate, device=device),
-        torch.tensor(accept_length - 1, device=device),  # 不含 root
-        sample_p
+        torch.tensor([best_candidate_idx], device=device), # [1]
+        torch.tensor([accept_length - 1], device=device),  # [1], 减去 root
+        sample_p # [1, vocab]
     )
 
 
@@ -256,9 +307,9 @@ def rejection_sampling(
     sample_logits = torch.softmax(processed, dim=0)
     
     return (
-        torch.tensor(best_candidate, device=device),
-        torch.tensor(accept_length - 1, device=device),
-        sample_logits,
+        torch.tensor([best_candidate], device=device),  # [1]
+        torch.tensor([accept_length - 1], device=device),  # [1]
+        sample_logits.unsqueeze(0) if sample_logits.ndim == 1 else sample_logits,  # [1, V]
     )
 
 
@@ -323,19 +374,25 @@ def logits_sampling(
                     f"SemanticLogitsProcessor only supports batch_size=1, got {batch_size}"
                 )
             
-            for b in range(batch_size):
-                bc, al, sl = greedy_sampling(
-                    input_ids[b], logits[b], candidates[b], logits_processor
-                )
-                best_candidates.append(bc)
-                accept_lengths.append(al)
-                sample_logits_list.append(sl)
+            # for b in range(batch_size):
+            #     bc, al, sl = greedy_sampling(
+            #         input_ids[b], logits[b], candidates[b], logits_processor
+            #     )
+            #     best_candidates.append(bc)
+            #     accept_lengths.append(al)
+            #     sample_logits_list.append(sl)
             
-            return (
-                torch.stack(best_candidates),
-                torch.stack(accept_lengths),
-                torch.stack(sample_logits_list),
+            # return (
+            #     torch.stack(best_candidates),
+            #     torch.stack(accept_lengths),
+            #     torch.stack(sample_logits_list),
+            # )
+
+            best_candidate, accept_length, sample_p = greedy_sampling(
+                input_ids, logits, candidates, logits_processor
             )
+
+            return best_candidate, accept_length, sample_p
     
     # Rejection Sampling Mode
     else:
@@ -392,16 +449,10 @@ def evaluate_single(
     if input_ids.device != device:
         input_ids = input_ids.to(device)
 
-    # 处理维度: logits 应该是 [batch, seq, vocab] 或 [batch, 1, seq, vocab]
-    squeeze_output = False
+    # 处理维度: logits 应该是 [batch, 1, seq, vocab]
     if logits.ndim == 3:
         # [batch, seq, vocab] -> [batch, 1, seq, vocab]
         logits = logits.unsqueeze(1)
-        squeeze_output = True
-    elif logits.ndim == 4 and logits.shape[1] == 1:
-        # [batch, 1, seq, vocab] - 已经是正确形状
-        squeeze_output = True
-    # logits 现在应该是 [batch, num_heads, seq, vocab] 或 [batch, 1, seq, vocab]
     
     # 从 retrieve_indices 提取候选
     if retrieve_indices.ndim == 2:
@@ -443,15 +494,14 @@ def evaluate_single(
     )
     
     # 采样 Bonus Token
+    # 确保 sample_logits 是 2D [batch, vocab]（torch.multinomial 只接受 1D 或 2D）
+    if sample_logits.ndim == 3:
+        sample_logits = sample_logits.squeeze(1)  # [batch, 1, vocab] -> [batch, vocab]
+    
     if logits_processor is not None:
         sample_token = torch.multinomial(sample_logits, 1)
     else:
         sample_token = torch.argmax(sample_logits, dim=-1, keepdim=True)
-    
-    if squeeze_output:
-        best_candidate = best_candidate.squeeze(0)
-        accept_length = accept_length.squeeze(0)
-        sample_token = sample_token.squeeze(0)
     
     return best_candidate, accept_length, sample_token
 
@@ -512,21 +562,28 @@ def evaluate_parallel(
         target_ids = torch.argmax(candidate_logits[i, :, :-1, :], dim=-1)
         draft_ids = candidates[i, :, 1:]
         posterior_mask = (draft_ids == target_ids).int()
-        
+
         path_accept_lens = torch.cumprod(posterior_mask, dim=-1).sum(dim=-1)
         accept_length, best_candidate = path_accept_lens.max(dim=0)
-        
+
+        # 维度规范：确保返回 [1] 维度的 tensor
+        if accept_length.ndim == 0:
+            accept_length = accept_length.unsqueeze(0)
+        if best_candidate.ndim == 0:
+            best_candidate = best_candidate.unsqueeze(0)
+
         # 采样
-        next_pos = accept_length.clamp(max=candidate_logits.shape[2] - 1)
-        sample_logits = candidate_logits[i, best_candidate, next_pos, :]
+        next_pos = accept_length[0].clamp(max=candidate_logits.shape[2] - 1)
+        sample_logits = candidate_logits[i, best_candidate[0], next_pos, :]
         sample_token = torch.argmax(sample_logits, dim=-1, keepdim=True)
-        
+
         best_candidates.append(best_candidate)
         accept_lengths.append(accept_length)
         sample_tokens.append(sample_token)
-    
+
+    # 使用 cat 拼接，因为每个元素已经是 [1] 维度
     return (
-        torch.stack(best_candidates),
-        torch.stack(accept_lengths),
-        torch.stack(sample_tokens),
+        torch.cat(best_candidates, dim=0),  # [num_para]
+        torch.cat(accept_lengths, dim=0),   # [num_para]
+        torch.cat(sample_tokens, dim=0),    # [num_para, 1]
     )

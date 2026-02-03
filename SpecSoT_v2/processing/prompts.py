@@ -307,7 +307,7 @@ def prepare_skeleton_input(
     return input_ids, prefix_ids
 
 
-def prepare_parallel_branches(
+def prepare_parallel_inputs(
     tokenizer,
     tasks: List[Dict],
     skeleton_text: str,

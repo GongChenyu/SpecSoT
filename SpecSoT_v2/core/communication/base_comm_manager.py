@@ -860,31 +860,18 @@ class ZMQCommManagerBase(ABC):
                 # 处理eagle cache
                 if chunk_idx >= 0 and eagle_cache_received_indicator[chunk_idx] == 0:
                     # 设置Eagle Layer的draft_past_key_values
-                    # 检查是否使用 KVCache 类（统一使用 KVCache 类管理）
-                    if eagle_layer.kv_cache_initialized and eagle_layer.draft_past_key_values is not None:
+                    # 使用 KVCache 类（由 InferenceEngine 统一管理）
+                    if eagle_layer.draft_past_key_values is not None:
                         # 使用 KVCache 类的 cat 方法追加数据
                         key_cache, value_cache = eagle_layer.draft_past_key_values[0]
                         key_cache.cat(key, dim=2)
                         value_cache.cat(value, dim=2)
                         current_kv_length = key_cache.current_length.item()
                     else:
-                        # 未初始化时直接设置（不应该发生，因为 prefill 时会初始化）
-                        self.logger.warning("Eagle KV Cache 未初始化，使用普通 tensor 格式")
-                        if eagle_layer.draft_past_key_values is None:
-                            eagle_layer.draft_past_key_values = ((key, value),)
-                        else:
-                            old_key, old_value = eagle_layer.draft_past_key_values[0]
-                            # 兼容 KVCache 类和普通 tensor
-                            if hasattr(old_key, 'data'):
-                                old_key_tensor = old_key.data[:, :, :old_key.current_length.item(), :]
-                                old_value_tensor = old_value.data[:, :, :old_value.current_length.item(), :]
-                            else:
-                                old_key_tensor = old_key
-                                old_value_tensor = old_value
-                            new_key = torch.cat([old_key_tensor, key], dim=2)
-                            new_value = torch.cat([old_value_tensor, value], dim=2)
-                            eagle_layer.draft_past_key_values = ((new_key, new_value),)
-                        current_kv_length = eagle_layer.draft_past_key_values[0][0].shape[2]
+                        # draft_past_key_values 为 None 时直接设置（不应该发生）
+                        self.logger.warning("Eagle draft_past_key_values 为 None，使用普通 tensor 格式")
+                        eagle_layer.draft_past_key_values = ((key, value),)
+                        current_kv_length = key.shape[2]
                     
                     eagle_cache_received_indicator[chunk_idx] = 1
                     expected_eagle_caches -= 1

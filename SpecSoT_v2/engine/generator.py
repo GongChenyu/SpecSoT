@@ -51,9 +51,11 @@ from ..models.draft_model import Eagle3, Eagle2
 
 from ..processing.prompts import (
     prepare_skeleton_input,
-    prepare_parallel_branches,
+    prepare_parallel_inputs,
     parse_skeleton_output,
+    build_prompt,
 )
+from ..processing.logits_processor import SemanticLogitsProcessor, VocabScanner
 
 from ..core.scheduling import (
     BranchInfo,
@@ -67,7 +69,7 @@ from ..core.scheduling import (
 from ..core.distributed.distributed_prefill import DistributedPrefillManager
 from ..core.communication.task_coordinator import DistributedTaskCoordinator
 
-from ..utils.utils import stack_with_left_padding
+from ..utils.utils import stack_with_left_padding, set_random_seed, prepare_logits_processor
 
 
 class SpecSoTGenerator:
@@ -89,6 +91,7 @@ class SpecSoTGenerator:
     def __init__(
         self,
         base_model: nn.Module,
+        use_eagle3: bool,
         eagle_layer: nn.Module,
         drafter: Any,
         tokenizer: Any,
@@ -111,6 +114,7 @@ class SpecSoTGenerator:
             seed: 随机种子
         """
         self.base_model = base_model
+        self.use_eagle3 = use_eagle3
         self.eagle_layer = eagle_layer
         self.drafter = drafter
         self.tokenizer = tokenizer
@@ -137,15 +141,12 @@ class SpecSoTGenerator:
             eagle_layer=eagle_layer,
             drafter=drafter,
             device=self.device,
+            use_bim_mode=self.use_bim_mode,
+            use_eagle3=self.use_eagle3,
         )
         
         # 状态管理器（延迟初始化）
         self.state_manager: Optional[BranchStateManager] = None
-        
-        # KV Cache 引用
-        self.past_key_values = None
-        self.past_key_values_data = None
-        self.current_length_data = None
         
         # 输出存储
         self.skeleton_output = None
@@ -167,7 +168,6 @@ class SpecSoTGenerator:
         # =====================================================================
         # 3. Semantic Logits Processor 预初始化
         # =====================================================================
-        from ..processing.logits_processor import SemanticLogitsProcessor, VocabScanner
         self._vocab_scanner = VocabScanner(tokenizer)
         self._semantic_processor = SemanticLogitsProcessor(
             tokenizer=tokenizer,
@@ -179,7 +179,6 @@ class SpecSoTGenerator:
         # =====================================================================
         # 4. 推理状态初始化
         # =====================================================================
-        from ..utils.utils import set_random_seed
         base_model.eval()
         eagle_layer.eval()
         set_random_seed(seed)
@@ -319,6 +318,7 @@ class SpecSoTGenerator:
         # =====================================================================
         return cls(
             base_model=base_model,
+            use_eagle3=use_eagle3,
             eagle_layer=eagle_layer,
             drafter=drafter,
             tokenizer=tokenizer,
@@ -342,11 +342,6 @@ class SpecSoTGenerator:
         # Base Model tree mode
         self.base_model.model.tree_mask = None
         self.base_model.model.tree_mode = None
-
-        # Base Model KV Cache 引用 (实际分配在 generate 中)
-        self.past_key_values = None
-        self.past_key_values_data = None
-        self.current_length_data = None
 
         # 并行解码状态
         self.branch_index_map = None
@@ -423,7 +418,9 @@ class SpecSoTGenerator:
         task_prompt: str,
         max_new_tokens: int = 512,
         max_parallel: int = 4,
-        logits_processor: Optional[LogitsProcessorList] = None,
+        temperature: float = 0.0,
+        top_p: float = 0.0,
+        top_k: int = 0,
         use_semantic_constraint: bool = False,
         use_scheduling: bool = False,
         enable_parallel: bool = True,
@@ -435,17 +432,28 @@ class SpecSoTGenerator:
             task_prompt: 任务描述
             max_new_tokens: 最大生成 token 数
             max_parallel: 最大并行分支数
-            logits_processor: logits 处理器
-            use_semantic_constraint: 是否使用语义约束
+            temperature: 采样温度 (0 表示 greedy)
+            top_p: nucleus sampling 参数
+            top_k: top-k sampling 参数
+            use_semantic_constraint: 是否使用语义约束（仅 SpecSoT skeleton 阶段）
             use_scheduling: 是否使用调度
             enable_parallel: 是否启用并行解码
             
         Returns:
             GenerateResult: 生成结果
         """
+        # 公共初始化
+        self._reset_state()
+        self.eagle_layer.reset_state()
+        
+        logits_processor = None
+        if temperature > 1e-5:
+            logits_processor = prepare_logits_processor(temperature, top_p, top_k)
+
         start_time = time.time()
         
         if enable_parallel:
+            # SpecSoT 模式：skeleton 阶段可能需要语义约束
             output_ids, stats = self.generate_specsot(
                 task_prompt=task_prompt,
                 max_new_tokens=max_new_tokens,
@@ -455,11 +463,11 @@ class SpecSoTGenerator:
                 use_scheduling=use_scheduling,
             )
         else:
+            # Eagle 模式：只用采样 processor
             output_ids, stats = self.generate_eagle(
                 task_prompt=task_prompt,
                 max_new_tokens=max_new_tokens,
                 logits_processor=logits_processor,
-                use_semantic_constraint=use_semantic_constraint,
             )
         
         # 解码输出
@@ -482,39 +490,38 @@ class SpecSoTGenerator:
         task_prompt: str,
         max_new_tokens: int = 512,
         logits_processor: Optional[LogitsProcessorList] = None,
-        use_semantic_constraint: bool = False,
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """
         纯投机解码模式（无并行分支）
         
+        Eagle 模式不需要语义约束，只使用采样 processor。
+        
         Args:
             task_prompt: 任务描述
             max_new_tokens: 最大生成 token 数
-            logits_processor: logits 处理器
-            use_semantic_constraint: 是否使用语义约束
+            logits_processor: 采样 logits 处理器（温度、top_p、top_k）
             
         Returns:
             output_ids, stats
         """
         self._log(f"开始 Eagle 推理模式")
-        
-        # Phase 1: Prefill
-        prefill_result = self._skeleton_prefill(
-            task_prompt=task_prompt,
+        full_prompt = build_prompt(
+            model_type=self._get_model_type(),
+            system_content="You are a helpful assistant.",
+            user_content=task_prompt,
+        )
+
+        input_ids = self.tokenizer.encode(full_prompt, return_tensors='pt').to(self.device)
+        input_len = input_ids.shape[1]
+
+        # 使用 inference engine 执行 prefill（自动初始化 KV Cache）
+        (draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
+        ) = self.inference_engine.prefill_single(
+            input_ids=input_ids,
             max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
-            use_semantic_constraint=use_semantic_constraint,
-        )
-        
-        # Phase 2: Decode Loop
-        input_ids = prefill_result.input_ids
-        input_len = prefill_result.input_len
-        
-        draft_tokens = prefill_result.draft_tokens
-        retrieve_indices = prefill_result.retrieve_indices
-        tree_mask = prefill_result.tree_mask
-        tree_position_ids = prefill_result.tree_position_ids
-        
+        ) 
+
         eos_token_id = self.tokenizer.eos_token_id
         total_accept_len = 0
         
@@ -523,7 +530,7 @@ class SpecSoTGenerator:
             (
                 input_ids, draft_tokens, retrieve_indices,
                 tree_mask, tree_position_ids, accept_length,
-            ) = self._decode_step_single(
+            ) = self.inference_engine.decode_step_single(
                 input_ids=input_ids,
                 draft_tokens=draft_tokens,
                 retrieve_indices=retrieve_indices,
@@ -533,9 +540,13 @@ class SpecSoTGenerator:
             )
             
             total_accept_len += accept_length
+
+            if step % 50 == 0:
+                self._log(f"Eagle 解码进度: {step+1}/{max_new_tokens} tokens")
+                print(self.tokenizer.decode(input_ids[0]))
             
             # 检查停止条件
-            if self._check_stop_single(input_ids, input_len, eos_token_id):
+            if eos_token_id in input_ids[0, input_len:]:
                 break
         
         output_ids = input_ids[:, input_len:]
@@ -544,6 +555,7 @@ class SpecSoTGenerator:
             'total_tokens': output_ids.shape[-1],
             'avg_accept_len': total_accept_len / max(step, 1),
         }
+        print(stats)
         
         return output_ids, stats
     
@@ -560,12 +572,16 @@ class SpecSoTGenerator:
         """
         SpecSoT 主流水线
         
+        Logits Processor 控制逻辑：
+        - Skeleton 阶段：语义约束 + 采样约束（如果启用 use_semantic_constraint）
+        - Parallel 阶段：仅采样约束
+        
         Args:
             task_prompt: 任务描述
             max_new_tokens: 最大生成 token 数
             max_parallel: 最大并行分支数
-            logits_processor: logits 处理器
-            use_semantic_constraint: 是否使用语义约束
+            logits_processor: 采样 logits 处理器（温度、top_p、top_k）
+            use_semantic_constraint: 是否使用语义约束（仅 skeleton 阶段）
             use_scheduling: 是否使用调度
             
         Returns:
@@ -582,6 +598,24 @@ class SpecSoTGenerator:
         self._log(f"开始 SpecSoT 流水线: use_scheduling={use_scheduling}")
         
         # =====================================================================
+        # 准备 Skeleton 阶段的 Logits Processor
+        # Skeleton 阶段需要语义约束（如果启用）+ 采样约束
+        # =====================================================================
+        skeleton_logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
+        if use_semantic_constraint:
+            # 先准备输入以获取 input_len（用于配置语义 processor）
+            model_type = self._get_model_type()
+            temp_input_ids, _ = prepare_skeleton_input(
+                self.tokenizer, task_prompt, model_type, self.device
+            )
+            input_len = temp_input_ids.shape[1]
+            
+            # 配置语义 processor
+            self._semantic_processor.configure(prefix_len=input_len, enforce_format=True)
+            skeleton_logits_processor.append(self._semantic_processor)
+            self._log("Skeleton 阶段使用 FSM 语义约束")
+        
+        # =====================================================================
         # Phase 1: Skeleton Prefill
         # =====================================================================
         skeleton_start = time.time()
@@ -589,25 +623,21 @@ class SpecSoTGenerator:
         prefill_result = self._skeleton_prefill(
             task_prompt=task_prompt,
             max_new_tokens=max_new_tokens,
-            logits_processor=logits_processor,
-            use_semantic_constraint=use_semantic_constraint,
+            logits_processor=skeleton_logits_processor,
         )
         
         # =====================================================================
         # Phase 2: Skeleton Decode
         # =====================================================================
-        decode_result = self._skeleton_decode(prefill_result)
+        decode_result = self._skeleton_decode(prefill_result, skeleton_logits_processor)
         
         stats['skeleton_time'] = time.time() - skeleton_start
         stats['skeleton_text'] = decode_result.skeleton_text
-        
+        print(f"Skeleton 输出:\n{decode_result.skeleton_text}")
         # =====================================================================
         # Phase 3: Skeleton Parse
         # =====================================================================
-        parse_result = self._skeleton_parse(
-            skeleton_text=decode_result.skeleton_text,
-            task_prompt=task_prompt,
-        )
+        parse_result = self._skeleton_parse(decode_result.skeleton_text, task_prompt)
         
         # 处理 direct/error 模式
         if parse_result.mode != "plan":
@@ -621,11 +651,7 @@ class SpecSoTGenerator:
         # =====================================================================
         scheduling_start = time.time()
         
-        schedule_result = self._schedule_branches(
-            parse_result=parse_result,
-            use_scheduling=use_scheduling,
-            max_parallel=max_parallel,
-        )
+        schedule_result = self._schedule_branches(parse_result, use_scheduling, max_parallel)
         
         stats['scheduling_time'] = time.time() - scheduling_start
         
@@ -641,6 +667,40 @@ class SpecSoTGenerator:
         
         branch_prompts = [parse_result.clean_branches[bid] for bid in my_branch_ids]
         
+        # 状态初始化（Skeleton -> Parallel 转换）
+        prefix_len = prefill_result.task_input_ids.shape[1]
+        num_branches = len(branch_prompts)
+        
+        # 初始化状态管理器
+        if self.state_manager is None:
+            self.state_manager = BranchStateManager(
+                max_seq_len=prefix_len + max_new_tokens + 200,
+                max_branches=num_branches,
+                device=self.device,
+                use_bim_mode=self.use_bim_mode,
+            )
+        
+        # Skeleton -> Parallel 状态转换：处理 Base Model 和 Eagle Layer 的 KV cache 初始化/扩展
+        (self.inference_engine.past_key_values, 
+         self.inference_engine.past_key_values_data, 
+         self.inference_engine.current_length_data)= \
+        self.state_manager.init_parallel_state(
+            base_model=self.base_model,
+            eagle_layer=self.eagle_layer,
+            prefix_len=prefix_len,
+            num_branches=num_branches,
+            max_new_tokens=max_new_tokens,
+            old_past_key_values=self.inference_engine.past_key_values,
+            old_past_key_values_data=self.inference_engine.past_key_values_data,
+            old_current_length_data=self.inference_engine.current_length_data,
+        )
+        
+        self.active_branches = list(my_branch_ids)
+        
+        # 将 state_manager 传递给 inference_engine
+        self.inference_engine.state_manager = self.state_manager
+        
+        # 执行并行 prefill
         parallel_prefill_result = self._parallel_prefill(
             prefix_ids=prefill_result.task_input_ids,
             branch_prompts=branch_prompts,
@@ -650,15 +710,16 @@ class SpecSoTGenerator:
         
         # =====================================================================
         # Phase 6: Parallel Decode
+        # Parallel 阶段使用采样 logits_processor（不需要语义约束）
         # =====================================================================
         parallel_decode_result = self._parallel_decode(
             prefill_result=parallel_prefill_result,
             schedule_result=schedule_result,
             clean_branches=parse_result.clean_branches,
             max_new_tokens=max_new_tokens,
-            max_kv_len=prefill_result.max_kv_len,
             prefix_len=prefill_result.task_input_ids.shape[1],
             use_scheduling=use_scheduling,
+            logits_processor=logits_processor,  # 采样 processor
         )
         
         stats['parallel_time'] = time.time() - parallel_start
@@ -691,9 +752,13 @@ class SpecSoTGenerator:
         task_prompt: str,
         max_new_tokens: int,
         logits_processor: Optional[LogitsProcessorList] = None,
-        use_semantic_constraint: bool = False,
     ) -> SkeletonPrefillResult:
-        """Phase 1: 骨架 Prefill"""
+        """
+        Phase 1: 骨架 Prefill
+        
+        注意：logits_processor 应由上层函数准备好传入。
+        Skeleton 阶段可能包含语义约束 + 采样约束。
+        """
         model_type = self._get_model_type()
 
         # 准备输入
@@ -703,24 +768,13 @@ class SpecSoTGenerator:
         input_len = input_ids.shape[1]
         base_prompt_len = task_input_ids.shape[1]
 
-        # 使用 inference engine 执行带初始化的 prefill
-        (
-            draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
-            hidden_states, logits, sample_token
-        ) = self.inference_engine.prefill_single_with_init(
+        # 使用 inference engine 执行 prefill（自动初始化 KV Cache）
+        (draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
+        ) = self.inference_engine.prefill_single(
             input_ids=input_ids,
             max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
         )
-
-        # 同步 KV Cache 引用到 generator
-        self.past_key_values = self.inference_engine.past_key_values
-        self.past_key_values_data = self.inference_engine.past_key_values_data
-        self.current_length_data = self.inference_engine.current_length_data
-
-        # 计算 max_kv_len
-        tree_buffer = self.eagle_layer.total_tokens if hasattr(self, 'eagle_layer') else 100
-        max_kv_len = input_len + max_new_tokens + tree_buffer + 200
 
         return SkeletonPrefillResult(
             draft_tokens=draft_tokens,
@@ -731,13 +785,12 @@ class SpecSoTGenerator:
             task_input_ids=task_input_ids,
             input_len=input_len,
             base_prompt_len=base_prompt_len,
-            max_kv_len=max_kv_len,
-            hidden_states=hidden_states,
         )
     
     def _skeleton_decode(
         self,
         prefill_result: SkeletonPrefillResult,
+        logits_processor: Optional[LogitsProcessorList] = None,
         max_steps: int = 200,
     ) -> SkeletonDecodeResult:
         """Phase 2: 骨架解码"""
@@ -757,12 +810,13 @@ class SpecSoTGenerator:
             (
                 input_ids, draft_tokens, retrieve_indices,
                 tree_mask, tree_position_ids, accept_length,
-            ) = self._decode_step_single(
+            ) = self.inference_engine.decode_step_single(
                 input_ids=input_ids,
                 draft_tokens=draft_tokens,
                 retrieve_indices=retrieve_indices,
                 tree_mask=tree_mask,
                 tree_position_ids=tree_position_ids,
+                logits_processor=logits_processor,
             )
             
             # 检查骨架停止条件
@@ -783,11 +837,7 @@ class SpecSoTGenerator:
             decode_time=decode_time,
         )
     
-    def _skeleton_parse(
-        self,
-        skeleton_text: str,
-        task_prompt: str,
-    ) -> SkeletonParseResult:
+    def _skeleton_parse(self, skeleton_text: str, task_prompt: str) -> SkeletonParseResult:
         """Phase 3: 骨架解析"""
         model_type = self._get_model_type()
         
@@ -805,7 +855,7 @@ class SpecSoTGenerator:
         tasks = content
         self._log(f"检测到 {len(tasks)} 个并行分支")
         
-        clean_branches, instruction_len = prepare_parallel_branches(
+        clean_branches, instruction_len = prepare_parallel_inputs(
             self.tokenizer, tasks, skeleton_text, model_type, task_prompt
         )
         
@@ -877,23 +927,12 @@ class SpecSoTGenerator:
         - 复用 prefix 的 KV Cache（不重新计算）
         - 只 prefill 各分支的 parallel prompt
         - 根据 use_bim_mode 选择 BIM 或 Batching 模式
+        
+        注意：
+        - 状态初始化（state_manager, KV cache 转换）应在调用此方法前完成
+        - 由上层函数（generate_specsot）统一管理状态转换
         """
         prefix_len = prefix_ids.shape[1]
-        num_branches = len(branch_prompts)
-
-        # 初始化状态管理器
-        if self.state_manager is None:
-            self.state_manager = BranchStateManager(
-                max_seq_len=4096,
-                max_branches=num_branches,
-                device=self.device,
-                use_bim_mode=self.use_bim_mode,
-            )
-        else:
-            self.state_manager.reset()
-
-        self.state_manager.init_prefix(prefix_len)
-        self.active_branches = list(branch_ids)
 
         # 调用 inference engine 执行并行 prefill
         result = self.inference_engine.prefill_parallel_branches(
@@ -935,14 +974,18 @@ class SpecSoTGenerator:
         schedule_result: ScheduleResult,
         clean_branches: List[List[int]],
         max_new_tokens: int,
-        max_kv_len: int,
         prefix_len: int,
         use_scheduling: bool,
+        logits_processor: Optional[LogitsProcessorList] = None,
     ) -> ParallelDecodeResult:
         """
         Phase 6: 并行解码
         
         执行多分支的 Decode Loop：Draft -> Verify -> Update
+        
+        支持两种模式：
+        1. 朴素模式 (use_scheduling=False): 所有分支同时解码
+        2. Continuous Batching 模式 (use_scheduling=True): 支持动态添加新分支
         """
         decode_start = time.time()
         
@@ -957,81 +1000,210 @@ class SpecSoTGenerator:
         eos_token_id = self.tokenizer.eos_token_id
         
         total_accept_len = 0
+
+        max_kv_len = self.inference_engine.past_key_values_data.shape[3]  # 动态获取当前 KV Cache 长度限制
         
         # DEBUG: 初始状态
         self._log(f"[DEBUG] _parallel_decode 开始: active_branches={self.active_branches}")
         self._log(f"[DEBUG] draft_tokens shape: {draft_tokens.shape}")
-        self._log(f"[DEBUG] max_new_tokens={max_new_tokens}, max_kv_len={max_kv_len}")
+        self._log(f"[DEBUG] max_new_tokens={max_new_tokens}, max_kv_len={max_kv_len}, use_scheduling={use_scheduling}")
         
-        for step in range(max_new_tokens):
-            # 检查停止条件
-            current_len = self.current_length_data[0].item()
-            if current_len + tokens_per_branch * len(self.active_branches) > max_kv_len:
-                self._log(f"KV Cache 限制，提前结束", level="warning")
-                break
+        if use_scheduling and schedule_result.schedule_plan is not None:
+            # ========== Continuous Batching 模式 ==========
+            branch_info_dict = {info.branch_id: info for info in schedule_result.branch_infos}
+            my_plan = schedule_result.schedule_plan.get_plan_for_device(0)
             
-            if not self.active_branches:
-                self._log(f"[DEBUG] 无活跃分支，step={step}")
-                break
+            if my_plan is None:
+                return ParallelDecodeResult(branch_outputs={}, stats={}, decode_time=0.0)
             
-            # DEBUG: step开始
-            if step < 5:
-                self._log(f"[DEBUG] step={step}, active_branches={self.active_branches}, current_len={current_len}")
-            
-            # 执行解码步骤
-            (
-                draft_tokens, retrieve_indices, tree_mask,
-                tree_position_ids, accept_lengths, all_finished,
-            ) = self.inference_engine.decode_step_parallel(
-                input_ids=prefill_result.input_ids,
-                draft_tokens=draft_tokens,
-                retrieve_indices=retrieve_indices,
-                tree_mask=tree_mask,
-                tree_position_ids=tree_position_ids,
-                branch_index_map=branch_index_map,
-                active_branches=self.active_branches,
-                prefix_len=prefix_len,
+            exec_manager = BranchExecutionManager(
+                execution_plan=my_plan,
+                branch_infos=branch_info_dict,
+                rank=0,
             )
+            # 只激活已经 prefill 的分支
+            prefilled_branches = list(self.active_branches)
+            exec_manager.activate_branches(prefilled_branches)
+            self._log(f"Continuous Batching: 初始激活分支 {prefilled_branches}, 待加入 {exec_manager.pending_branches}")
             
-            # DEBUG: step结果
-            if step < 5:
-                self._log(f"[DEBUG] step={step}, accept_lengths={accept_lengths.tolist()}, all_finished={all_finished}")
-            
-            total_accept_len += accept_lengths.sum().item()
-            
-            # 更新分支输出和检查完成状态
-            finished_branches = []
-            for i, branch_id in enumerate(self.active_branches):
-                accept_len = accept_lengths[i].item()
-                if accept_len > 0:
-                    # 记录接受的 tokens
-                    accepted = draft_tokens[i, :accept_len + 1].tolist()
-                    branch_outputs[branch_id].extend(accepted)
+            for step in range(max_new_tokens):
+                # 检查停止条件
+                current_len = self.inference_engine.current_length_data[0].item()
+                if current_len + tokens_per_branch * len(self.active_branches) > max_kv_len:
+                    self._log(f"KV Cache 限制，提前结束", level="warning")
+                    break
+                
+                if exec_manager.is_all_completed():
+                    self._log("所有分支执行完成")
+                    break
+                
+                # 根据是否有 prefilling 分支选择不同的解码方式
+                if self.prefilling_branches:
+                    # 混合模式：同时处理老分支的验证和新分支的 prefill
+                    (
+                        draft_tokens, retrieve_indices, tree_mask,
+                        tree_position_ids, accept_lengths, all_finished,
+                        self.active_branches, step_outputs,
+                    ) = self.inference_engine.continuous_decode_step_parallel_bim(
+                        draft_tokens=draft_tokens,
+                        retrieve_indices=retrieve_indices,
+                        tree_mask=tree_mask,
+                        tree_position_ids=tree_position_ids,
+                        branch_index_map=branch_index_map,
+                        active_branches=self.active_branches,
+                        prefilling_branches=self.prefilling_branches,
+                        pending_prefill_prompts=self.pending_prefill_prompts,
+                        prefix_len=prefix_len,
+                        logits_processor=logits_processor,
+                    )
                     
-                    # 检查是否生成了 EOS
-                    if eos_token_id in accepted:
-                        finished_branches.append(branch_id)
+                    # 清理 prefilling 状态
+                    self.prefilling_branches = []
+                    self.pending_prefill_prompts = {}
+                    
+                    # 合并输出
+                    for bid, tokens in step_outputs.items():
+                        if bid in branch_outputs:
+                            branch_outputs[bid].extend(tokens)
+                else:
+                    # 正常解码模式
+                    (
+                        draft_tokens, retrieve_indices, tree_mask,
+                        tree_position_ids, accept_lengths, all_finished,
+                    ) = self.inference_engine.decode_step_parallel(
+                        input_ids=prefill_result.input_ids,
+                        draft_tokens=draft_tokens,
+                        retrieve_indices=retrieve_indices,
+                        tree_mask=tree_mask,
+                        tree_position_ids=tree_position_ids,
+                        branch_index_map=branch_index_map,
+                        active_branches=self.active_branches,
+                        logits_processor=logits_processor,
+                        prefix_len=prefix_len,
+                    )
+                    
+                    # 更新分支输出
+                    if accept_lengths is not None:
+                        for i, branch_id in enumerate(self.active_branches):
+                            accept_len = accept_lengths[i].item()
+                            if accept_len > 0:
+                                accepted = draft_tokens[i, :accept_len + 1].tolist()
+                                branch_outputs[branch_id].extend(accepted)
+                
+                exec_manager.step()
+                
+                if accept_lengths is not None:
+                    total_accept_len += accept_lengths.sum().item()
+                
+                # 处理完成的分支
+                finished_branches = []
+                for i, branch_id in enumerate(self.active_branches):
+                    if accept_lengths is not None and i < len(accept_lengths):
+                        accept_len = accept_lengths[i].item()
+                        if accept_len > 0:
+                            accepted = draft_tokens[i, :accept_len + 1].tolist()
+                            if eos_token_id in accepted:
+                                finished_branches.append(branch_id)
+                
+                for bid in finished_branches:
+                    if bid in self.active_branches:
+                        self.active_branches.remove(bid)
+                    self.state_manager.finish_branch(bid)
+                    self.recently_completed_branches.append(bid)
+                    self._log(f"分支 {bid} 完成")
+                
+                # 处理完成的分支，动态加入新分支
+                if self.recently_completed_branches:
+                    completed = self.recently_completed_branches
+                    completed_outputs = {bid: branch_outputs.get(bid, []) for bid in completed}
+                    exec_manager.handle_completed_branches(completed, completed_outputs)
+                    
+                    new_branches = exec_manager.get_branches_to_add()
+                    if new_branches:
+                        self._log(f"Continuous Batching: 加入新分支 {new_branches}")
+                        self._add_branches_to_active(
+                            new_branches, clean_branches, prefix_len, logits_processor
+                        )
+                        exec_manager.activate_branches(new_branches)
+                    
+                    self.recently_completed_branches = []
+                
+                if all_finished or not self.active_branches:
+                    self._log("所有分支解码完成")
+                    break
             
-            # 移除完成的分支
-            for bid in finished_branches:
-                self.active_branches.remove(bid)
-                self.state_manager.finish_branch(bid)
-                self._log(f"分支 {bid} 完成")
+            stats = {'execution_stats': exec_manager.get_stats(), 'num_steps': step + 1}
+        
+        else:
+            # ========== 朴素模式：所有分支同时解码 ==========
+            for step in range(max_new_tokens):
+                # 检查停止条件
+                current_len = self.inference_engine.current_length_data[0].item()
+                if current_len + tokens_per_branch * len(self.active_branches) > max_kv_len:
+                    self._log(f"KV Cache 限制，提前结束", level="warning")
+                    break
+                
+                if not self.active_branches:
+                    self._log(f"[DEBUG] 无活跃分支，step={step}")
+                    break
+                
+                # DEBUG: step开始
+                if step < 5:
+                    self._log(f"[DEBUG] step={step}, active_branches={self.active_branches}, current_len={current_len}")
+                
+                # 执行解码步骤
+                (
+                    draft_tokens, retrieve_indices, tree_mask,
+                    tree_position_ids, accept_lengths, all_finished,
+                ) = self.inference_engine.decode_step_parallel(
+                    input_ids=prefill_result.input_ids,
+                    draft_tokens=draft_tokens,
+                    retrieve_indices=retrieve_indices,
+                    tree_mask=tree_mask,
+                    tree_position_ids=tree_position_ids,
+                    branch_index_map=branch_index_map,
+                    active_branches=self.active_branches,
+                    logits_processor=logits_processor,
+                    prefix_len=prefix_len,
+                )
+                
+                # DEBUG: step结果
+                if step < 5:
+                    self._log(f"[DEBUG] step={step}, accept_lengths={accept_lengths.tolist()}, all_finished={all_finished}")
+                
+                total_accept_len += accept_lengths.sum().item()
+                
+                # 更新分支输出和检查完成状态
+                finished_branches = []
+                for i, branch_id in enumerate(self.active_branches):
+                    accept_len = accept_lengths[i].item()
+                    if accept_len > 0:
+                        # 记录接受的 tokens
+                        accepted = draft_tokens[i, :accept_len + 1].tolist()
+                        branch_outputs[branch_id].extend(accepted)
+                        
+                        # 检查是否生成了 EOS
+                        if eos_token_id in accepted:
+                            finished_branches.append(branch_id)
+                
+                # 移除完成的分支
+                for bid in finished_branches:
+                    self.active_branches.remove(bid)
+                    self.state_manager.finish_branch(bid)
+                    self._log(f"分支 {bid} 完成")
+                
+                if all_finished or not self.active_branches:
+                    self._log("所有分支解码完成")
+                    break
             
-            if all_finished or not self.active_branches:
-                self._log("所有分支解码完成")
-                break
+            stats = {'avg_accept_len': total_accept_len / max(step + 1, 1), 'num_steps': step + 1}
         
         decode_time = time.time() - decode_start
-        num_steps = max(step, 1)
         
         return ParallelDecodeResult(
             branch_outputs=branch_outputs,
             decode_time=decode_time,
-            stats={
-                'avg_accept_len': total_accept_len / num_steps,
-                'num_steps': num_steps,
-            },
+            stats=stats,
         )
     
     def _merge_results(
@@ -1117,36 +1289,6 @@ class SpecSoTGenerator:
     # =========================================================================
     # 辅助方法
     # =========================================================================
-    
-    def _decode_step_single(
-        self,
-        input_ids: torch.Tensor,
-        draft_tokens: torch.Tensor,
-        retrieve_indices: torch.Tensor,
-        tree_mask: torch.Tensor,
-        tree_position_ids: torch.Tensor,
-        logits_processor: Optional[LogitsProcessorList] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int]:
-        """单步解码"""
-        return self.inference_engine.decode_step_single(
-            input_ids=input_ids,
-            draft_tokens=draft_tokens,
-            retrieve_indices=retrieve_indices,
-            tree_mask=tree_mask,
-            tree_position_ids=tree_position_ids,
-            logits_processor=logits_processor,
-        )
-    
-    def _check_stop_single(
-        self,
-        input_ids: torch.Tensor,
-        input_len: int,
-        eos_token_id: int,
-    ) -> bool:
-        """检查单序列停止条件"""
-        if eos_token_id in input_ids[0, input_len:]:
-            return True
-        return False
     
     def _check_skeleton_stop(
         self,
@@ -1242,7 +1384,6 @@ class SpecSoTGenerator:
             v_expanded = v_prefix.expand(num_para, -1, -1, -1).clone()
             # 批量模式下使用普通 tensor 格式
             self.eagle_layer.draft_past_key_values = ((k_expanded, v_expanded),)
-            self.eagle_layer.kv_cache_initialized = False
         
         # ---------------------------------------------------------------------
         # 3. 构建打包输入序列和 Branch Index Map

@@ -6,8 +6,9 @@ Eagle Base - Eagle Layer 基类
 - forward(): 前向传播（抽象方法）
 - get_head_output(): 获取 lm_head 输出（抽象方法）
 - reset_state(): 重置状态
-- init_kv_cache(): 初始化 KV Cache
-- set_draft_past_key_values_sync_callback(): 设置同步回调
+- get_kv_cache_length(): 获取当前 KV Cache 长度
+- set_kv_cache_length(): 设置 KV Cache 长度（用于丢弃 tree_grow 临时数据）
+- set_draft_kv_sync_callback(): 设置同步回调
 - _prepare_decoder_attention_mask(): 构建注意力掩码
 
 Eagle2 与 Eagle3 的主要区别：
@@ -17,10 +18,10 @@ Eagle2 与 Eagle3 的主要区别：
 4. lm_head：Eagle2 用外部传入，Eagle3 用内置
 
 KV Cache 管理：
-- 使用预分配内存的 KVCache 类管理（与 Base Model 一致）
-- draft_past_key_values: List[List[KVCache]] 结构
-- draft_past_key_values_data: 底层 tensor 数据
-- draft_current_length_data: 当前长度追踪
+- KV Cache 由外部 InferenceEngine 使用 initialize_eagle_past_key_values() 统一初始化
+- draft_past_key_values: List[List[KVCache]] 结构，由外部设置
+- draft_past_key_values_data: 底层 tensor 数据列表，由外部设置
+- draft_current_length_data: 当前长度追踪，由外部设置
 """
 
 from abc import ABC, abstractmethod
@@ -208,20 +209,19 @@ class EagleBase(nn.Module, ABC):
     子类需要实现 forward() 和 get_head_output() 方法。
     
     KV Cache 管理：
-    - 使用 KVCache 类管理（与 Base Model 一致）
-    - draft_past_key_values: List[List[KVCache]] - 每层的 [key_cache, value_cache]
-    - draft_past_key_values_data: torch.Tensor - 底层数据存储
-    - draft_current_length_data: torch.Tensor - 当前长度追踪
-    - kv_cache_initialized: bool - 是否已初始化
+    - KV Cache 由外部 InferenceEngine 统一初始化和管理
+    - 使用 initialize_eagle_past_key_values() 函数初始化
+    - draft_past_key_values: List[List[KVCache]] - 每层的 [key_cache, value_cache]，由外部设置
+    - draft_past_key_values_data: List[torch.Tensor] - 底层数据存储列表，由外部设置
+    - draft_current_length_data: torch.Tensor - 当前长度追踪，由外部设置
     """
 
     def __init__(self):
         super().__init__()
-        # 状态变量（子类初始化具体值）
+        # KV Cache 状态（由外部 InferenceEngine 设置）
         self.draft_past_key_values = None
         self.draft_past_key_values_data = None
         self.draft_current_length_data = None
-        self.kv_cache_initialized = False
         
         self.cache_padding_mask = None
         self.full_position_ids = None
@@ -237,11 +237,6 @@ class EagleBase(nn.Module, ABC):
         self.depth = None
         self.hidden_size = None
         self.embed_tokens = None
-        
-        # KV Cache 配置（子类设置）
-        self._num_layers = 1  # 默认单层，Eagle2 会覆盖
-        self._num_key_value_heads = None
-        self._head_dim = None
 
     
     def _load_embeddings(self, path: str):
@@ -329,14 +324,6 @@ class EagleBase(nn.Module, ABC):
 
     def reset_state(self):
         """重置状态（不释放 KV Cache 内存，只重置长度）"""
-        # 重置 KV Cache 长度为 0（保留预分配的内存）
-        if self.kv_cache_initialized and self.draft_past_key_values is not None:
-            for layer_kv in self.draft_past_key_values:
-                for kv_cache in layer_kv:
-                    kv_cache.current_length.fill_(0)
-        else:
-            self.draft_past_key_values = None
-            
         self.cache_padding_mask = None
         self.full_position_ids = None
         self.tree_mask = None
@@ -346,67 +333,9 @@ class EagleBase(nn.Module, ABC):
         self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
         self._draft_kv_sync_callback = None
 
-    def init_kv_cache(self, max_length: int, batch_size: int = 1):
-        """
-        初始化 KV Cache（预分配内存）
-        
-        Args:
-            max_length: 最大序列长度
-                       注意：应该是 prefill_len + max_draft_steps * (top_k * depth)
-                       但实际上只需要保留 expand_root 的 cache，所以可以更小
-            batch_size: 批次大小
-            
-        Returns:
-            tuple: (draft_past_key_values, draft_past_key_values_data, draft_current_length_data)
-                   与 initialize_past_key_values 保持一致的返回格式
-        """
-        # 延迟导入避免循环依赖
-        from ...core.kv_cache import KVCache
-        
-        device = self.embed_tokens.weight.device
-        dtype = self.embed_tokens.weight.dtype
-        
-        # 获取 KV cache 配置
-        num_layers = self._num_layers
-        num_key_value_heads = self._num_key_value_heads or self.config.num_key_value_heads
-        head_dim = self._head_dim or getattr(
-            self.config, 'head_dim', 
-            self.config.hidden_size // self.config.num_attention_heads
-        )
-        
-        # 分配底层数据存储
-        # shape: [num_layers * 2, batch_size, num_kv_heads, max_length, head_dim]
-        self.draft_past_key_values_data = torch.zeros(
-            num_layers * 2,
-            batch_size,
-            num_key_value_heads,
-            max_length,
-            head_dim,
-            device=device,
-            dtype=dtype,
-        )
-        
-        # 长度追踪 tensor
-        self.draft_current_length_data = torch.zeros(
-            num_layers * 2, dtype=torch.long, device="cpu"
-        )
-        
-        # 为每层创建 KVCache 对象
-        self.draft_past_key_values = []
-        for i in range(num_layers):
-            self.draft_past_key_values.append([
-                KVCache(self.draft_past_key_values_data[2 * i], self.draft_current_length_data[2 * i]),
-                KVCache(self.draft_past_key_values_data[2 * i + 1], self.draft_current_length_data[2 * i + 1])
-            ])
-        
-        self.kv_cache_initialized = True
-        
-        # 返回三元组，与 initialize_past_key_values 保持一致
-        return self.draft_past_key_values, self.draft_past_key_values_data, self.draft_current_length_data
-        
     def get_kv_cache_length(self) -> int:
         """获取当前 KV Cache 的有效长度"""
-        if not self.kv_cache_initialized or self.draft_past_key_values is None:
+        if self.draft_past_key_values is None:
             return 0
         # 所有层的长度应该一致，取第一层的
         return self.draft_past_key_values[0][0].current_length.item()
@@ -421,7 +350,7 @@ class EagleBase(nn.Module, ABC):
         Args:
             length: 目标长度
         """
-        if not self.kv_cache_initialized or self.draft_past_key_values is None:
+        if self.draft_past_key_values is None:
             return
         for layer_kv in self.draft_past_key_values:
             for kv_cache in layer_kv:
