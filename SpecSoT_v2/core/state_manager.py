@@ -122,23 +122,33 @@ class BranchStateManager:
         # 共享 prefix 长度
         self.prefix_len: int = 0
 
-        
         if self.use_bim_mode:
             # ===== BIM 模式状态 =====
             # BIM: Branch Index Map
-            self.bim = torch.full(self.max_seq_len, self.BIM_EMPTY, dtype=torch.long, device=self.device)
-            # Position IDs
-            self.position_ids = torch.zeros(self.max_seq_len, dtype=torch.long, device=self.device)
+            self.bim = torch.full((self.max_seq_len,), self.BIM_EMPTY, dtype=torch.long, device=self.device)
+            # Position IDs (BIM 模式)
+            self.bim_position_ids = torch.zeros(self.max_seq_len, dtype=torch.long, device=self.device)
             # 当前总序列长度（BIM 模式）
             self.current_seq_len: int = 0
         else:
             # ===== Batching 模式状态 =====
-            # Batching 模式下的 padding mask [num_branches, max_len]，1=有效，0=padding
-            self.padding_mask: Optional[torch.Tensor] = None
-            # Batching 模式下的 position_ids [num_branches, max_len]
-            self.batching_position_ids: Optional[torch.Tensor] = None
-            # Batching 模式下各分支长度列表
+            # 预分配固定大小的 tensor，避免运行时重新分配
+            # padding_mask: [max_branches, max_seq_len]，1=有效，0=padding
+            self.batching_padding_mask = torch.zeros(
+                (self.max_branches, self.max_seq_len),
+                dtype=torch.long,
+                device=self.device
+            )
+            # position_ids: [max_branches, max_seq_len]
+            self.batching_position_ids = torch.zeros(
+                (self.max_branches, self.max_seq_len),
+                dtype=torch.long,
+                device=self.device
+            )
+            # 各分支当前长度（不含 prefix）
             self.branch_lengths: List[int] = []
+            # 当前有效的最大分支长度（用于切片）
+            self.max_branch_len: int = 0
     
     def reset(self):
         """重置所有状态"""
@@ -149,12 +159,13 @@ class BranchStateManager:
         
         if self.use_bim_mode:
             self.bim.fill_(self.BIM_EMPTY)
-            self.position_ids.fill_(0)
+            self.bim_position_ids.fill_(0)
         else:
-            # Batching 模式状态重置
-            self.padding_mask = None
-            self.batching_position_ids = None
+            # Batching 模式状态重置（原地操作）
+            self.batching_padding_mask.fill_(0)
+            self.batching_position_ids.fill_(0)
             self.branch_lengths = []
+            self.max_branch_len = 0
 
     # =========================================================================
     # Skeleton -> Parallel 阶段转换
@@ -217,7 +228,7 @@ class BranchStateManager:
             
             # 3. 设置 BIM 状态
             self.bim[:prefix_len] = self.BIM_PREFIX
-            self.position_ids[:prefix_len] = torch.arange(prefix_len, device=self.device)
+            self.bim_position_ids[:prefix_len] = torch.arange(prefix_len, device=self.device)
             
             return old_past_key_values, old_past_key_values_data, old_current_length_data
         
@@ -267,10 +278,25 @@ class BranchStateManager:
             new_draft_length.fill_(prefix_len)
             
             # 设置新的 KV Cache 到 eagle_layer
-            eagle_layer.reset_state()
             eagle_layer.draft_past_key_values = new_draft_kv
             eagle_layer.draft_past_key_values_data = new_draft_data
             eagle_layer.draft_current_length_data = new_draft_length
+            
+            # -----------------------------------------------------------------
+            # 3. 初始化 Batching 模式状态：填充 prefix 部分
+            # -----------------------------------------------------------------
+            # padding_mask: prefix 部分全部有效（1）
+            # [num_branches, prefix_len] 区域置为 1
+            self.batching_padding_mask[:num_branches, :prefix_len] = 1
+            
+            # batching_position_ids: prefix 部分位置编码 [0, 1, ..., prefix_len-1]
+            # 每个分支都有相同的 prefix position
+            prefix_positions = torch.arange(prefix_len, device=self.device, dtype=torch.long)
+            self.batching_position_ids[:num_branches, :prefix_len] = prefix_positions.unsqueeze(0).expand(num_branches, -1)
+            
+            # 更新当前状态
+            self.max_branch_len = prefix_len
+            self.branch_lengths = [0] * num_branches  # 各分支尚未添加 prompt
             
             return new_past_key_values, new_data_list, new_length_data
  
@@ -311,7 +337,7 @@ class BranchStateManager:
             self.bim[start_pos:end_pos] = branch_id
             
             # 设置 Position IDs（从 prefix_len 开始）
-            self.position_ids[start_pos:end_pos] = torch.arange(
+            self.bim_position_ids[start_pos:end_pos] = torch.arange(
                 self.prefix_len, 
                 self.prefix_len + branch_len, 
                 device=self.device
@@ -366,7 +392,7 @@ class BranchStateManager:
             
             # Position 继续递增
             for i in range(num_tokens):
-                self.position_ids[old_end + i] = self.prefix_len + state.current_len + i
+                self.bim_position_ids[old_end + i] = self.prefix_len + state.current_len + i
             
             self.current_seq_len = max(self.current_seq_len, new_end)
         
@@ -530,7 +556,7 @@ class BranchStateManager:
             pos_ids_list.extend(curr_pos)
 
             # 更新 Position IDs
-            self.position_ids[start_pos:end_pos] = torch.tensor(
+            self.bim_position_ids[start_pos:end_pos] = torch.tensor(
                 curr_pos, device=self.device, dtype=torch.long
             )
 
@@ -584,9 +610,8 @@ class BranchStateManager:
         ]
         position_ids = stack_with_left_padding(position_tensors, 0, self.device)
 
-        # 保存到状态管理器
-        self.padding_mask = padding_mask
-        self.batching_position_ids = position_ids
+        # 注意：不再覆盖成员变量，由 build_batching_prefill_mask 负责填充
+        # 只记录分支长度信息
         self.branch_lengths = branch_lengths
 
         return padded_input, position_ids, padding_mask
@@ -714,9 +739,9 @@ class BranchStateManager:
         max_branch_len = padded_input.shape[1]
         branch_lengths = self.branch_lengths  # align_branches 已设置
 
-        # 2. 构建 attention mask
+        # 2. 构建 attention mask（同时填充成员变量）
         attention_mask = self.build_batching_prefill_mask(
-            padding_mask, branch_lengths, max_branch_len
+            padding_mask, position_ids, branch_lengths, max_branch_len
         )
 
         # 3. 注册分支状态
@@ -792,11 +817,16 @@ class BranchStateManager:
     def build_batching_prefill_mask(
         self,
         padding_mask: torch.Tensor,
+        position_ids: torch.Tensor,
         branch_lengths: List[int],
         max_branch_len: int,
     ) -> torch.Tensor:
         """
         构建 Batching 模式并行 Prefill 的 attention mask
+        
+        同时执行两个任务：
+        1. 将传入的 padding_mask 和 position_ids 填充到成员变量中（prefix 之后）
+        2. 构建 attention mask（考虑 prefix + 当前输入）
 
         确保：
         1. 可以看到 prefix（KV Cache）
@@ -805,6 +835,7 @@ class BranchStateManager:
 
         Args:
             padding_mask: [num_branches, max_branch_len] padding 掩码 (1=有效, 0=padding)
+            position_ids: [num_branches, max_branch_len] 位置编码
             branch_lengths: 各分支长度
             max_branch_len: 最大分支长度
 
@@ -813,28 +844,70 @@ class BranchStateManager:
         """
         num_branches = len(branch_lengths)
         total_key_len = self.prefix_len + max_branch_len
-
+        
+        # =====================================================================
+        # 1. 填充成员变量：将当前输入的 padding_mask 和 position_ids 追加到 prefix 之后
+        # =====================================================================
+        # 填充 padding_mask: [num_branches, prefix_len:prefix_len+max_branch_len]
+        self.batching_padding_mask[:num_branches, self.prefix_len:self.prefix_len + max_branch_len] = padding_mask
+        
+        # 填充 position_ids: [num_branches, prefix_len:prefix_len+max_branch_len]
+        self.batching_position_ids[:num_branches, self.prefix_len:self.prefix_len + max_branch_len] = position_ids
+        
+        # 更新状态
+        self.branch_lengths = branch_lengths
+        self.max_branch_len = self.prefix_len + max_branch_len
+        
+        # =====================================================================
+        # 2. 构建 attention mask（矩阵化实现）
+        # =====================================================================
+        # 获取完整的 padding_mask（包含 prefix 和当前输入）
+        # full_padding_mask: [num_branches, total_key_len]
+        full_padding_mask = self.batching_padding_mask[:num_branches, :total_key_len]
+        
+        # 初始化 mask 为全遮蔽
         mask = torch.full(
             (num_branches, 1, max_branch_len, total_key_len),
             torch.finfo(self.dtype).min,
             device=self.device,
             dtype=self.dtype,
         )
-
-        for i, length in enumerate(branch_lengths):
-            pad_len = max_branch_len - length
-
-            # 可以看到 prefix（KV Cache 中的部分）
-            mask[i, :, :, :self.prefix_len] = 0
-
-            # 可以看到自己分支的有效 tokens（因果）
-            for q in range(max_branch_len):
-                if padding_mask[i, q] == 1:  # 有效位置
-                    # 可以看到 prefix_len 到 prefix_len + q 的位置（只看有效部分）
-                    valid_start = self.prefix_len + pad_len
-                    valid_end = self.prefix_len + q + 1
-                    mask[i, :, q, valid_start:valid_end] = 0
-
+        
+        # -----------------------------------------------------------------
+        # 2.1 Padding 掩码：只能看到有效位置（padding_mask == 1）
+        # -----------------------------------------------------------------
+        # key_valid_mask: [num_branches, 1, 1, total_key_len]
+        key_valid_mask = full_padding_mask.view(num_branches, 1, 1, total_key_len)
+        
+        # query 的有效性掩码（只处理 query 的有效位置）
+        # query_padding_mask: [num_branches, max_branch_len]（传入的 padding_mask）
+        query_valid_mask = padding_mask.view(num_branches, 1, max_branch_len, 1)
+        
+        # -----------------------------------------------------------------
+        # 2.2 因果掩码：query 位置只能看到 <= 自己位置的 key
+        # -----------------------------------------------------------------
+        # 获取 query 和 key 的 position_ids
+        # query_positions: [num_branches, max_branch_len] -> [num_branches, 1, max_branch_len, 1]
+        query_positions = position_ids.view(num_branches, 1, max_branch_len, 1)
+        
+        # key_positions: [num_branches, total_key_len] -> [num_branches, 1, 1, total_key_len]
+        key_positions = self.batching_position_ids[:num_branches, :total_key_len].view(num_branches, 1, 1, total_key_len)
+        
+        # 因果约束：key_position <= query_position
+        causal_mask = (key_positions <= query_positions)  # [num_branches, 1, max_branch_len, total_key_len]
+        
+        # -----------------------------------------------------------------
+        # 2.3 组合掩码
+        # -----------------------------------------------------------------
+        # 有效条件：
+        # 1. query 是有效的（query_valid_mask）
+        # 2. key 是有效的（key_valid_mask）
+        # 3. 因果约束满足（causal_mask）
+        valid_mask = query_valid_mask.bool() & (key_valid_mask == 1) & causal_mask
+        
+        # 应用掩码
+        mask.masked_fill_(valid_mask, 0)
+        
         return mask
     
     # =========================================================================
@@ -943,12 +1016,12 @@ class BranchStateManager:
         mask = mask.masked_fill(causal_mask, 0)
         
         # padding 掩码（使用 padding_mask 而不是 padding_lengths）
-        if self.padding_mask is not None and self.padding_mask.shape[0] >= batch_size:
+        if self.batching_padding_mask is not None and self.batching_padding_mask.shape[0] >= batch_size:
             # padding_mask: [num_branches, seq_len], 1=有效, 0=padding
             # 需要将 padding 位置在 attention mask 中遮蔽
             for i in range(batch_size):
                 # 找到 padding 结束的位置
-                valid_positions = self.padding_mask[i].nonzero(as_tuple=True)[0]
+                valid_positions = self.batching_padding_mask[i].nonzero(as_tuple=True)[0]
                 if len(valid_positions) > 0:
                     first_valid = valid_positions[0].item()
                     if first_valid > 0:

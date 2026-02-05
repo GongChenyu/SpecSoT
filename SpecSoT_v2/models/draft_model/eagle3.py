@@ -304,7 +304,9 @@ class Eagle3(EagleBase):
         self._num_key_value_heads = config.num_key_value_heads
         self._head_dim = getattr(config, 'head_dim', config.hidden_size // config.num_attention_heads)
 
-        self.reset_state()
+        # 初始化 tree 相关的 buffer（必须在 embed_tokens 和 top_k 设置后调用）
+        self._init_tree_buffers()
+
 
     @classmethod
     def from_pretrained(
@@ -410,8 +412,6 @@ class Eagle3(EagleBase):
         eagle_layer.load_state_dict(ea_state_dict, strict=False)
         eagle_layer.to(base_model.dtype).to(device)
         
-        eagle_layer.reset_state()
-        
         return eagle_layer
 
     # =========================================================================
@@ -426,6 +426,7 @@ class Eagle3(EagleBase):
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
         use_cache: bool = True,
+        batching_padding_mask: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, ...]:
         """
@@ -475,7 +476,8 @@ class Eagle3(EagleBase):
                 dtype=torch.bool, device=hidden_states.device
             )
         attention_mask = self._prepare_decoder_attention_mask(
-            attention_mask, (batch_size, seq_length), hidden_states, past_key_values_length
+            attention_mask, (batch_size, seq_length), hidden_states, past_key_values_length,
+            batching_padding_mask=batching_padding_mask
         )
 
         # 对齐 hidden_states 和 embeddings 维度

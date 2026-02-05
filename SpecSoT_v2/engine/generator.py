@@ -160,10 +160,6 @@ class SpecSoTGenerator:
         self.recently_completed_branches: List[int] = []
         self.prefilling_branches: List[int] = []  # 正在 prefill 的新分支
         self.pending_prefill_prompts: Dict[int, List[int]] = {}  # 新分支的 prompt tokens 缓存
-        
-        # Branch Index Map 和 Position IDs（用于并行解码）
-        self.branch_index_map: Optional[torch.Tensor] = None
-        self.full_position_ids: Optional[torch.Tensor] = None
 
         # =====================================================================
         # 3. Semantic Logits Processor 预初始化
@@ -183,7 +179,6 @@ class SpecSoTGenerator:
         eagle_layer.eval()
         set_random_seed(seed)
         self._reset_state()
-        eagle_layer.reset_state()
 
         # =====================================================================
         # 5. 分布式初始化
@@ -344,8 +339,6 @@ class SpecSoTGenerator:
         self.base_model.model.tree_mode = None
 
         # 并行解码状态
-        self.branch_index_map = None
-        self.full_position_ids = None
         self.active_branches = []
 
         # Continuous Batching 状态
@@ -444,7 +437,6 @@ class SpecSoTGenerator:
         """
         # 公共初始化
         self._reset_state()
-        self.eagle_layer.reset_state()
         
         logits_processor = None
         if temperature > 1e-5:
@@ -514,11 +506,13 @@ class SpecSoTGenerator:
         input_ids = self.tokenizer.encode(full_prompt, return_tensors='pt').to(self.device)
         input_len = input_ids.shape[1]
 
-        # 使用 inference engine 执行 prefill（自动初始化 KV Cache）
+        # 初始化 KV Cache
+        self.inference_engine.init_kv_caches(input_len, max_new_tokens)
+
+        # 使用 inference engine 执行 prefill
         (draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
         ) = self.inference_engine.prefill_single(
             input_ids=input_ids,
-            max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
         ) 
 
@@ -671,34 +665,16 @@ class SpecSoTGenerator:
         prefix_len = prefill_result.task_input_ids.shape[1]
         num_branches = len(branch_prompts)
         
-        # 初始化状态管理器
-        if self.state_manager is None:
-            self.state_manager = BranchStateManager(
-                max_seq_len=prefix_len + max_new_tokens + 200,
-                max_branches=num_branches,
-                device=self.device,
-                use_bim_mode=self.use_bim_mode,
-            )
-        
-        # Skeleton -> Parallel 状态转换：处理 Base Model 和 Eagle Layer 的 KV cache 初始化/扩展
-        (self.inference_engine.past_key_values, 
-         self.inference_engine.past_key_values_data, 
-         self.inference_engine.current_length_data)= \
-        self.state_manager.init_parallel_state(
-            base_model=self.base_model,
-            eagle_layer=self.eagle_layer,
+        # 使用 inference_engine 初始化状态管理器
+        self.inference_engine.init_state_manager(
             prefix_len=prefix_len,
             num_branches=num_branches,
             max_new_tokens=max_new_tokens,
-            old_past_key_values=self.inference_engine.past_key_values,
-            old_past_key_values_data=self.inference_engine.past_key_values_data,
-            old_current_length_data=self.inference_engine.current_length_data,
         )
         
         self.active_branches = list(my_branch_ids)
-        
-        # 将 state_manager 传递给 inference_engine
-        self.inference_engine.state_manager = self.state_manager
+        self.state_manager = self.inference_engine.state_manager
+        self.drafter.state_manager = self.inference_engine.state_manager
         
         # 执行并行 prefill
         parallel_prefill_result = self._parallel_prefill(
@@ -706,6 +682,7 @@ class SpecSoTGenerator:
             branch_prompts=branch_prompts,
             branch_ids=my_branch_ids,
             max_new_tokens=max_new_tokens,
+            logits_processor=logits_processor,
         )
         
         # =====================================================================
@@ -768,11 +745,13 @@ class SpecSoTGenerator:
         input_len = input_ids.shape[1]
         base_prompt_len = task_input_ids.shape[1]
 
-        # 使用 inference engine 执行 prefill（自动初始化 KV Cache）
+        # 初始化 KV Cache
+        self.inference_engine.init_kv_caches(input_len, max_new_tokens)
+
+        # 使用 inference engine 执行 prefill
         (draft_tokens, retrieve_indices, tree_mask, tree_position_ids,
         ) = self.inference_engine.prefill_single(
             input_ids=input_ids,
-            max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
         )
 
@@ -919,6 +898,7 @@ class SpecSoTGenerator:
         branch_prompts: List[List[int]],
         branch_ids: List[int],
         max_new_tokens: int,
+        logits_processor: Optional[LogitsProcessorList] = None,
     ) -> ParallelPrefillResult:
         """
         Phase 5: 并行 Prefill
@@ -935,11 +915,12 @@ class SpecSoTGenerator:
         prefix_len = prefix_ids.shape[1]
 
         # 调用 inference engine 执行并行 prefill
-        result = self.inference_engine.prefill_parallel_branches(
+        result = self.inference_engine.prefill_parallel(
             prefix_len=prefix_len,
             branch_prompts=branch_prompts,
             branch_ids=branch_ids,
             max_new_tokens=max_new_tokens,
+            logits_processor=logits_processor,
         )
 
         # 更新状态管理器
@@ -951,9 +932,6 @@ class SpecSoTGenerator:
                 self.state_manager.add_branch(
                     branch_id, length, start_position=prefix_len + begin
                 )
-
-        # 保存 branch_index_map 引用
-        self.branch_index_map = result.get('branch_index_map')
 
         return ParallelPrefillResult(
             input_ids=result['input_ids'],
@@ -1001,7 +979,7 @@ class SpecSoTGenerator:
         
         total_accept_len = 0
 
-        max_kv_len = self.inference_engine.past_key_values_data.shape[3]  # 动态获取当前 KV Cache 长度限制
+        max_kv_len = self.inference_engine.past_key_values_data[0].shape[3]  # 动态获取当前 KV Cache 长度限制
         
         # DEBUG: 初始状态
         self._log(f"[DEBUG] _parallel_decode 开始: active_branches={self.active_branches}")
@@ -1308,147 +1286,7 @@ class SpecSoTGenerator:
 
         return False
 
-    # =========================================================================
-    # 并行解码辅助方法 (从 specsot_model.py 移植)
-    # =========================================================================
-    
-    def _prepare_parallel_batch(
-        self,
-        prefix_ids: torch.Tensor,
-        branches_prompts: List[List[int]],
-        max_new_tokens: int,
-        branch_ids: Optional[List[int]] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, List[int], List[int], torch.Tensor]:
-        """
-        准备并行解码的批次数据（统一入口）
-        
-        关键设计：
-        =========
-        在 Skeleton 阶段，已经 prefill 了 prefix (system prompt) 的 KV cache。
-        在 Parallel 阶段，我们需要：
-          1. **复用** prefix 的 KV cache（不重新计算）
-          2. 只 prefill **各分支的 parallel prompt**（新的 user turn 部分）
-        
-        因此，返回的 input_ids **只包含各分支的 prompt，不包含 prefix**。
-        
-        核心步骤：
-        1. 重置 KV Cache 长度到 prefix_len（保留 prefix cache）
-        2. 复制 Eagle Layer KV Cache 为多分支
-        3. 构建 BIM: 追踪每个 token 的分支归属（prefix 标记为 -1）
-        4. 打包输入: **只包含各分支的 prompt**（不包含 prefix）
-        5. 位置编码: 各分支从 prefix_len 开始独立计数
-        
-        Args:
-            prefix_ids: 共享前缀 [1, prefix_len]（仅用于获取长度）
-            branches_prompts: 各分支的 prompt token 列表（不包含 prefix）
-            max_new_tokens: 每个分支最大生成长度
-            branch_ids: 分支 ID 列表（可选，用于 Continuous Batching）
-            
-        Returns:
-            input_ids: 打包后的输入 [1, branches_total_len]（仅分支 prompts）
-            tips_indices: 各分支 tip 位置（相对于 prefix_len 的偏移）
-            branch_begins: 各分支起始位置（相对于 prefix_len 的偏移）
-            branch_lengths: 各分支初始长度
-            draft_input_ids: Draft 模型的输入 [num_para, max_len]
-        """
-        device = self.device
-        num_para = len(branches_prompts)
-        prefix_len = prefix_ids.shape[1]
-        pad_token_id = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
-        
-        # 如果没有指定 branch_ids，使用默认的 0, 1, 2, ...
-        if branch_ids is None:
-            branch_ids = list(range(num_para))
-        
-        # 初始化活跃分支列表
-        self.active_branches = list(branch_ids)
-        
-        # ---------------------------------------------------------------------
-        # 1. Base Model KV Cache: 重置到 prefix 长度
-        # ---------------------------------------------------------------------
-        self.current_length_data.fill_(prefix_len)
-        
-        # ---------------------------------------------------------------------
-        # 2. Eagle Layer KV Cache: 复制 prefix KV 为多分支
-        # ---------------------------------------------------------------------
-        if self.eagle_layer.draft_past_key_values is not None:
-            # 获取第一层的 KV Cache
-            key_cache, value_cache = self.eagle_layer.draft_past_key_values[0]
-            # 使用 KVCache 类的 .data 属性统一访问
-            k_draft = key_cache.data[:, :, :key_cache.shape[2], :]
-            v_draft = value_cache.data[:, :, :value_cache.shape[2], :]
-            # 复制 prefix 部分并扩展到多分支
-            k_prefix = k_draft[..., :prefix_len, :].clone()
-            v_prefix = v_draft[..., :prefix_len, :].clone()
-            k_expanded = k_prefix.expand(num_para, -1, -1, -1).clone()
-            v_expanded = v_prefix.expand(num_para, -1, -1, -1).clone()
-            # 批量模式下使用普通 tensor 格式
-            self.eagle_layer.draft_past_key_values = ((k_expanded, v_expanded),)
-        
-        # ---------------------------------------------------------------------
-        # 3. 构建打包输入序列和 Branch Index Map
-        # ---------------------------------------------------------------------
-        # 关键：只构建分支部分，不包含 prefix
-        flat_branch_ids = []
-        # BIM: prefix 部分标记为 -1（共享），分支部分标记为对应的 branch_id
-        branch_index_list = [-1] * prefix_len
-        
-        tips_indices = []
-        branch_begins = []
-        branch_lengths = []
-        # 位置编码：从 prefix_len 开始
-        pos_ids_list = []
-        
-        draft_branch_list = []
-        draft_pos_list = []
-        
-        # 当前偏移从 prefix_len 开始（相对于整个序列的绝对位置）
-        current_offset = prefix_len
-        for i, (br, bid) in enumerate(zip(branches_prompts, branch_ids)):
-            curr_len = len(br)
-            branch_begins.append(current_offset - prefix_len)  # 相对于分支起始的偏移
-            flat_branch_ids.extend(br)
-            branch_index_list.extend([bid] * curr_len)
-            branch_lengths.append(curr_len)
-            current_offset += curr_len
-            tips_indices.append(current_offset - prefix_len - 1)  # 相对于分支起始的偏移
-            
-            # 位置编码: 每个分支从 prefix_len 开始独立计数
-            curr_pos = list(range(prefix_len, prefix_len + curr_len))
-            pos_ids_list.extend(curr_pos)
-            
-            draft_branch_list.append(torch.tensor(br, device=device, dtype=torch.long))
-            draft_pos_list.append(torch.tensor(curr_pos, device=device, dtype=torch.long))
-        
-        # 构建 Tensor
-        # 关键修改：input_ids 只包含分支 prompts，不包含 prefix
-        branches_tensor = torch.tensor([flat_branch_ids], device=device, dtype=torch.long)
-        input_ids = branches_tensor  # 不再拼接 prefix_ids
-        tips_indices = torch.tensor(tips_indices, device=device)
-        self.full_position_ids = torch.tensor(pos_ids_list, device=device)
-        
-        # 初始化 BIM（包含 prefix 的标记，用于 attention mask 构建）
-        total_capacity = prefix_len + input_ids.shape[1] + max_new_tokens + 128
-        self.branch_index_map = torch.full(
-            (total_capacity,), -2, dtype=torch.long, device=device
-        )
-        self.branch_index_map[:len(branch_index_list)] = torch.tensor(
-            branch_index_list, device=device
-        )
-        
-        # 构建 Draft 模型的 Batched 输入（左填充）
-        draft_input_ids, branch_mask = stack_with_left_padding(
-            draft_branch_list, pad_id=pad_token_id, device=device, return_mask=True
-        )
-        padded_branch_pos = stack_with_left_padding(draft_pos_list, pad_id=0, device=device)
-        
-        prefix_mask = torch.ones((num_para, prefix_len), dtype=torch.long, device=device)
-        prefix_pos = torch.arange(prefix_len, device=device).unsqueeze(0).expand(num_para, -1)
-        self.eagle_layer.cache_padding_mask = torch.cat([prefix_mask, branch_mask], dim=1)
-        self.eagle_layer.full_position_ids = torch.cat([prefix_pos, padded_branch_pos], dim=1)
-        
-        return input_ids, tips_indices, branch_begins, branch_lengths, draft_input_ids
-    
+
     def _add_branches_to_active(
         self,
         new_branch_ids: List[int],

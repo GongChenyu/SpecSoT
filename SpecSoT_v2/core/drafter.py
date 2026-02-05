@@ -49,6 +49,7 @@ class Drafter:
         self.total_tokens = eagle_layer.total_tokens
         self.depth = eagle_layer.depth
         self.logsoftmax = nn.LogSoftmax(dim=-1)
+        self.state_manager = None  # 在外部设置 StateManager 实例
 
     # =========================================================================
     # 词表映射（关键：兼容 Eagle2/3）
@@ -174,46 +175,58 @@ class Drafter:
         """
         eagle = self.eagle_layer
         actual_hidden = hidden_states
+        actual_input = input_ids
 
-        # 获取 KV cache 长度
+        # # 获取 KV cache 长度
         kv_len = eagle.get_kv_cache_length()
        
-        # 根据当前状态确定输入
-        # 核心逻辑：确保 actual_hidden 和 actual_input 长度一致
-        if kv_len > 0:
-            if input_ids.shape[0] == 1:
-                if active_branch is not None:
-                    # 并行分支模式
-                    actual_input = input_ids
-                elif hidden_states.shape[1] == input_ids.shape[1] - 1:
-                    # Decode 阶段：input_ids 是 [tokens..., bonus]
-                    # hidden_states 长度 N，input_ids 长度 N+1
-                    # actual_input 应该是 input_ids[:, 1:]，长度 N
-                    actual_input = input_ids[:, 1:]
-                else:
-                    # 标准情况：从完整序列中截取新增部分
-                    actual_input = input_ids[:, 1:]
-                    actual_input = actual_input[:, kv_len:]
-            elif hidden_states.shape[1] != input_ids.shape[1]:
-                actual_input = input_ids[:, 1:]
-            else:
-                actual_input = input_ids
-        else:
-            # Prefill 阶段
-            if active_branch is not None and input_ids.shape[1] == 1:
-                # 并行分支首次 prefill：tip token 直接用
-                # hidden_states 长度 = 1，input_ids 长度 = 1
-                # 不需要跳过第一个 token
-                actual_input = input_ids
-            else:
-                # 标准 prefill：跳过第一个 token
-                actual_input = input_ids[:, 1:]
+        # # 根据当前状态确定输入
+        # # 核心逻辑：确保 actual_hidden 和 actual_input 长度一致
+        # if kv_len > 0:
+        #     if input_ids.shape[0] == 1:
+        #         if active_branch is not None:
+        #             # 并行分支模式
+        #             actual_input = input_ids
+        #         elif hidden_states.shape[1] == input_ids.shape[1] - 1:
+        #             # Decode 阶段：input_ids 是 [tokens..., bonus]
+        #             # hidden_states 长度 N，input_ids 长度 N+1
+        #             # actual_input 应该是 input_ids[:, 1:]，长度 N
+        #             actual_input = input_ids[:, 1:]
+        #         else:
+        #             # 标准情况：从完整序列中截取新增部分
+        #             actual_input = input_ids[:, 1:]
+        #             actual_input = actual_input[:, kv_len:]
+        #     elif hidden_states.shape[1] != input_ids.shape[1]:
+        #         actual_input = input_ids[:, 1:]
+        #     else:
+        #         actual_input = input_ids
+        # else:
+        #     # Prefill 阶段
+        #     if active_branch is not None and input_ids.shape[1] == 1:
+        #         # 并行分支首次 prefill：tip token 直接用
+        #         # hidden_states 长度 = 1，input_ids 长度 = 1
+        #         # 不需要跳过第一个 token
+        #         actual_input = input_ids
+        #     else:
+        #         # 标准 prefill：跳过第一个 token
+        #         actual_input = input_ids[:, 1:]
 
         # 处理位置编码
-        if eagle.full_position_ids is not None and kv_len > 0:
-            position_start = kv_len
-            step = actual_input.shape[1]
-            position_ids = eagle.full_position_ids[:, position_start:position_start + step]
+        # if eagle.full_position_ids is not None and kv_len > 0:
+        #     position_start = kv_len
+        #     step = actual_input.shape[1]
+        #     position_ids = eagle.full_position_ids[:, position_start:position_start + step]
+
+        if self.state_manager is not None and kv_len > 0:
+            if self.state_manager.use_bim_mode:
+                position_ids = self.state_manager.bim_position_ids[kv_len:kv_len + actual_input.shape[1]]
+            else:
+                position_ids = self.state_manager.batching_position_ids[:, kv_len:kv_len + actual_input.shape[1]]
+
+        # 获取 cache_padding_mask
+        cache_padding_mask = None
+        if self.state_manager is not None and not self.state_manager.use_bim_mode:
+            cache_padding_mask = self.state_manager.batching_padding_mask
 
         # Eagle Layer Forward
         out_hidden, past_key_values = eagle(
@@ -221,6 +234,7 @@ class Drafter:
             input_ids=actual_input,
             position_ids=position_ids,
             past_key_values=eagle.draft_past_key_values,
+            cache_padding_mask=cache_padding_mask,
             use_cache=True,
         )
 
@@ -266,10 +280,11 @@ class Drafter:
         """
         eagle = self.eagle_layer
         hidden_size = eagle.hidden_size
+        device = last_hidden.device
 
         input_hidden = last_hidden[:, None, :].repeat(1, top_k, 1)
-        tree_mask = eagle.tree_mask_init.repeat(bsz, 1, 1, 1)
-        local_range = torch.arange(top_k, device=eagle.embed_tokens.weight.device)
+        tree_mask = eagle.tree_mask_init.to(device).repeat(bsz, 1, 1, 1)
+        local_range = torch.arange(top_k, device=device)
         past_key_values = eagle.draft_past_key_values
 
         loop_scores = []
@@ -280,19 +295,29 @@ class Drafter:
             eagle.tree_mask = tree_mask
 
             # 计算位置编码
-            if eagle.full_position_ids is not None:
-                root_pos = eagle.full_position_ids[:, -1]
+            # 从 state_manager 获取位置信息
+            if self.state_manager is not None and not self.state_manager.use_bim_mode:
+                # Batching 模式：从 state_manager 获取
+                root_pos = self.state_manager.batching_position_ids[:bsz, self.state_manager.max_branch_len - 1]
                 current_pos = root_pos + i + 1
                 position_ids = current_pos.unsqueeze(1).expand(-1, top_k)
             else:
+                # BIM 模式或无 state_manager：使用原有逻辑
                 position_ids = len_posi - 1 + eagle.position_ids
                 position_ids = position_ids.unsqueeze(0).repeat(bsz, 1)
+
+            # 获取 cache_padding_mask
+            cache_padding_mask = None
+            if self.state_manager is not None and not self.state_manager.use_bim_mode:
+                cache_padding_mask = self.state_manager.batching_padding_mask[:bsz]
 
             # Eagle Layer Forward
             out_hidden, past_key_values = eagle(
                 input_hidden, input_ids=input_ids,
                 past_key_values=past_key_values,
-                position_ids=position_ids, use_cache=True
+                position_ids=position_ids,
+                cache_padding_mask=cache_padding_mask,
+                use_cache=True
             )
 
             # 计算父节点索引
@@ -331,10 +356,10 @@ class Drafter:
 
             # 更新 Tree Mask
             new_masks = []
+            init_mask = eagle.tree_mask_init.to(device)
             for b in range(bsz):
                 current_mask = tree_mask[b:b+1]
                 selected_cols = current_mask[:, :, :, out_ids[b]]
-                init_mask = eagle.tree_mask_init
                 new_mask = torch.cat((selected_cols, init_mask), dim=3)
                 new_masks.append(new_mask)
             tree_mask = torch.cat(new_masks, dim=0)
@@ -550,11 +575,15 @@ class Drafter:
         # 获取 KV cache 长度
         kv_len = eagle.get_kv_cache_length()
 
+        # 从 state_manager 获取 position_ids
         position_ids = None
-        if eagle.full_position_ids is not None and kv_len > 0:
+        if self.state_manager is not None and kv_len > 0:
             position_start = kv_len
             step = actual_input.shape[1]
-            position_ids = eagle.full_position_ids[:, position_start:position_start + step]
+            if self.state_manager.use_bim_mode:
+                position_ids = self.state_manager.bim_position_ids[position_start:position_start + step]
+            else:
+                position_ids = self.state_manager.batching_position_ids[:, position_start:position_start + step]
 
         out_hidden, past_key_values = eagle(
             actual_hidden,

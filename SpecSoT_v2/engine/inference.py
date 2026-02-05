@@ -73,7 +73,7 @@ class InferenceEngine:
         self.current_length_data = None
 
     # =========================================================================
-    # KV Cache 初始化
+    # KV Cache 初始化和状态初始化
     # =========================================================================
 
     def init_kv_caches(self, input_len: int, max_new_tokens: int):
@@ -100,6 +100,46 @@ class InferenceEngine:
         self.eagle_layer.draft_past_key_values = self.draft_past_key_values
         self.eagle_layer.draft_past_key_values_data = self.draft_past_key_values_data
         self.eagle_layer.draft_current_length_data = self.draft_current_length_data
+
+    def init_state_manager(
+        self,
+        prefix_len: int,
+        num_branches: int,
+        max_new_tokens: int,
+    ):
+        """
+        初始化状态管理器并执行 Skeleton -> Parallel 状态转换
+
+        Args:
+            prefix_len: 共享 prefix 长度
+            num_branches: 分支数量
+            max_new_tokens: 最大生成 token 数
+            use_bim_mode: 是否使用 BIM 模式
+        """
+        # 初始化状态管理器
+        if self.state_manager is None:
+            self.state_manager = BranchStateManager(
+                max_seq_len=prefix_len + max_new_tokens + 200,
+                max_branches=num_branches,
+                device=self.device,
+                use_bim_mode=self.use_bim_mode,
+            )
+
+        # Skeleton -> Parallel 状态转换：处理 Base Model 和 Eagle Layer 的 KV cache 初始化/扩展
+        (self.past_key_values,
+         self.past_key_values_data,
+         self.current_length_data) = self.state_manager.init_parallel_state(
+            base_model=self.base_model,
+            eagle_layer=self.eagle_layer,
+            prefix_len=prefix_len,
+            num_branches=num_branches,
+            max_new_tokens=max_new_tokens,
+            old_past_key_values=self.past_key_values,
+            old_past_key_values_data=self.past_key_values_data,
+            old_current_length_data=self.current_length_data,
+        )
+
+        return self.state_manager
 
     # =========================================================================
     # Hidden States 处理辅助方法
@@ -155,34 +195,24 @@ class InferenceEngine:
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         logits_processor: Optional[Any] = None,
-        max_new_tokens: Optional[int] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         单序列 Prefill
         
-        执行首次前向传播。如果提供 max_new_tokens，会自动初始化 KV Cache。
+        执行首次前向传播。KV Cache 需要在调用前通过 init_kv_caches 初始化。
         
         Args:
             input_ids: [1, seq_len]
             attention_mask: 可选的 attention mask
             position_ids: 可选的 position ids
             logits_processor: logits 处理器
-            max_new_tokens: 最大生成 token 数（用于初始化 KV Cache）
             
         Returns:
             draft_tokens: 候选 token 树
             retrieve_indices: 检索索引
             tree_mask: 树 attention mask
             tree_position_ids: 树 position ids
-            hidden_states: 最后的隐藏状态
-            logits: 输出 logits
-            sample_token: 采样的 token
         """
-        # 如果提供了 max_new_tokens，则初始化 KV Cache
-        if max_new_tokens is not None:
-            input_len = input_ids.shape[1]
-            self.init_kv_caches(input_len, max_new_tokens)
-
         # Base Model Forward
         outputs = self.base_model.model(
             input_ids=input_ids,
@@ -193,35 +223,37 @@ class InferenceEngine:
         last_hidden_state = outputs["last_hidden_state"]  # 用于计算 logits
         logits = self.base_model.lm_head(last_hidden_state)
         
-        # 采样
+        # 采样  这里skeleton阶段就是采用greedy的方式
         if logits_processor is not None:
             processed_logits = logits_processor(input_ids, logits[:, -1:, :])
             sample_token = torch.argmax(processed_logits[:, -1, :], dim=-1, keepdim=True)
+            # probabilities = torch.nn.functional.softmax(processed_logits[:, -1, :], dim=-1)
+            # sample_token = torch.multinomial(probabilities, 1)
         else:
             sample_token = torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
 
         # 将 sample_token 拼接到 input_ids（与 specsot_model 保持一致）
-        input_ids = torch.cat((input_ids, sample_token.to(input_ids.device)), dim=1)
-
-        # 初始化 Eagle Layer
-        self.eagle_layer.reset_state()
+        draft_input_ids = torch.cat((input_ids, sample_token.to(input_ids.device)), dim=1)
+        # 去掉第一个token，保持长度不变
+        draft_input_ids = draft_input_ids[:, 1:]
 
         # 提取 Draft Model 的输入 hidden states（完整序列）
         draft_input_hidden = self._prepare_draft_input_hidden(outputs)  # [batch, seq_len, hidden(*3)]
 
         # 生成 Draft Tree（传入完整的 hidden states 和 input_ids）
         draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-            self.drafter.generate_draft_tree(draft_input_hidden, input_ids)
+            self.drafter.generate_draft_tree(draft_input_hidden, draft_input_ids)
         
         return (draft_tokens, retrieve_indices, tree_mask, tree_position_ids)
 
     @torch.inference_mode()
-    def prefill_parallel_branches(
+    def prefill_parallel(
         self,
         prefix_len: int,
         branch_prompts: List[List[int]],
         branch_ids: List[int],
         max_new_tokens: int,
+        logits_processor: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         并行 Prefill 统一入口
@@ -233,19 +265,223 @@ class InferenceEngine:
             branch_prompts: 各分支的 prompt token 列表
             branch_ids: 分支 ID 列表
             max_new_tokens: 最大生成 token 数
+            logits_processor: logits 处理器
 
         Returns:
             包含 prefill 结果的字典
         """
         if self.use_bim_mode:
             return self._prefill_parallel_bim(
-                prefix_len, branch_prompts, branch_ids, max_new_tokens
+                prefix_len, branch_prompts, branch_ids, max_new_tokens, logits_processor
             )
         else:
             return self._prefill_parallel_batching(
-                prefix_len, branch_prompts, branch_ids, max_new_tokens
+                prefix_len, branch_prompts, branch_ids, max_new_tokens, logits_processor
             )
 
+    @torch.inference_mode()
+    def _prefill_parallel_bim(
+        self,
+        prefix_len: int,
+        branch_prompts: List[List[int]],
+        branch_ids: List[int],
+        max_new_tokens: int,
+        logits_processor: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        BIM 模式并行 Prefill
+
+        所有分支拉平成单序列 [1, total_len]，通过 BIM 索引区分不同分支。
+
+        Args:
+            prefix_len: 共享 prefix 长度
+            branch_prompts: 各分支的 prompt token 列表
+            branch_ids: 分支 ID 列表
+            max_new_tokens: 最大生成 token 数
+            logits_processor: logits 处理器
+
+        Returns:
+            包含 prefill 结果的字典
+        """
+        num_branches = len(branch_prompts)
+
+        # 2. 使用 state_manager 准备所有数据（BIM, position_ids, attention_mask 等）
+        if self.state_manager is None:
+            raise RuntimeError("state_manager 未初始化")
+        
+        prefill_data = self.state_manager.prepare_parallel_prefill_bim(
+            branch_prompts=branch_prompts,
+            branch_ids=branch_ids,
+            max_new_tokens=max_new_tokens,
+        )
+
+        input_ids = prefill_data['input_ids']
+        branch_index_map = prefill_data['branch_index_map']
+        position_ids = prefill_data['position_ids']
+        attention_mask = prefill_data['attention_mask']
+        tips_indices = prefill_data['tips_indices']
+        branch_begins = prefill_data['branch_begins']
+        branch_lengths = prefill_data['branch_lengths']
+
+        # 3. Base Model Forward
+        self.base_model.model.tree_mask = attention_mask
+        self.base_model.model.tree_mode = "parallel_prefill"
+
+        outputs = self.base_model.model(
+            input_ids=input_ids,
+            attention_mask=None,
+            past_key_values=self.past_key_values,
+            position_ids=position_ids,
+        )
+        last_hidden_state = outputs["last_hidden_state"]  # [1, total_len, hidden_size]
+        logits = self.base_model.lm_head(last_hidden_state)
+
+        # 提取 Draft Model 的输入 hidden states（完整序列）
+        draft_input_hidden = self._prepare_draft_input_hidden(outputs)  # [1, total_len, hidden(*3)]
+
+        # 5. 提取各分支的完整 hidden states 和采样
+        # 对各分支的 tip 位置进行采样
+        branch_hidden_list = []
+        branch_draft_ids_list = []
+        for i, (begin, length) in enumerate(zip(branch_begins, branch_lengths)):
+            # 提取该分支的完整 hidden states
+            branch_hidden = draft_input_hidden[:, begin:begin+length, :]  # [1, length, hidden(*3)]
+            branch_hidden_list.append(branch_hidden)
+            
+            # 提取该分支的 tip logits 并采样
+            tip_idx = begin + length - 1
+            tip_logits = logits[:, tip_idx:tip_idx+1, :]  # [1, 1, vocab]
+            
+            # 采样（与 prefill_single 保持一致）
+            if logits_processor is not None:
+                processed_logits = logits_processor(input_ids, tip_logits)
+                probabilities = torch.nn.functional.softmax(processed_logits[:, -1, :], dim=-1)
+                sample_token = torch.multinomial(probabilities, 1)
+            else:
+                sample_token = torch.argmax(tip_logits[:, -1, :], dim=-1, keepdim=True)  # [1, 1]
+            
+            # 构造 draft_input_ids: cat(branch_ids, sample_token)[:, 1:]
+            branch_token_ids = input_ids[:, begin:begin+length]  # [1, length]
+            branch_draft_ids = torch.cat((branch_token_ids, sample_token), dim=1)[:, 1:]  # [1, length]
+            branch_draft_ids_list.append(branch_draft_ids)
+        
+        # 拼接所有分支: [num_branches, length, hidden(*3)] 和 [num_branches, length]
+        all_branch_hidden = torch.cat(branch_hidden_list, dim=0)  # [num_branches, length, hidden(*3)]
+        all_branch_draft_ids = torch.cat(branch_draft_ids_list, dim=0)  # [num_branches, length]
+
+        # 8. 生成 Draft Tree（传入完整的 hidden states 和 draft_input_ids）
+        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
+            self.drafter.generate_draft_tree(
+                all_branch_hidden, all_branch_draft_ids,
+                prefix_len=prefix_len,
+                active_branch=list(range(num_branches)),
+            )
+
+        return {
+            'input_ids': input_ids,
+            'draft_tokens': draft_tokens,
+            'retrieve_indices': retrieve_indices,
+            'tree_mask': tree_mask,
+            'tree_position_ids': tree_position_ids,
+            'tips_indices': tips_indices,
+            'branch_begins': branch_begins,
+            'branch_lengths': branch_lengths,
+            'branch_index_map': branch_index_map,
+            'position_ids': position_ids,
+        }
+
+    @torch.inference_mode()
+    def _prefill_parallel_batching(
+        self,
+        prefix_len: int,
+        branch_prompts: List[List[int]],
+        branch_ids: List[int],
+        max_new_tokens: int,
+        logits_processor: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Batching 模式并行 Prefill
+
+        各分支独立 [num_branches, max_len]。
+        注意：KV Cache 的扩展已在 state_manager.init_parallel_state 中完成。
+
+        Args:
+            prefix_len: 共享 prefix 长度
+            branch_prompts: 各分支的 prompt token 列表
+            branch_ids: 分支 ID 列表
+            max_new_tokens: 最大生成 token 数
+            logits_processor: logits 处理器
+
+        Returns:
+            包含 prefill 结果的字典
+        """
+        num_branches = len(branch_prompts)
+
+        # 1. 使用 state_manager 准备所有数据
+        # 注意：KV Cache 已在 generator 的 _parallel_prefill 中通过 
+        # state_manager.init_parallel_state 完成初始化和扩展
+        if self.state_manager is None:
+            raise RuntimeError("state_manager 未初始化")
+
+        prefill_data = self.state_manager.prepare_parallel_prefill_batching(
+            branch_prompts=branch_prompts,
+            branch_ids=branch_ids,
+            pad_token_id=0,
+        )
+
+        padded_input = prefill_data['input_ids']
+        position_ids = prefill_data['position_ids']
+        padding_mask = prefill_data['padding_mask']
+        attention_mask = prefill_data['attention_mask']
+        branch_lengths = prefill_data['branch_lengths']
+
+        max_branch_len = padded_input.shape[1]
+
+        # 3. Base Model Forward
+        outputs = self.base_model.model(
+            input_ids=padded_input,
+            attention_mask=attention_mask,
+            past_key_values=self.past_key_values,
+            position_ids=position_ids,
+        )
+        last_hidden_state = outputs["last_hidden_state"]  # [num_branches, max_branch_len, hidden_size]
+        logits = self.base_model.lm_head(last_hidden_state)
+
+        # 提取 Draft Model 的输入 hidden states（完整序列）
+        draft_input_hidden = self._prepare_draft_input_hidden(outputs)  # [num_branches, max_branch_len, hidden(*3)]
+
+        # 5. 对各分支的 tip 位置进行采样，构造 draft_input_ids
+        # 采样（与 prefill_single 保持一致）
+        if logits_processor is not None:
+            processed_logits = logits_processor(padded_input, logits[:, -1:, :])
+            probabilities = torch.nn.functional.softmax(processed_logits[:, -1, :], dim=-1)
+            sample_tokens = torch.multinomial(probabilities, 1)  # [num_branches, 1]
+        else:
+            sample_tokens = torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)  # [num_branches, 1]
+        
+        # 构造 draft_input_ids: 先去掉第一个 token，再 cat 上 sample_token
+        # 因为mask确定的可见区域是一定的，所以input ids 整体左移，再加上sample token 是正确的
+        draft_input_ids = torch.cat((padded_input, sample_tokens), dim=1)[:, 1:]  # [num_branches, max_branch_len]
+
+        # 6. 生成 Draft Tree（传入完整的 hidden states 和 draft_input_ids）
+        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
+            self.drafter.generate_draft_tree(
+                draft_input_hidden, draft_input_ids,
+                prefix_len=prefix_len,
+                active_branch=list(range(num_branches)),
+            )
+
+        return {
+            'input_ids': padded_input,
+            'draft_tokens': draft_tokens,
+            'retrieve_indices': retrieve_indices,
+            'tree_mask': tree_mask,
+            'tree_position_ids': tree_position_ids,
+            'branch_lengths': branch_lengths,
+            'padding_mask': padding_mask,
+            'position_ids': position_ids,
+        }
+    
     # =========================================================================
     # Decode 操作
     # =========================================================================
@@ -413,7 +649,7 @@ class InferenceEngine:
             path_indices = path_indices.to(self.device)
         
         # 获取接受的 tokens（从 draft_tokens 提取）
-        accepted_tokens = draft_tokens[0, path_indices]
+        accepted_tokens = draft_tokens[batch_idx, path_indices]
         
         # 更新 KV Cache
         # 使用 verify 前的长度（如果提供），否则从 current_length_data 获取
@@ -429,40 +665,14 @@ class InferenceEngine:
                 kv_cache.copy(absolute_indices, prev_length)
         
         # 更新 input_ids
-        # new_tokens = accepted_tokens（不含 bonus token）
-        # bonus token 会在 draft_input_ids 中添加
+        # new_tokens = accepted_tokens（不含 sample token）
         updated_input_ids = torch.cat([input_ids, accepted_tokens.unsqueeze(0)], dim=1)
         
-        # 创建用于 Draft 的 input_ids
-        # Eagle 的对齐规则：hidden[i] 和 emb(token[i+1]) 配对预测 token[i+2]
-        # 
-        # 我们需要：
-        # - h_sample_token 和 emb(node_1) → 预测 node_2
-        # - h_node_1 和 emb(node_2) → 预测 node_3
-        # - ...
-        # - h_node_{n-1} 和 emb(node_n) → 预测 bonus_next
-        # - h_node_n 和 emb(bonus) → 预测下一个 token
-        #
-        # 所以 input_ids 的格式应该是 [dummy, node_1, node_2, ..., bonus]
-        # 其中 dummy 占位让 input_ids[:, 1:] = [node_1, node_2, ..., bonus]
-        # 这样 actual_input = input_ids[:, 1:] 长度正好匹配 accept_hidden
-        draft_input_ids = torch.cat([
-            torch.zeros(1, 1, dtype=accepted_tokens.dtype, device=accepted_tokens.device),  # dummy 占位
-            accepted_tokens.unsqueeze(0),  # [node_1, node_2, ..., node_n]
-            sample_token.view(1, -1)       # [bonus]
-        ], dim=1)
+        # 创建用于 Draft 的 input_ids （含 sample token）
+        draft_input_ids = torch.cat([accepted_tokens.unsqueeze(0),sample_token.view(1, -1)], dim=1)[:,1:]
         
         # 提取接受路径的 Hidden States（用于下一轮 Draft Tree 生成）
-        # 关键：需要从位置 0（sample_token）开始，因为：
-        # - h_sample_token 和 emb(node_1) 配对预测 node_2
-        # - h_node_1 和 emb(node_2) 配对预测 node_3
-        # - ...
-        # 构建包含位置 0 的完整 path
-        full_path_indices = torch.cat([
-            torch.zeros(1, dtype=path_indices.dtype, device=path_indices.device),  # 位置 0: sample_token
-            path_indices  # [node_1_idx, node_2_idx, ...]
-        ])
-        draft_input_hidden = all_hidden_states[:, full_path_indices, :]  # [batch, accept_len+2, hidden_dim]
+        draft_input_hidden = all_hidden_states[:, path_indices, :]  # [batch, accept_len+2, hidden_dim]
         
         # 更新当前长度
         self.current_length_data[0] = prev_length + len(path_indices)
@@ -690,8 +900,17 @@ class InferenceEngine:
         
         # 计算绝对位置
         # tree_position_ids 是相对位置，需要加上当前 tip 的位置
-        # Eagle 的 full_position_ids 最后一个位置就是 tip
-        current_tip_pos = self.eagle_layer.full_position_ids[:, -1].unsqueeze(-1)
+        # 从 StateManager 获取 position_ids
+        if self.state_manager.use_bim_mode:
+            tip_idx = self.state_manager.current_seq_len - 1
+            current_tip_pos = self.state_manager.bim_position_ids[tip_idx].unsqueeze(0).unsqueeze(-1)
+        else:
+            # Batching 模式：每个分支可能有不同长度
+            tip_positions = []
+            for i, branch_id in enumerate(active_branches):
+                branch_len = self.state_manager.branch_states[branch_id].current_len + self.state_manager.prefix_len
+                tip_positions.append(self.state_manager.batching_position_ids[i, branch_len - 1])
+            current_tip_pos = torch.stack(tip_positions).unsqueeze(-1)
         abs_draft_pos = tree_position_ids + current_tip_pos + 1
         flat_draft_pos = abs_draft_pos.view(1, -1)
         
@@ -971,203 +1190,6 @@ class InferenceEngine:
 
         return mask
 
-    # =========================================================================
-    # 双模式实现：BIM 模式
-    # =========================================================================
-
-    @torch.inference_mode()
-    def _prefill_parallel_bim(
-        self,
-        prefix_len: int,
-        branch_prompts: List[List[int]],
-        branch_ids: List[int],
-        max_new_tokens: int,
-    ) -> Dict[str, Any]:
-        """
-        BIM 模式并行 Prefill
-
-        所有分支拉平成单序列 [1, total_len]，通过 BIM 索引区分不同分支。
-
-        Args:
-            prefix_len: 共享 prefix 长度
-            branch_prompts: 各分支的 prompt token 列表
-            branch_ids: 分支 ID 列表
-            max_new_tokens: 最大生成 token 数
-
-        Returns:
-            包含 prefill 结果的字典
-        """
-        num_branches = len(branch_prompts)
-
-        # 1. 重置 KV Cache 到 prefix 长度
-        self.current_length_data.fill_(prefix_len)
-
-        # 2. 使用 state_manager 准备所有数据（BIM, position_ids, attention_mask 等）
-        if self.state_manager is None:
-            raise RuntimeError("state_manager 未初始化")
-        
-        prefill_data = self.state_manager.prepare_parallel_prefill_bim(
-            branch_prompts=branch_prompts,
-            branch_ids=branch_ids,
-            max_new_tokens=max_new_tokens,
-        )
-
-        input_ids = prefill_data['input_ids']
-        branch_index_map = prefill_data['branch_index_map']
-        position_ids = prefill_data['position_ids']
-        attention_mask = prefill_data['attention_mask']
-        tips_indices = prefill_data['tips_indices']
-        branch_begins = prefill_data['branch_begins']
-        branch_lengths = prefill_data['branch_lengths']
-
-        # 3. Base Model Forward
-        self.base_model.model.tree_mask = attention_mask
-        self.base_model.model.tree_mode = "parallel_prefill"
-
-        outputs = self.base_model.model(
-            input_ids=input_ids,
-            attention_mask=None,
-            past_key_values=self.past_key_values,
-            position_ids=position_ids,
-        )
-        last_hidden_state = outputs["last_hidden_state"]  # [1, total_len, hidden_size]
-
-        # 提取 Draft Model 的输入 hidden states
-        draft_input_hidden = self._prepare_draft_input_hidden(outputs)  # [1, total_len, hidden(*3)]
-
-        # 5. 提取各分支 Tip 的 Hidden States
-        tips_hidden = []
-        for tip_idx in tips_indices:
-            tips_hidden.append(draft_input_hidden[:, tip_idx:tip_idx+1, :])
-        tips_hidden = torch.cat(tips_hidden, dim=1).transpose(0, 1)  # [num_branches, 1, hidden(*3)]
-
-        # 注意：Eagle KV Cache 已在 state_manager.init_parallel_state 中初始化并复用 prefix
-
-        # 6. 提取各分支的 tip token
-        flat_branch_ids = []
-        for prompt in branch_prompts:
-            flat_branch_ids.extend(prompt)
-        tip_token_ids = torch.tensor(
-            [flat_branch_ids[begin + length - 1]
-             for begin, length in zip(branch_begins, branch_lengths)],
-            device=self.device
-        ).unsqueeze(1)
-
-        # 8. 生成 Draft Tree
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-            self.drafter.generate_draft_tree(
-                tips_hidden, tip_token_ids,
-                prefix_len=prefix_len,
-                active_branch=list(range(num_branches)),
-            )
-
-        return {
-            'input_ids': input_ids,
-            'draft_tokens': draft_tokens,
-            'retrieve_indices': retrieve_indices,
-            'tree_mask': tree_mask,
-            'tree_position_ids': tree_position_ids,
-            'tips_indices': tips_indices,
-            'branch_begins': branch_begins,
-            'branch_lengths': branch_lengths,
-            'branch_index_map': branch_index_map,
-            'position_ids': position_ids,
-        }
-
-    # =========================================================================
-    # 双模式实现：Batching 模式
-    # =========================================================================
-
-    @torch.inference_mode()
-    def _prefill_parallel_batching(
-        self,
-        prefix_len: int,
-        branch_prompts: List[List[int]],
-        branch_ids: List[int],
-        max_new_tokens: int,
-    ) -> Dict[str, Any]:
-        """
-        Batching 模式并行 Prefill
-
-        各分支独立 [num_branches, max_len]。
-        注意：KV Cache 的扩展已在 state_manager.init_parallel_state 中完成。
-
-        Args:
-            prefix_len: 共享 prefix 长度
-            branch_prompts: 各分支的 prompt token 列表
-            branch_ids: 分支 ID 列表
-            max_new_tokens: 最大生成 token 数
-
-        Returns:
-            包含 prefill 结果的字典
-        """
-        num_branches = len(branch_prompts)
-
-        # 1. 使用 state_manager 准备所有数据
-        # 注意：KV Cache 已在 generator 的 _parallel_prefill 中通过 
-        # state_manager.init_parallel_state 完成初始化和扩展
-        if self.state_manager is None:
-            raise RuntimeError("state_manager 未初始化")
-
-        prefill_data = self.state_manager.prepare_parallel_prefill_batching(
-            branch_prompts=branch_prompts,
-            branch_ids=branch_ids,
-            pad_token_id=0,
-        )
-
-        padded_input = prefill_data['input_ids']
-        position_ids = prefill_data['position_ids']
-        padding_mask = prefill_data['padding_mask']
-        attention_mask = prefill_data['attention_mask']
-        branch_lengths = prefill_data['branch_lengths']
-
-        max_branch_len = padded_input.shape[1]
-
-        # 3. Base Model Forward
-        outputs = self.base_model.model(
-            input_ids=padded_input,
-            attention_mask=attention_mask,
-            past_key_values=self.past_key_values,
-            position_ids=position_ids,
-        )
-        last_hidden_state = outputs["last_hidden_state"]  # [num_branches, max_branch_len, hidden_size]
-
-        # 提取 Draft Model 的输入 hidden states
-        draft_input_hidden = self._prepare_draft_input_hidden(outputs)  # [num_branches, max_branch_len, hidden(*3)]
-
-        # 5. 提取各分支 tip hidden states
-        tips_hidden = []
-        for i, length in enumerate(branch_lengths):
-            tip_idx = max_branch_len - 1  # 最后一个位置
-            tips_hidden.append(draft_input_hidden[i:i+1, tip_idx:tip_idx+1, :])
-        tips_hidden = torch.cat(tips_hidden, dim=0)  # [num_branches, 1, hidden(*3)]
-
-        # 注意：Eagle KV Cache 已在 state_manager.init_parallel_state 中初始化并复用 prefix
-
-        # 6. 生成 Draft Tree
-        tip_token_ids = torch.tensor(
-            [branch_prompts[i][-1] for i in range(num_branches)],
-            device=self.device
-        ).unsqueeze(1)
-
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = \
-            self.drafter.generate_draft_tree(
-                tips_hidden, tip_token_ids,
-                prefix_len=prefix_len,
-                active_branch=list(range(num_branches)),
-            )
-
-        return {
-            'input_ids': padded_input,
-            'draft_tokens': draft_tokens,
-            'retrieve_indices': retrieve_indices,
-            'tree_mask': tree_mask,
-            'tree_position_ids': tree_position_ids,
-            'branch_lengths': branch_lengths,
-            'padding_mask': padding_mask,
-            'position_ids': position_ids,
-        }
-    
     # =========================================================================
     # Batching 模式辅助方法
     # =========================================================================
@@ -1459,7 +1481,13 @@ class InferenceEngine:
         # 老分支的 draft tokens
         if num_old > 0 and draft_tokens is not None:
             flat_draft_tokens = draft_tokens.reshape(1, -1)
-            current_tip_pos = self.eagle_layer.full_position_ids[:, -1].unsqueeze(-1)
+            # 从 StateManager 获取 position_ids
+            if self.state_manager.use_bim_mode:
+                tip_idx = self.state_manager.current_seq_len - 1
+                current_tip_pos = self.state_manager.bim_position_ids[tip_idx].unsqueeze(0).unsqueeze(-1)
+            else:
+                # Batching 模式暂不支持 continuous decode
+                raise NotImplementedError("Batching mode not supported for continuous decode")
             abs_draft_pos = tree_position_ids + current_tip_pos + 1
             flat_draft_pos = abs_draft_pos.view(1, -1)
         else:
@@ -1825,55 +1853,23 @@ class InferenceEngine:
             return
         
         # 构建新分支的 cache_padding_mask 和 full_position_ids
-        new_mask_list = []
-        new_pos_list = []
-        
-        for prompt_len in new_prompt_lengths:
+        # 使用 StateManager 的预分配方式（原地更新）
+        old_num_branches = len(self.state_manager.active_branches) - num_new
+        max_new_len = 0
+
+        for i, (branch_id, prompt_len) in enumerate(zip(new_branch_ids, new_prompt_lengths)):
             total_len = prefix_len + prompt_len
-            mask = torch.ones(total_len, device=device, dtype=torch.long)
-            new_mask_list.append(mask)
-            pos = torch.arange(total_len, device=device, dtype=torch.long)
-            new_pos_list.append(pos)
-        
-        # 对齐到老分支的长度
-        if self.eagle_layer.cache_padding_mask is not None:
-            old_len = self.eagle_layer.cache_padding_mask.shape[1]
-            
-            padded_masks = []
-            padded_positions = []
-            for mask, pos in zip(new_mask_list, new_pos_list):
-                cur_len = len(mask)
-                if cur_len < old_len:
-                    # 左填充到相同长度
-                    pad_len = old_len - cur_len
-                    mask = torch.cat([torch.zeros(pad_len, device=device, dtype=mask.dtype), mask])
-                    pos = torch.cat([torch.zeros(pad_len, device=device, dtype=pos.dtype), pos])
-                elif cur_len > old_len:
-                    # 老分支需要右填充
-                    pad_len = cur_len - old_len
-                    old_mask_padded = torch.cat([
-                        self.eagle_layer.cache_padding_mask,
-                        torch.zeros(self.eagle_layer.cache_padding_mask.shape[0], pad_len, device=device, dtype=self.eagle_layer.cache_padding_mask.dtype)
-                    ], dim=1)
-                    old_pos_padded = torch.cat([
-                        self.eagle_layer.full_position_ids,
-                        torch.zeros(self.eagle_layer.full_position_ids.shape[0], pad_len, device=device, dtype=self.eagle_layer.full_position_ids.dtype)
-                    ], dim=1)
-                    self.eagle_layer.cache_padding_mask = old_mask_padded
-                    self.eagle_layer.full_position_ids = old_pos_padded
-                    old_len = cur_len
-                padded_masks.append(mask)
-                padded_positions.append(pos)
-            
-            new_cache_mask = torch.stack(padded_masks, dim=0)
-            new_full_pos = torch.stack(padded_positions, dim=0)
-            
-            self.eagle_layer.cache_padding_mask = torch.cat([
-                self.eagle_layer.cache_padding_mask, new_cache_mask
-            ], dim=0)
-            self.eagle_layer.full_position_ids = torch.cat([
-                self.eagle_layer.full_position_ids, new_full_pos
-            ], dim=0)
+            max_new_len = max(max_new_len, total_len)
+            branch_idx = old_num_branches + i
+
+            # 原地更新 StateManager 的预分配 tensor
+            self.state_manager.batching_padding_mask[branch_idx, :total_len] = 1
+            self.state_manager.batching_position_ids[branch_idx, :total_len] = torch.arange(
+                total_len, device=device, dtype=torch.long
+            )
+
+        # 更新长度变量
+        self.state_manager.max_branch_len = max(self.state_manager.max_branch_len, max_new_len)
         
         # 扩展 Eagle Layer KV Cache
         if self.eagle_layer.draft_past_key_values is not None:

@@ -373,20 +373,6 @@ def logits_sampling(
                 raise RuntimeError(
                     f"SemanticLogitsProcessor only supports batch_size=1, got {batch_size}"
                 )
-            
-            # for b in range(batch_size):
-            #     bc, al, sl = greedy_sampling(
-            #         input_ids[b], logits[b], candidates[b], logits_processor
-            #     )
-            #     best_candidates.append(bc)
-            #     accept_lengths.append(al)
-            #     sample_logits_list.append(sl)
-            
-            # return (
-            #     torch.stack(best_candidates),
-            #     torch.stack(accept_lengths),
-            #     torch.stack(sample_logits_list),
-            # )
 
             best_candidate, accept_length, sample_p = greedy_sampling(
                 input_ids, logits, candidates, logits_processor
@@ -575,7 +561,11 @@ def evaluate_parallel(
         # 采样
         next_pos = accept_length[0].clamp(max=candidate_logits.shape[2] - 1)
         sample_logits = candidate_logits[i, best_candidate[0], next_pos, :]
-        sample_token = torch.argmax(sample_logits, dim=-1, keepdim=True)
+        probabilities = torch.nn.functional.softmax(sample_logits, dim=-1)
+        if logits_processor is not None:
+            sample_token = torch.multinomial(probabilities.unsqueeze(0), 1)  # [1, 1]
+        else:
+            sample_token = torch.argmax(sample_logits, dim=-1, keepdim=True)
 
         best_candidates.append(best_candidate)
         accept_lengths.append(accept_length)

@@ -5,7 +5,6 @@ Eagle Base - Eagle Layer 基类
 定义 Eagle Layer 的公共接口和共享实现：
 - forward(): 前向传播（抽象方法）
 - get_head_output(): 获取 lm_head 输出（抽象方法）
-- reset_state(): 重置状态
 - get_kv_cache_length(): 获取当前 KV Cache 长度
 - set_kv_cache_length(): 设置 KV Cache 长度（用于丢弃 tree_grow 临时数据）
 - set_draft_kv_sync_callback(): 设置同步回调
@@ -222,21 +221,33 @@ class EagleBase(nn.Module, ABC):
         self.draft_past_key_values = None
         self.draft_past_key_values_data = None
         self.draft_current_length_data = None
-        
-        self.cache_padding_mask = None
-        self.full_position_ids = None
+
+        # cache_padding_mask 和 full_position_ids 已移至 StateManager 管理
+        # 通过参数传入而非存储在 Eagle 中
         self.tree_mask = None
-        self.tree_mask_init = None
-        self.position_ids = None
         self._draft_kv_sync_callback = None
 
-        # 子类需要设置的属性
+        # 以下属性由子类设置
         self.config = None
         self.top_k = None
         self.total_tokens = None
         self.depth = None
         self.hidden_size = None
         self.embed_tokens = None
+        
+        # tree_mask_init 和 position_ids 在子类调用 _init_tree_buffers() 后初始化
+        self.tree_mask_init = None
+        self.position_ids = None
+
+    def _init_tree_buffers(self):
+        """
+        初始化 tree 相关的 buffer
+        
+        子类在设置 embed_tokens 和 top_k 后调用此方法
+        """
+        device = self.embed_tokens.weight.device
+        self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
+        self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
 
     
     def _load_embeddings(self, path: str):
@@ -322,17 +333,6 @@ class EagleBase(nn.Module, ABC):
     # 公共方法
     # =========================================================================
 
-    def reset_state(self):
-        """重置状态（不释放 KV Cache 内存，只重置长度）"""
-        self.cache_padding_mask = None
-        self.full_position_ids = None
-        self.tree_mask = None
-
-        device = self.embed_tokens.weight.device
-        self.tree_mask_init = torch.eye(self.top_k, device=device)[None, None]
-        self.position_ids = torch.zeros(self.top_k, device=device, dtype=torch.long)
-        self._draft_kv_sync_callback = None
-
     def get_kv_cache_length(self) -> int:
         """获取当前 KV Cache 的有效长度"""
         if self.draft_past_key_values is None:
@@ -373,6 +373,7 @@ class EagleBase(nn.Module, ABC):
         input_shape: Tuple[int, int],
         inputs_embeds: torch.Tensor,
         past_key_values_length: int,
+        batching_padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         构建解码器注意力掩码
@@ -380,7 +381,7 @@ class EagleBase(nn.Module, ABC):
         处理三种情况：
         1. 基本因果掩码
         2. Tree mask (用于 draft tree 内部)
-        3. Cache padding mask (用于并行解码的批次对齐)
+        3. Cache padding mask (用于并行解码的批次对齐，通过参数传入)
         """
         combined_attention_mask = None
 
@@ -411,9 +412,9 @@ class EagleBase(nn.Module, ABC):
                 tree_mask == 0
             ] = torch.finfo(torch.float32).min
 
-        # 应用 Cache Padding Mask (并行解码用)
-        if self.cache_padding_mask is not None:
-            padding_bool = (self.cache_padding_mask == 0)
+        # 应用 Cache Padding Mask (并行解码用，通过参数传入)
+        if batching_padding_mask is not None:
+            padding_bool = (batching_padding_mask == 0)
             current_src_len = combined_attention_mask.shape[-1]
             mask_len = padding_bool.shape[1]
             bsz = padding_bool.shape[0]
