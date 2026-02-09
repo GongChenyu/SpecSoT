@@ -62,17 +62,32 @@ def create_parser():
     # parser.add_argument("--eagle_model_path", type=str, default="/data/home/chenyu/Coding/SD+SoT/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
     # parser.add_argument("--use_eagle3", type=str2bool, default=False, help="是否使用 Eagle3 模型")
 
+    # 模型配置
+    # Qwen3
+    # parser.add_argument("--base_model_path", type=str, default="/home/doit/chenyu/models/Qwen3-4B", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/home/doit/chenyu/models/Qwen3-4B_eagle3", help="Eagle Model 路径")
+    # parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
+    # LLaMA3
+    # parser.add_argument("--base_model_path", type=str, default="/home/doit/chenyu/models/Llama-3.1-8B-Instruct", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/home/doit/chenyu/models/EAGLE3-LLaMA3.1-Instruct-8B", help="Eagle Model 路径")
+    # parser.add_argument("--use_eagle3", type=str2bool, default=True, help="是否使用 Eagle3 模型")
+    # Vicuna
+    # parser.add_argument("--base_model_path", type=str, default="/home/doit/chenyu/models/vicuna-7b-v1.3", help="Base Model 路径")
+    # parser.add_argument("--eagle_model_path", type=str, default="/home/doit/chenyu/models/EAGLE-Vicuna-7B-v1.3", help="Eagle Model 路径")
+    # parser.add_argument("--use_eagle3", type=str2bool, default=False, help="是否使用 Eagle3 模型")
+
+
     # 推理配置
     parser.add_argument("--enable_parallel", type=str2bool, default=True, help="启用骨架并行模式")
     parser.add_argument("--use_semantic_constraint", type=str2bool, default=False, help="是否使用 FSM 语义约束")
     parser.add_argument("--use_bim_mode", type=str2bool, default=False, help="是否使用 BIM 模式 (True: In-One-Sequence, False: Batching)")
-    parser.add_argument("--max_new_tokens", type=int, default=1000, help="最大生成token数")
-    parser.add_argument("--device", type=str, default="cuda:7", help="默认设备 (非分布式模式下使用)")
+    parser.add_argument("--max_new_tokens", type=int, default=3000, help="最大生成token数")
+    parser.add_argument("--device", type=str, default="cuda:0", help="默认设备 (非分布式模式下使用)")
     
     # 分布式配置
     parser.add_argument("--distributed", type=str2bool, default=False, help="是否启用分布式模式")
     parser.add_argument("--world_size", type=int, default=3, help="分布式总进程数")
-    parser.add_argument("--devices", type=str, default="127.0.0.1#1,127.0.0.1#2,127.0.0.1#3", help="设备列表，格式: ip#gpu_id,ip#gpu_id,...")
+    parser.add_argument("--devices", type=str, default="127.0.0.1#5,127.0.0.1#6,127.0.0.1#7", help="设备列表，格式: ip#gpu_id,ip#gpu_id,...")
     parser.add_argument("--layer_splits", type=str, default="14,28", help="层分割策略")
     parser.add_argument("--base_port", type=int, default=45000, help="通信基础端口")
     parser.add_argument("--comm_mode", type=str, default="p2p", choices=["p2p", "ring"], help="通信模式")
@@ -83,7 +98,7 @@ def create_parser():
     parser.add_argument("--rank", type=int, default=0, help="当前进程的rank（内部使用）")
 
     # 调度配置
-    parser.add_argument("--use_scheduling", type=str2bool, default=False, help="是否启用分支调度")
+    parser.add_argument("--use_scheduling", type=str2bool, default=True, help="是否启用分支调度")
     parser.add_argument("--max_parallel", type=int, default=2, help="每设备最大并行分支数")
 
     # 运行模式配置
@@ -91,16 +106,16 @@ def create_parser():
     parser.add_argument("--prompt", type=str, default="", help="inference 模式下的输入 prompt")
 
     # 任务配置 (evaluation 模式使用)
-    parser.add_argument("--task", type=str, default="planning", choices=["retrieval", "planning", "multi-doc-qa", "bfcl"], help="评估任务类型")
-    parser.add_argument("--num_samples", type=int, default=1, help="测试样本数量")
-    parser.add_argument("--seed", type=int, default=60, help="随机种子")
+    parser.add_argument("--task", type=str, default="vicuna_bench", choices=["mt_bench", "vicuna_bench", "planning", "retrieval", "multi-doc-qa", "bfcl"], help="评估任务类型")
+    parser.add_argument("--num_samples", type=int, default=3, help="测试样本数量")
+    parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--task_data_path", type=str, default="", help="任务数据文件路径 (内部使用)")
 
     # 分布式 SSH 配置 (多机部署使用)
-    parser.add_argument("--ssh_user", type=str, default="", help="SSH 用户名 (多机分布式)")
-    parser.add_argument("--ssh_key", type=str, default="", help="SSH 私钥路径 (多机分布式)")
-    parser.add_argument("--remote_python", type=str, default="python", help="远程机器 Python 路径")
-    parser.add_argument("--remote_workdir", type=str, default="", help="远程机器工作目录")
+    parser.add_argument("--ssh_user", type=str, default="doit", help="SSH 用户名 (多机分布式)")
+    parser.add_argument("--ssh_key", type=str, default="/home/doit/.ssh/id_rsa", help="SSH 私钥路径 (多机分布式)")
+    parser.add_argument("--remote_python", type=str, default="/home/doit/anaconda3/envs/sdsot/bin/python", help="远程机器 Python 路径")
+    parser.add_argument("--remote_workdir", type=str, default="/home/doit/chenyu/SpecSoT", help="远程机器工作目录")
 
     return parser
 

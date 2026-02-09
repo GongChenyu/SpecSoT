@@ -1,0 +1,13 @@
+{
+  "task": "planning",
+  "timestamp": "20260209_235412",
+  "num_samples": 1,
+  "enable_parallel": false,
+  "distributed": false,
+  "use_scheduling": false,
+  "use_eagle3": true,
+  "model": "Qwen3-4B",
+  "eagle_model": "Qwen3-4B_eagle3",
+  "max_new_tokens": 1000,
+  "use_semantic_constraint": true
+}

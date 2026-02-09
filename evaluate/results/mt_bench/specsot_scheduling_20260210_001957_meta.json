@@ -1,0 +1,13 @@
+{
+  "task": "mt_bench",
+  "timestamp": "20260210_001957",
+  "num_samples": 3,
+  "enable_parallel": true,
+  "distributed": false,
+  "use_scheduling": true,
+  "use_eagle3": true,
+  "model": "Qwen3-4B",
+  "eagle_model": "Qwen3-4B_eagle3",
+  "max_new_tokens": 1000,
+  "use_semantic_constraint": false
+}

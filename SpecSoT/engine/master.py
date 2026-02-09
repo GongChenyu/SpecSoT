@@ -29,6 +29,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
 from .utils import DeviceConfig, parse_devices, cleanup_ports
+from evaluate import load_task_dataset, save_results
 
 
 @dataclass
@@ -177,11 +178,9 @@ class MasterEngine:
             return [{"task_prompt": prompt, "raw_data": {}}]
         else:
             # evaluation 模式: 从数据集加载
-            from ...evaluate import load_task_dataset
             return load_task_dataset(
                 task=self.args.task,
                 num_samples=self.args.num_samples,
-                seed=self.args.seed,
                 project_dir=self.project_dir,
             )
 
@@ -437,23 +436,24 @@ class MasterEngine:
         """
         if not results:
             return
-        
-        from ...evaluate import save_results
-        
-        mode = getattr(self.args, 'mode', 'evaluation')
+                
         output_dir = os.path.join(self.project_dir, "evaluate", "results")
         
         extra_info = {
             "model": os.path.basename(self.args.base_model_path),
-            "enable_parallel": self.args.enable_parallel,
-            "distributed": self.args.distributed,
+            "eagle_model": os.path.basename(self.args.eagle_model_path),
+            "max_new_tokens": self.args.max_new_tokens,
+            "use_semantic_constraint": getattr(self.args, 'use_semantic_constraint', False),
         }
         
         save_results(
             results=results,
             task=self.args.task,
             output_dir=output_dir,
-            mode=mode,
+            enable_parallel=self.args.enable_parallel,
+            distributed=self.args.distributed,
+            use_scheduling=getattr(self.args, 'use_scheduling', False),
+            use_eagle3=getattr(self.args, 'use_eagle3', True),
             extra_info=extra_info,
         )
     

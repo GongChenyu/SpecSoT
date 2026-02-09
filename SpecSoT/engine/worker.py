@@ -111,15 +111,43 @@ def setup_worker_logger(rank: int, log_dir: str) -> logging.Logger:
 # =============================================================================
 
 def load_dataset(task: str, project_dir: str):
-    """加载评估数据集"""
-    if task == "retrieval":
+    """
+    加载评估数据集 (兼容旧接口)
+    
+    注意: 推荐使用 evaluate.data_loader.load_task_dataset 替代
+    """
+    if task == "mt_bench":
+        path = os.path.join(project_dir, "evaluate/datasets/mt_bench/question.jsonl")
+        df = pd.read_json(path, lines=True)
+        # 只使用第一轮，如果有 reference 则拼接
+        def get_prompt(row):
+            turns = row.get("turns", [])
+            reference = row.get("reference", None)
+            first_turn = turns[0] if turns else ""
+            if reference and len(reference) > 0:
+                return f"{first_turn}\n\n参考答案: {reference[0]}"
+            return first_turn
+        df['task_prompt'] = df.apply(get_prompt, axis=1)
+    elif task == "vicuna_bench":
+        path = os.path.join(project_dir, "evaluate/datasets/vicuna_bench/question.jsonl")
+        df = pd.read_json(path, lines=True)
+        # 只使用第一轮
+        def get_prompt(row):
+            turns = row.get("turns", [])
+            reference = row.get("reference", None)
+            first_turn = turns[0] if turns else ""
+            if reference and len(reference) > 0:
+                return f"{first_turn}\n\n参考答案: {reference[0]}"
+            return first_turn
+        df['task_prompt'] = df.apply(get_prompt, axis=1)
+    elif task == "planning":
+        path = os.path.join(project_dir, "evaluate/datasets/planning/industry_tasks_converted.jsonl")
+        df = pd.read_json(path, lines=True)
+        df['task_prompt'] = df['task']
+    elif task == "retrieval":
         path = os.path.join(project_dir, "evaluate/datasets/student_resume_logic_retrieval/logic_gpa_resume_10.jsonl")
         df = pd.read_json(path, lines=True)
         df['task_prompt'] = df['prompt']
-    elif task == "planning":
-        path = os.path.join(project_dir, "evaluate/datasets/planning/industry_tasks_no_ascii.jsonl")
-        df = pd.read_json(path, lines=True)
-        df['task_prompt'] = df['task']
     else:  # multi-doc-qa
         path = os.path.join(project_dir, "evaluate/datasets/multi-doc-qa/2wikimqa.jsonl")
         df = pd.read_json(path, lines=True)
@@ -221,12 +249,27 @@ class WorkerEngine:
         
         # 3. 从数据集加载 (兼容旧模式)
         df = self._load_dataset()
-        return [{"task_prompt": row['task_prompt'], "raw_data": row.to_dict()} for _, row in df.iterrows()]
-        
-        # 清理
-        self._cleanup()
-        
-        self.logger.info("Worker 执行完成")
+        task = self.args.task
+        results = []
+        for idx, (_, row) in enumerate(df.iterrows()):
+            item = {
+                "task_prompt": row['task_prompt'],
+                "raw_data": row.to_dict(),
+            }
+            # 提取任务 ID
+            if task in ["mt_bench", "vicuna_bench"]:
+                item["question_id"] = row.get("question_id", idx)
+                item["category"] = row.get("category", "")
+            elif task == "planning":
+                item["task_id"] = row.get("task_id", idx)
+            else:
+                # 其他数据集尝试通用 ID
+                if "question_id" in row:
+                    item["question_id"] = row["question_id"]
+                elif "task_id" in row:
+                    item["task_id"] = row["task_id"]
+            results.append(item)
+        return results
 
     def _log_config(self):
         """打印配置信息"""
@@ -318,6 +361,7 @@ class WorkerEngine:
         
         Args:
             task_list: 任务列表，每个元素为 dict，包含 'task_prompt' 键
+                       以及 'question_id' 或 'task_id' 用于标识
         """
         monitor_device = torch.cuda.current_device() if torch.cuda.is_available() else 0
         
@@ -327,11 +371,22 @@ class WorkerEngine:
                 self.logger.warning(f"样本 {i+1} 没有有效的 prompt，跳过")
                 continue
             
-            self.logger.info(f"\n[样本 {i+1}/{len(task_list)}] {task_prompt[:60]}...")
+            # 获取任务 ID
+            task_id = task.get("task_id", task.get("question_id", i))
+            self.logger.info(f"\n[样本 {i+1}/{len(task_list)}] ID={task_id} | {task_prompt[:60]}...")
             
             result = self._run_single_inference(task_prompt, monitor_device)
             result["prompt"] = task_prompt
             result["raw_data"] = task.get("raw_data", {})
+            
+            # 记录任务 ID
+            if "question_id" in task:
+                result["question_id"] = task["question_id"]
+            if "task_id" in task:
+                result["task_id"] = task["task_id"]
+            if "category" in task:
+                result["category"] = task["category"]
+            
             self.results.append(result)
             
             self._log_sample_result(result)

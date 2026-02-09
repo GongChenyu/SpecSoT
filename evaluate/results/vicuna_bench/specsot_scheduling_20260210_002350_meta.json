@@ -1,0 +1,13 @@
+{
+  "task": "vicuna_bench",
+  "timestamp": "20260210_002350",
+  "num_samples": 3,
+  "enable_parallel": true,
+  "distributed": false,
+  "use_scheduling": true,
+  "use_eagle3": true,
+  "model": "Llama-3.1-8B-Instruct",
+  "eagle_model": "EAGLE3-LLaMA3.1-Instruct-8B",
+  "max_new_tokens": 3000,
+  "use_semantic_constraint": false
+}
