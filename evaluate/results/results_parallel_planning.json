@@ -1,0 +1,18 @@
+[
+    {
+        "response":"[PLAN]\n1.<100><None>[-]Physical Health Benefits\n2.<100><None>[-]Mental Health Benefits\n3.<100><None>[-]Social Benefits\n4.<100><None>[-]Improved Coordination\n5.<100><None>[-]Stress Relief\n6.<100><None>[-]Teamwork and Communication\n[END]\n\n## 1. Physical Health Benefits\nPlaying basketball offers numerous physical health benefits. Regular participation in\n\n## 2. Mental Health Benefits\nPlaying basketball has numerous mental health benefits. It can help\n\n## 3. Social Benefits\nPlaying basketball offers numerous social benefits, making it an excellent\n\n## 4. Improved Coordination\nPlaying basketball can significantly improve coordination due to its fast-paced\n\n## 5. Stress Relief\nPlaying basketball is an excellent way to relieve stress due to\n\n## 6. Teamwork and Communication\nPlaying basketball fosters teamwork and communication among players. This",
+        "inference_time":3.58583951,
+        "skeleton_time":2.7296738625,
+        "parallel_time":0.8538849354,
+        "memory":18976.3125,
+        "length":198,
+        "throughput":55.2171951505,
+        "num_para":6,
+        "avg_accept_len":0.0,
+        "avg_draft_time":0.0084208086,
+        "avg_verify_time":0.0471073487,
+        "avg_update_time":0.0020053731,
+        "mode":"local_naive",
+        "prompt":"Please explain the benefits of playing basketball from six aspects (each aspect limited to 100 words)."
+    }
+]

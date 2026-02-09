@@ -113,15 +113,15 @@ def setup_worker_logger(rank: int, log_dir: str) -> logging.Logger:
 def load_dataset(task: str, project_dir: str):
     """加载评估数据集"""
     if task == "retrieval":
-        path = os.path.join(project_dir, "datasets/student_resume_logic_retrieval/logic_gpa_resume_10.jsonl")
+        path = os.path.join(project_dir, "evaluate/datasets/student_resume_logic_retrieval/logic_gpa_resume_10.jsonl")
         df = pd.read_json(path, lines=True)
         df['task_prompt'] = df['prompt']
     elif task == "planning":
-        path = os.path.join(project_dir, "datasets/planning/industry_tasks_no_ascii.jsonl")
+        path = os.path.join(project_dir, "evaluate/datasets/planning/industry_tasks_no_ascii.jsonl")
         df = pd.read_json(path, lines=True)
         df['task_prompt'] = df['task']
     else:  # multi-doc-qa
-        path = os.path.join(project_dir, "datasets/multi-doc-qa/2wikimqa.jsonl")
+        path = os.path.join(project_dir, "evaluate/datasets/multi-doc-qa/2wikimqa.jsonl")
         df = pd.read_json(path, lines=True)
         df['task_prompt'] = df['input']
     return df, path
@@ -140,8 +140,16 @@ class WorkerEngine:
     - DEBUG: 详细的中间状态、tensor信息、通信细节
     """
 
-    def __init__(self, args):
+    def __init__(self, args, task_data: list = None):
+        """
+        初始化 Worker 引擎
+        
+        Args:
+            args: 命令行参数
+            task_data: 任务数据列表 (由 Master 传递，单机模式)
+        """
         self.args = args
+        self.task_data = task_data  # 由 Master 传递的任务数据
         self.project_dir = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
@@ -160,8 +168,13 @@ class WorkerEngine:
         # 结果存储
         self.results = []
 
-    def run(self):
-        """运行 Worker 主流程"""
+    def run(self) -> list:
+        """
+        运行 Worker 主流程
+        
+        Returns:
+            list: 推理结果列表
+        """
         self._log_config()
         
         # 设置分布式
@@ -170,14 +183,45 @@ class WorkerEngine:
         # 加载模型
         self._load_model()
         
-        # 加载数据集
-        df = self._load_dataset()
+        # 获取任务数据
+        task_list = self._get_task_list()
         
         # 执行推理
-        self._run_inference_loop(df)
+        self._run_inference_loop(task_list)
         
-        # 保存结果
-        self._save_results()
+        # 清理
+        self._cleanup()
+        
+        self.logger.info("Worker 执行完成")
+        
+        return self.results
+    
+    def _get_task_list(self) -> list:
+        """
+        获取任务列表
+        
+        优先级:
+        1. 从构造函数传入的 task_data (单机模式)
+        2. 从 task_data_path 参数指定的文件加载 (分布式模式)
+        3. 从数据集加载 (兼容旧模式)
+        """
+        import json
+        
+        # 1. 构造函数传入
+        if self.task_data is not None:
+            self.logger.info(f"使用 Master 传递的任务数据 ({len(self.task_data)} 条)")
+            return self.task_data
+        
+        # 2. 从文件加载
+        task_data_path = getattr(self.args, 'task_data_path', '')
+        if task_data_path and os.path.exists(task_data_path):
+            self.logger.info(f"从文件加载任务数据: {task_data_path}")
+            with open(task_data_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        
+        # 3. 从数据集加载 (兼容旧模式)
+        df = self._load_dataset()
+        return [{"task_prompt": row['task_prompt'], "raw_data": row.to_dict()} for _, row in df.iterrows()]
         
         # 清理
         self._cleanup()
@@ -268,18 +312,26 @@ class WorkerEngine:
         self.logger.info(f"数据集: {os.path.basename(path)} ({len(df)} 条)")
         return df
 
-    def _run_inference_loop(self, df):
-        """执行推理循环"""
+    def _run_inference_loop(self, task_list: list):
+        """
+        执行推理循环
+        
+        Args:
+            task_list: 任务列表，每个元素为 dict，包含 'task_prompt' 键
+        """
         monitor_device = torch.cuda.current_device() if torch.cuda.is_available() else 0
         
-        for i in range(len(df)):
-            # task_prompt = df.loc[i, "task_prompt"]
-            # task_prompt = "Please provide a concise description of how to improve shooting accuracy in basketball, offering five suggestions, each approximately 200 words."
-            task_prompt = "Please explain the benefits of playing basketball from six aspects (each aspect limited to 100 words)."
-            self.logger.info(f"\n[样本 {i+1}/{len(df)}] {task_prompt[:60]}...")
+        for i, task in enumerate(task_list):
+            task_prompt = task.get("task_prompt", "")
+            if not task_prompt:
+                self.logger.warning(f"样本 {i+1} 没有有效的 prompt，跳过")
+                continue
+            
+            self.logger.info(f"\n[样本 {i+1}/{len(task_list)}] {task_prompt[:60]}...")
             
             result = self._run_single_inference(task_prompt, monitor_device)
             result["prompt"] = task_prompt
+            result["raw_data"] = task.get("raw_data", {})
             self.results.append(result)
             
             self._log_sample_result(result)
@@ -373,7 +425,7 @@ class WorkerEngine:
         if self.args.distributed and self.args.rank != 0:
             return
         
-        save_dir = os.path.join(self.project_dir, "results")
+        save_dir = os.path.join(self.project_dir, "evaluate", "results")
         os.makedirs(save_dir, exist_ok=True)
         
         mode = "parallel" if self.args.enable_parallel else "standard"
